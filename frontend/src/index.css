@@ -1,0 +1,52 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-300 dark:bg-background dark:text-slate-100;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 shadow-lg dark:bg-slate-800/60 dark:border-slate-700/50;
+  }
+}
+
+/* 微信公众号 HTML 原生渲染的样式覆盖 */
+.article-html-container {
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
+  color: #333;
+  line-height: 1.6;
+  font-size: 17px;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+.dark .article-html-container {
+  color: #c4c4c4;
+}
+
+.article-html-container img {
+  max-width: 100% !important;
+  height: auto !important;
+  display: block;
+  margin: 10px 0;
+  visibility: visible !important;
+}
+
+.article-html-container p {
+  margin-bottom: 1em;
+  word-wrap: break-word;
+}
+
+.article-html-container section {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.article-html-container * {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}

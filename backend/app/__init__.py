@@ -1,0 +1,1 @@
+# SynthAI backend app package
