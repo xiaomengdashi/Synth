@@ -1,11 +1,11 @@
 import { useStore, Article } from '../store/useStore';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Clock, Video, FileText, Twitter } from 'lucide-react';
+import { ArrowRight, Clock, Video, FileText, Twitter, BookOpen, Code, Link as LinkIcon, Trash2 } from 'lucide-react';
 import { formatDistanceToNow } from '../utils/formatDate';
 
 export default function Home() {
-  const { articles } = useStore();
+  const { articles, deleteArticle } = useStore();
 
   const getSourceIcon = (sourceType: string) => {
     switch (sourceType) {
@@ -13,7 +13,9 @@ export default function Home() {
       case 'bilibili': return <Video className="w-4 h-4 text-blue-400" />;
       case 'douyin': return <Video className="w-4 h-4 text-pink-500" />;
       case 'x': return <Twitter className="w-4 h-4 text-sky-500" />;
-      default: return <FileText className="w-4 h-4 text-slate-500" />;
+      case 'csdn': return <Code className="w-4 h-4 text-red-500" />;
+      case 'cnblogs': return <BookOpen className="w-4 h-4 text-indigo-500" />;
+      default: return <LinkIcon className="w-4 h-4 text-slate-500" />;
     }
   };
 
@@ -23,7 +25,9 @@ export default function Home() {
       case 'bilibili': return 'Bilibili';
       case 'douyin': return '抖音';
       case 'x': return 'X (Twitter)';
-      default: return '其他来源';
+      case 'csdn': return 'CSDN';
+      case 'cnblogs': return '博客园';
+      default: return '网页链接';
     }
   };
 
@@ -85,7 +89,7 @@ export default function Home() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-50px" }}
               transition={{ duration: 0.5, delay: index * 0.1 }}
-              className="group flex flex-col glass-panel rounded-2xl overflow-hidden hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(59,130,246,0.2)] transition-all duration-300"
+              className="group relative flex flex-col glass-panel rounded-2xl overflow-hidden hover:-translate-y-2 hover:shadow-[0_20px_40px_-15px_rgba(59,130,246,0.2)] transition-all duration-300"
             >
               <Link to={`/article/${article.id}`} className="block relative aspect-[16/9] overflow-hidden">
                 <div className="absolute inset-0 bg-slate-900/20 group-hover:bg-transparent transition-colors z-10" />
@@ -98,6 +102,19 @@ export default function Home() {
                   {getSourceIcon(article.source_type)}
                   {getSourceLabel(article.source_type)}
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (window.confirm('确定要删除这篇文章吗？')) {
+                      deleteArticle(article.id);
+                    }
+                  }}
+                  className="absolute top-4 right-4 z-30 p-2 bg-white/90 dark:bg-slate-900/90 hover:bg-red-50 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 backdrop-blur-sm rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-200"
+                  title="删除文章"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </Link>
 
               <div className="p-6 flex flex-col flex-1">

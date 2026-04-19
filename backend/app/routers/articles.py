@@ -41,3 +41,31 @@ async def get_article(article_id: str, db: AsyncSession = Depends(get_db)):
         return ARTICLES_DB[article_id]
         
     raise HTTPException(status_code=404, detail="Article not found")
+
+@router.delete("/{article_id}")
+async def delete_article(article_id: str, db: AsyncSession = Depends(get_db)):
+    # 先找到关联的任务并删除（或者置空）
+    from app.models import Task
+    result = await db.execute(select(Task).where(Task.article_id == article_id))
+    tasks = result.scalars().all()
+    for task in tasks:
+        await db.delete(task)
+        
+    article = await db.get(Article, article_id)
+    if not article:
+        raise HTTPException(status_code=404, detail="Article not found")
+    
+    await db.delete(article)
+    await db.commit()
+    
+    # 顺便清理内存中的数据
+    from app.routers.tasks import ARTICLES_DB, TASKS_DB
+    if article_id in ARTICLES_DB:
+        del ARTICLES_DB[article_id]
+    
+    # 清理 TASKS_DB 中对应的任务
+    task_ids_to_del = [tid for tid, tdata in TASKS_DB.items() if tdata.get("article_id") == article_id]
+    for tid in task_ids_to_del:
+        del TASKS_DB[tid]
+        
+    return {"status": "success", "message": "Article deleted"}

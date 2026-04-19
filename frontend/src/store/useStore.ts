@@ -6,8 +6,8 @@ export interface Article {
   summary: string;
   content_md: string;
   original_url: string;
-  source_type: 'wechat' | 'bilibili' | 'douyin' | 'x';
-  cover_image_url: string;
+  source_type: 'wechat' | 'bilibili' | 'douyin' | 'x' | 'csdn' | 'cnblogs' | 'other';
+  cover_image_url?: string;
   created_at: string;
 }
 
@@ -24,6 +24,9 @@ export interface AppConfig {
   modelName: string;
   apiKey: string;
   baseUrl: string;
+  biliSessdata?: string;
+  biliJct?: string;
+  biliBuvid3?: string;
 }
 
 interface AppState {
@@ -38,6 +41,7 @@ interface AppState {
   setConfig: (config: AppConfig) => void;
   fetchConfig: () => Promise<void>;
   fetchArticles: () => Promise<void>;
+  deleteArticle: (articleId: string) => Promise<void>;
 }
 
 const mockArticles: Article[] = [
@@ -99,6 +103,9 @@ export const useStore = create<AppState>((set, get) => ({
     modelName: 'gpt-4o-mini',
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
+    biliSessdata: '',
+    biliJct: '',
+    biliBuvid3: '',
   },
   toggleDarkMode: () => set((state) => {
     const newDarkMode = !state.darkMode;
@@ -171,4 +178,21 @@ export const useStore = create<AppState>((set, get) => ({
       console.error('Failed to fetch articles', e);
     }
   },
+  deleteArticle: async (articleId: string) => {
+    try {
+      const res = await fetch(`/api/v1/articles/${articleId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        set((state) => ({
+          articles: state.articles.filter((a) => a.id !== articleId),
+          tasks: state.tasks.filter((t) => t.article_id !== articleId)
+        }));
+      } else {
+        console.error('Failed to delete article');
+      }
+    } catch (error) {
+      console.error('Failed to delete article', error);
+    }
+  }
 }));

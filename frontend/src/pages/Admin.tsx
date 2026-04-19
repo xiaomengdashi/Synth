@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore, Task } from '../store/useStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Plus, Link as LinkIcon, AlertCircle, CheckCircle2, Loader2, ArrowRight, XCircle, Settings2, Key, Globe, Cpu } from 'lucide-react';
+import { Plus, Link as LinkIcon, AlertCircle, CheckCircle2, Loader2, ArrowRight, XCircle, Settings2, Key, Globe, Cpu, Video } from 'lucide-react';
 import { formatDistanceToNow } from '../utils/formatDate';
 
 export default function Admin() {
@@ -10,6 +10,7 @@ export default function Admin() {
   const [url, setUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
+  const [configType, setConfigType] = useState<'llm' | 'bilibili'>('llm');
   const [localConfig, setLocalConfig] = useState(config);
   
   // 新增状态：大模型验证和列表
@@ -214,13 +215,31 @@ export default function Admin() {
           <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">管理控制台</h1>
           <p className="text-slate-600 dark:text-slate-400">提交链接并监控 AI 处理流水线</p>
         </div>
-        <button
-          onClick={() => setShowConfig(!showConfig)}
-          className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-colors"
-        >
-          <Settings2 className="w-5 h-5" />
-          大模型配置
-        </button>
+        
+        <div className="flex gap-3">
+          <button
+            onClick={() => {
+              setLocalConfig(config);
+              setConfigType('llm');
+              setShowConfig(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-medium transition-colors"
+          >
+            <Settings2 className="w-5 h-5" />
+            大模型配置
+          </button>
+          <button
+            onClick={() => {
+              setLocalConfig(config);
+              setConfigType('bilibili');
+              setShowConfig(true);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded-xl font-medium transition-colors"
+          >
+            <Video className="w-5 h-5" />
+            B站配置
+          </button>
+        </div>
       </div>
 
       {/* Configuration Panel */}
@@ -233,100 +252,170 @@ export default function Admin() {
             className="overflow-hidden"
           >
             <form onSubmit={handleConfigSave} className="glass-panel p-6 sm:p-8 rounded-3xl relative overflow-hidden">
-              <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-                <Settings2 className="w-5 h-5 text-primary" /> API 设置
-              </h2>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    <Globe className="w-4 h-4" /> Base URL
-                  </label>
-                  <input
-                    type="url"
-                    value={localConfig.baseUrl}
-                    onChange={(e) => setLocalConfig({...localConfig, baseUrl: e.target.value})}
-                    placeholder="https://api.openai.com/v1"
-                    className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    <Key className="w-4 h-4" /> API Key
-                  </label>
-                  <input
-                    type="text"
-                    value={localConfig.apiKey === config.apiKey && config.apiKey ? getDisplayApiKey(config.apiKey) : localConfig.apiKey}
-                    onFocus={() => {
-                      // 聚焦时如果显示的是脱敏值，则清空，让用户重新输入完整的 key
-                      if (localConfig.apiKey === config.apiKey && config.apiKey.length > 6) {
-                        setLocalConfig({...localConfig, apiKey: ''});
-                      }
-                    }}
-                    onChange={handleApiKeyChange}
-                    placeholder="sk-..."
-                    className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* 验证和模型选择区域 */}
-              <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 space-y-4">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    输入 Base URL 和 API Key 后，可验证并自动获取模型列表。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={handleVerify}
-                    disabled={isVerifying || !localConfig.baseUrl || !localConfig.apiKey}
-                    className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                    验证并获取模型
-                  </button>
-                </div>
-
-                {verifyStatus && (
-                  <div className={`text-sm p-3 rounded-lg flex items-center gap-2 ${verifyStatus === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
-                    {verifyStatus === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                    {verifyMessage}
-                  </div>
-                )}
-
-                <div className="space-y-2 pt-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                    <Cpu className="w-4 h-4" /> 模型名称 (选择或手动输入)
-                  </label>
-                  {availableModels.length > 0 ? (
-                    <select
-                      value={localConfig.modelName}
-                      onChange={(e) => setLocalConfig({...localConfig, modelName: e.target.value})}
-                      className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      required
-                    >
-                      <option value="" disabled>请选择模型</option>
-                      {availableModels.map(m => (
-                        <option key={m} value={m}>{m}</option>
-                      ))}
-                    </select>
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  {configType === 'llm' ? (
+                    <><Settings2 className="w-5 h-5 text-primary" />大模型配置</>
                   ) : (
-                    <input
-                      type="text"
-                      value={localConfig.modelName}
-                      onChange={(e) => setLocalConfig({...localConfig, modelName: e.target.value})}
-                      placeholder="如: gpt-4o, deepseek-chat"
-                      className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                      required
-                    />
+                    <><Video className="w-5 h-5 text-blue-500" />Bilibili 抓取配置</>
                   )}
-                </div>
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(false)}
+                  className="p-2 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
               </div>
+
+              {configType === 'llm' ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Globe className="w-4 h-4" /> Base URL
+                      </label>
+                      <input
+                        type="url"
+                        value={localConfig.baseUrl}
+                        onChange={(e) => setLocalConfig({...localConfig, baseUrl: e.target.value})}
+                        placeholder="https://api.openai.com/v1"
+                        className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Key className="w-4 h-4" /> API Key
+                      </label>
+                      <input
+                        type="text"
+                        value={localConfig.apiKey === config.apiKey && config.apiKey ? getDisplayApiKey(config.apiKey) : localConfig.apiKey}
+                        onFocus={() => {
+                          if (localConfig.apiKey === config.apiKey && config.apiKey.length > 6) {
+                            setLocalConfig({...localConfig, apiKey: ''});
+                          }
+                        }}
+                        onChange={handleApiKeyChange}
+                        placeholder="sk-..."
+                        className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  {/* 验证和模型选择区域 */}
+                  <div className="mt-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700/50 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        输入 Base URL 和 API Key 后，可验证并自动获取模型列表。
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleVerify}
+                        disabled={isVerifying || !localConfig.baseUrl || !localConfig.apiKey}
+                        className="px-4 py-2 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {isVerifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        验证并获取模型
+                      </button>
+                    </div>
+
+                    {verifyStatus && (
+                      <div className={`text-sm p-3 rounded-lg flex items-center gap-2 ${verifyStatus === 'success' ? 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400'}`}>
+                        {verifyStatus === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                        {verifyMessage}
+                      </div>
+                    )}
+
+                    <div className="space-y-2 pt-2">
+                      <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        <Cpu className="w-4 h-4" /> 模型名称 (选择或手动输入)
+                      </label>
+                      {availableModels.length > 0 ? (
+                        <select
+                          value={localConfig.modelName}
+                          onChange={(e) => setLocalConfig({...localConfig, modelName: e.target.value})}
+                          className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          required
+                        >
+                          <option value="" disabled>请选择模型</option>
+                          {availableModels.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={localConfig.modelName}
+                          onChange={(e) => setLocalConfig({...localConfig, modelName: e.target.value})}
+                          placeholder="如: gpt-4o, deepseek-chat"
+                          className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          required
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="mb-4">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 flex items-start gap-1.5 bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800/30">
+                      <AlertCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                      <span>填写 Bilibili 网页版的 Cookie 可以突破风控和匿名限制，大幅提高获取 AI 专属字幕的成功率。留空则使用默认匿名抓取。</span>
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                      SESSDATA
+                    </label>
+                    <input
+                      type="password"
+                      value={localConfig.biliSessdata || ''}
+                      onChange={(e) => setLocalConfig({ ...localConfig, biliSessdata: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-mono text-sm"
+                      placeholder="填入浏览器的 SESSDATA Cookie"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                        bili_jct
+                      </label>
+                      <input
+                        type="password"
+                        value={localConfig.biliJct || ''}
+                        onChange={(e) => setLocalConfig({ ...localConfig, biliJct: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-mono text-sm"
+                        placeholder="bili_jct Cookie"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                        buvid3
+                      </label>
+                      <input
+                        type="password"
+                        value={localConfig.biliBuvid3 || ''}
+                        onChange={(e) => setLocalConfig({ ...localConfig, biliBuvid3: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-white/50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-900 dark:text-white font-mono text-sm"
+                        placeholder="buvid3 Cookie"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
               
-              <div className="mt-6 flex justify-end">
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowConfig(false)}
+                  className="px-6 py-2.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg font-medium transition-colors"
+                >
+                  取消
+                </button>
                 <button
                   type="submit"
                   className="px-6 py-2.5 bg-primary hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"

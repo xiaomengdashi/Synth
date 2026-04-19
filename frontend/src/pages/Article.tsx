@@ -3,10 +3,11 @@ import { useStore, Article as ArticleType } from '../store/useStore';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
 import { motion } from 'framer-motion';
 import { ArrowLeft, ExternalLink, Calendar, Link as LinkIcon, Loader2 } from 'lucide-react';
-import 'highlight.js/styles/atom-one-dark.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 export default function Article() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +16,8 @@ export default function Article() {
   const [article, setArticle] = useState<ArticleType | null>(storeArticle || null);
   const [loading, setLoading] = useState(!storeArticle);
   const [error, setError] = useState(false);
+
+  const htmlContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // 如果 store 中没有找到，说明可能是刷新了页面，尝试从后端拉取
@@ -40,6 +43,18 @@ export default function Article() {
       setArticle(storeArticle);
     }
   }, [id, storeArticle]);
+
+  // 针对渲染原始 HTML 内容的高亮处理
+  useEffect(() => {
+    if (article && htmlContainerRef.current) {
+      // 找到所有 pre code 或 class 包含 language- 的块
+      const blocks = htmlContainerRef.current.querySelectorAll('pre code, .code-snippet, [class*="language-"]');
+      blocks.forEach((block) => {
+        // CSDN 特殊处理：有时候代码块只是一堆 span，需要让 hljs 重新着色
+        hljs.highlightElement(block as HTMLElement);
+      });
+    }
+  }, [article]);
 
   if (loading) {
     return (
@@ -125,6 +140,7 @@ export default function Article() {
                   {article.content_md.split('<!-- HTML_CONTENT_START -->')[0]}
                 </ReactMarkdown>
                 <div 
+                  ref={htmlContainerRef}
                   className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 w-full overflow-hidden article-html-container"
                   dangerouslySetInnerHTML={{ 
                     __html: article.content_md.split('<!-- HTML_CONTENT_START -->')[1].replace('<!-- HTML_CONTENT_END -->', '') 
