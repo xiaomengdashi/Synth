@@ -29,6 +29,7 @@ tmp_wechat_sample.html
 .superpowers/
 
 # Environment variables
+.backend.env
 .env
 .env.*
 
