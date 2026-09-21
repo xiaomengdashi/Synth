@@ -1,104 +1,184 @@
-import { useEffect } from 'react';
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useStore } from '../store/useStore';
-import { Sun, Moon, Sparkles, LayoutDashboard, Home, Search } from 'lucide-react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { FormEvent, useEffect, useState } from 'react';
+import { Outlet, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  Activity,
+  ArrowUpRight,
+  BookOpenText,
+  CheckCircle2,
+  CircleHelp,
+  FileText,
+  LayoutDashboard,
+  Moon,
+  Newspaper,
+  Search,
+  Settings2,
+  Sparkles,
+  Sun,
+  X,
+  AlertCircle,
+} from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useAppStore } from '../features/app/store/useAppStore';
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
+function ToastItem({
+  id,
+  title,
+  tone,
+}: {
+  id: string;
+  title: string;
+  tone: 'success' | 'error';
+}) {
+  const removeToast = useAppStore((state) => state.removeToast);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => removeToast(id), 2600);
+    return () => window.clearTimeout(timer);
+  }, [id, removeToast]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 14, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 10, scale: 0.98 }}
+      className="toast-item"
+    >
+      <span className={tone === 'success' ? 'toast-icon success' : 'toast-icon error'}>
+        {tone === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
+      </span>
+      <span>{title}</span>
+      <button type="button" onClick={() => removeToast(id)} aria-label="关闭提示">
+        <X size={15} />
+      </button>
+    </motion.div>
+  );
 }
 
 export default function Layout() {
-  const { darkMode, toggleDarkMode } = useStore();
+  const { darkMode, toggleDarkMode, toasts } = useAppStore();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
+  const isAdmin = location.pathname.startsWith('/admin');
+  const adminPageTitle = location.pathname === '/admin/tasks'
+    ? '处理任务'
+    : location.pathname === '/admin/articles'
+      ? '文章管理'
+      : location.pathname.startsWith('/admin/settings')
+        ? '系统配置'
+        : '内容总览';
 
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
-  const navItems = [
-    { path: '/', label: '首页', icon: Home },
-    { path: '/admin', label: '控制台', icon: LayoutDashboard },
+  useEffect(() => {
+    setSearchValue(searchParams.get('q') || '');
+  }, [searchParams]);
+
+  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const query = searchValue.trim();
+    navigate(query ? `/articles?q=${encodeURIComponent(query)}` : '/articles');
+  };
+
+  const adminLinks = [
+    { path: '/admin', label: '总览', icon: LayoutDashboard },
+    { path: '/admin/articles', label: '文章库', icon: Newspaper },
+    { path: '/admin/tasks', label: '处理任务', icon: Activity },
+    { path: '/admin/settings', label: '系统配置', icon: Settings2 },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col font-sans transition-colors duration-300 relative overflow-hidden">
-      {/* Animated Background Mesh */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-40 mix-blend-screen dark:opacity-60 transition-opacity duration-700">
-        <div className="absolute inset-0 bg-mesh dark:bg-mesh-dark"></div>
-        {/* Floating orbs */}
-        <div className="absolute top-[20%] left-[10%] w-[30rem] h-[30rem] bg-primary/20 dark:bg-primary/10 rounded-full blur-[100px] animate-float"></div>
-        <div className="absolute bottom-[10%] right-[20%] w-[25rem] h-[25rem] bg-secondary/20 dark:bg-secondary/10 rounded-full blur-[80px] animate-float" style={{ animationDelay: '2s' }}></div>
-      </div>
-
-      {/* Navigation */}
-      <nav className="sticky top-0 z-50 glass-panel border-x-0 border-t-0 rounded-none h-16 flex items-center justify-between px-6 lg:px-12 transition-all duration-300">
-        <div className="flex items-center gap-8">
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary shadow-lg overflow-hidden group-hover:animate-glow">
-              <Sparkles className="w-5 h-5 text-white" />
-              <div className="absolute inset-0 bg-white/20 blur-md group-hover:opacity-100 opacity-0 transition-opacity"></div>
-            </div>
-            <span className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-600 dark:from-white dark:to-slate-300">
-              SynthAI
-            </span>
+    <div className={isAdmin ? 'site-frame admin-frame' : 'site-frame'}>
+      {isAdmin ? (
+        <aside className="admin-sidebar">
+          <Link to="/" className="brand-mark">
+            <span className="brand-symbol"><Sparkles size={16} /></span>
+            <span>Synth<span>AI</span></span>
           </Link>
 
-          <div className="hidden md:flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/50 p-1 rounded-full border border-slate-200/50 dark:border-slate-700/50 backdrop-blur-sm">
-            {navItems.map((item) => (
+          <div className="sidebar-label">工作台</div>
+          <nav className="sidebar-nav" aria-label="后台导航">
+            {adminLinks.map((item, index) => (
               <Link
-                key={item.path}
                 to={item.path}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300",
-                  location.pathname === item.path
-                    ? "bg-white dark:bg-slate-700 text-primary shadow-sm"
-                    : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-white/50 dark:hover:bg-slate-700/50"
-                )}
+                key={item.path}
+                className={location.pathname === item.path || (item.path === '/admin/settings' && location.pathname.startsWith('/admin/settings/')) ? 'active' : ''}
               >
-                <item.icon className="w-4 h-4" />
-                {item.label}
+                <item.icon size={17} />
+                <span>{item.label}</span>
+                {index === 0 && <span className="nav-live-dot" />}
               </Link>
             ))}
+          </nav>
+
+          <div className="sidebar-spacer" />
+          <div className="sidebar-help">
+            <CircleHelp size={17} />
+            <div>
+              <strong>需要帮助？</strong>
+              <span>查看导入指南</span>
+            </div>
+            <ArrowUpRight size={15} />
           </div>
-        </div>
+          <Link to="/" className="back-to-site"><BookOpenText size={16} /> 返回前台</Link>
+        </aside>
+      ) : null}
 
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex relative group">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary transition-colors" />
-            <input 
-              type="text" 
-              placeholder="搜索 AI 资讯..." 
-              className="pl-9 pr-4 py-1.5 w-48 focus:w-64 transition-all duration-300 bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 dark:focus:ring-primary/30 text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
-            />
+      <div className="site-content">
+        <header className={isAdmin ? 'site-header admin-header' : 'site-header'}>
+          <div className="mobile-brand">
+            <Link to="/" className="brand-mark">
+              <span className="brand-symbol"><Sparkles size={15} /></span>
+              <span>Synth<span>AI</span></span>
+            </Link>
           </div>
-          
-          <button
-            onClick={toggleDarkMode}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-primary/50"
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
-        </div>
-      </nav>
+          {!isAdmin ? (
+            <nav className="public-nav" aria-label="主导航">
+              <Link to="/" className={location.pathname === '/' ? 'active' : ''}>发现</Link>
+              <Link to="/articles" className={location.pathname === '/articles' ? 'active' : ''}>文章库</Link>
+            </nav>
+          ) : (
+            <div className="admin-breadcrumb"><span>后台管理</span><span>/</span><strong>{adminPageTitle}</strong></div>
+          )}
+          <div className="header-actions">
+            <form className="header-search" onSubmit={handleSearch}>
+              <input
+                value={searchValue}
+                onChange={(event) => setSearchValue(event.target.value)}
+                placeholder="搜索文章或链接"
+                aria-label="搜索文章或链接"
+              />
+              <button type="submit" className="search-submit" aria-label="提交搜索">
+                <Search size={16} />
+              </button>
+            </form>
+            <button type="button" className="icon-button" onClick={toggleDarkMode} aria-label="切换主题">
+              {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+            {!isAdmin && <Link to="/admin" className="header-admin-link">管理后台 <ArrowUpRight size={14} /></Link>}
+          </div>
+        </header>
 
-      {/* Main Content */}
-      <main className="flex-1 relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full max-w-7xl">
-        <Outlet />
-      </main>
+        <main className={isAdmin ? 'site-main admin-main' : 'site-main'}>
+          <Outlet />
+        </main>
 
-      {/* Footer */}
-      <footer className="relative z-10 glass-panel border-x-0 border-b-0 rounded-none py-6 mt-auto">
-        <div className="container mx-auto px-6 text-center text-sm text-slate-500 dark:text-slate-400">
-          <p>© {new Date().getFullYear()} SynthAI. Automated AI News Aggregator.</p>
-        </div>
-      </footer>
+        {!isAdmin && (
+          <footer className="site-footer">
+            <span>© {new Date().getFullYear()} SynthAI</span>
+            <span>把值得读的内容，留在自己的知识库里。</span>
+          </footer>
+        )}
+      </div>
+
+      <div className="toast-stack">
+        <AnimatePresence>
+          {toasts.map((toast) => <ToastItem key={toast.id} {...toast} />)}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

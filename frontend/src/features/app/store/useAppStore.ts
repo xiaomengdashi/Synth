@@ -1,50 +1,34 @@
 import { create } from 'zustand';
+import type { Article } from '../../articles/types';
+import type { AppConfig } from '../../config/types';
+import type { Task } from '../../tasks/types';
 
-export interface Article {
+export interface ToastMessage {
   id: string;
   title: string;
-  summary: string;
-  content_md: string;
-  original_url: string;
-  source_type: 'wechat' | 'bilibili' | 'douyin' | 'x' | 'csdn' | 'cnblogs' | 'other';
-  cover_image_url?: string;
-  created_at: string;
-}
-
-export interface Task {
-  id: string;
-  original_url: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  current_step: string;
-  article_id?: string;
-  created_at: string;
-}
-
-export interface AppConfig {
-  modelName: string;
-  apiKey: string;
-  baseUrl: string;
-  biliSessdata?: string;
-  biliJct?: string;
-  biliBuvid3?: string;
+  tone: 'success' | 'error';
 }
 
 interface AppState {
   articles: Article[];
   tasks: Task[];
+  toasts: ToastMessage[];
   darkMode: boolean;
   config: AppConfig;
   toggleDarkMode: () => void;
   addArticle: (article: Article) => void;
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
+  pushToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  removeToast: (toastId: string) => void;
   setConfig: (config: AppConfig) => void;
   fetchConfig: () => Promise<void>;
   fetchArticles: () => Promise<void>;
-  deleteArticle: (articleId: string) => Promise<void>;
+  fetchTasks: () => Promise<void>;
+  deleteArticle: (articleId: string) => Promise<boolean>;
 }
 
-const mockArticles: Article[] = [
+const fallbackArticles: Article[] = [
   {
     id: '1',
     title: 'DeepSeek-V3 核心原理解析：MoE与MLA架构的完美结合',
@@ -95,9 +79,10 @@ if (initialDarkMode) {
   document.documentElement.classList.remove('dark');
 }
 
-export const useStore = create<AppState>((set, get) => ({
-  articles: mockArticles,
+export const useAppStore = create<AppState>((set) => ({
+  articles: [],
   tasks: [],
+  toasts: [],
   darkMode: initialDarkMode,
   config: {
     modelName: 'gpt-4o-mini',
@@ -119,14 +104,20 @@ export const useStore = create<AppState>((set, get) => ({
     return { darkMode: newDarkMode };
   }),
   addArticle: (article) => set((state) => {
-    // 避免重复添加，并处理状态更新覆盖
-    const exists = state.articles.find(a => a.id === article.id);
-    if (exists) return state;
-    return { articles: [article, ...state.articles] };
+    const nextArticles = state.articles.filter((item) => item.id !== article.id);
+    nextArticles.unshift(article);
+    nextArticles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    return { articles: nextArticles };
   }),
   addTask: (task) => set((state) => ({ tasks: [task, ...state.tasks] })),
   updateTask: (id, updates) => set((state) => ({
     tasks: state.tasks.map((t) => t.id === id ? { ...t, ...updates } : t)
+  })),
+  pushToast: (toast) => set((state) => ({
+    toasts: [...state.toasts, { ...toast, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }]
+  })),
+  removeToast: (toastId) => set((state) => ({
+    toasts: state.toasts.filter((toast) => toast.id !== toastId)
   })),
   setConfig: async (config) => {
     set(() => ({ config }));
@@ -156,26 +147,28 @@ export const useStore = create<AppState>((set, get) => ({
   fetchArticles: async () => {
     try {
       const res = await fetch('/api/v1/articles');
-      if (res.ok) {
-        const data = await res.json();
-        // 将获取到的文章与本地可能存在的mock文章合并去重（或者直接覆盖）
-        if (data.data && Array.isArray(data.data)) {
-          set((state) => {
-            const newArticles = [...data.data];
-            // 保留不冲突的 mock 数据（如果有的话，方便预览）
-            state.articles.forEach(mockArt => {
-              if (!newArticles.find(a => a.id === mockArt.id)) {
-                newArticles.push(mockArt);
-              }
-            });
-            // 排序，最新在上面
-            newArticles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-            return { articles: newArticles };
-          });
-        }
-      }
+      if (!res.ok) throw new Error(`Articles API returned ${res.status}`);
+      const data = await res.json();
+      if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');
+      const nextArticles = [...data.data];
+      nextArticles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      set(() => ({ articles: nextArticles }));
     } catch (e) {
       console.error('Failed to fetch articles', e);
+      set((state) => ({
+        articles: state.articles.length > 0 ? state.articles : fallbackArticles
+      }));
+    }
+  },
+  fetchTasks: async () => {
+    try {
+      const res = await fetch('/api/v1/tasks');
+      if (!res.ok) throw new Error(`Tasks API returned ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error('Tasks API returned an invalid payload');
+      set(() => ({ tasks: data.data }));
+    } catch (e) {
+      console.error('Failed to fetch tasks', e);
     }
   },
   deleteArticle: async (articleId: string) => {
@@ -186,13 +179,35 @@ export const useStore = create<AppState>((set, get) => ({
       if (res.ok) {
         set((state) => ({
           articles: state.articles.filter((a) => a.id !== articleId),
-          tasks: state.tasks.filter((t) => t.article_id !== articleId)
+          tasks: state.tasks.filter((t) => t.article_id !== articleId),
+          toasts: [...state.toasts, {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: '文章已删除',
+            tone: 'success',
+          }]
         }));
+        return true;
       } else {
         console.error('Failed to delete article');
+        set((state) => ({
+          toasts: [...state.toasts, {
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: '删除失败，请稍后重试',
+            tone: 'error',
+          }]
+        }));
+        return false;
       }
     } catch (error) {
       console.error('Failed to delete article', error);
+      set((state) => ({
+        toasts: [...state.toasts, {
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          title: '删除失败，请稍后重试',
+          tone: 'error',
+        }]
+      }));
+      return false;
     }
   }
 }));

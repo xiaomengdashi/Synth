@@ -20,7 +20,13 @@ venv/
 env/
 .venv/
 *.db
-backend/config.json
+backend/data/config.json
+backend/data/wechat-browser-profile/
+backend/data/wechat-browser-profile-test/
+output/
+.playwright-cli/
+tmp_wechat_sample.html
+.superpowers/
 
 # Environment variables
 .env
