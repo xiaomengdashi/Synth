@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowRight, CheckCircle2, Cpu, Video } from 'lucide-react';
+import { ArrowRight, CheckCircle2, Cpu, Smartphone, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
@@ -20,6 +20,11 @@ export default function AdminSettings() {
         description="选择一个配置模块进入独立页面，避免不同服务的设置互相干扰。"
       />
       <section className="admin-overview-grid settings-overview-grid">
+        <Link to="/share/setup" className="overview-link-panel">
+          <span className="overview-panel-icon"><Smartphone size={19} /></span>
+          <div><span className="eyebrow">iPhone / Share</span><h2>手机分享导入</h2><p>从 X 或微信文章的分享菜单直接保存内容到 SynthAI。</p><small className="config-status">设置快捷指令</small></div>
+          <ArrowRight size={17} />
+        </Link>
         <Link to="/admin/settings/model" className="overview-link-panel">
           <span className="overview-panel-icon"><Cpu size={19} /></span>
           <div>

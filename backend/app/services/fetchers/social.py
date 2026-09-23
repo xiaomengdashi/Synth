@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from urllib.parse import urlsplit
 
@@ -14,6 +15,85 @@ SUPPORTED_TWEET_HOSTS = {
     "mobile.x.com",
     *TWEET_MIRRORS,
 }
+SHORT_URL_HOSTS = {
+    "t.co",
+    "pic.twitter.com",
+    "x.com",
+    "www.x.com",
+    "mobile.x.com",
+    "twitter.com",
+    "www.twitter.com",
+    "mobile.twitter.com",
+    *TWEET_MIRRORS,
+}
+URL_PATTERN = re.compile(r"https?://[^\s<>\"]+", re.IGNORECASE)
+
+
+def _extract_url_strings(value) -> list[str]:
+    results: list[str] = []
+    if isinstance(value, str):
+        results.append(value)
+    elif isinstance(value, list):
+        for item in value:
+            results.extend(_extract_url_strings(item))
+    elif isinstance(value, dict):
+        for key in (
+            "expanded_url",
+            "expandedUrl",
+            "unwound_url",
+            "unwoundUrl",
+            "article_url",
+            "articleUrl",
+            "url",
+            "href",
+            "link",
+        ):
+            if key in value:
+                results.extend(_extract_url_strings(value[key]))
+    return results
+
+
+def _normalize_external_url(value: str) -> str | None:
+    candidate = str(value or "").strip().rstrip(".,;:!?)]}）】»”")
+    parsed = urlsplit(candidate)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme not in {"http", "https"} or not host or host in SHORT_URL_HOSTS:
+        return None
+    if parsed.username or parsed.password or parsed.port not in {None, 80, 443}:
+        return None
+    if parsed.path.lower().endswith((".jpg", ".jpeg", ".png", ".gif", ".webp", ".mp4", ".mov", ".mp3", ".m4a", ".pdf")):
+        return None
+    return f"{parsed.scheme}://{parsed.netloc}{parsed.path}" + (f"?{parsed.query}" if parsed.query else "")
+
+
+def extract_external_urls(tweet_data: dict) -> list[str]:
+    candidates: list[str] = []
+    tweet_info = tweet_data.get("tweet", {}) if isinstance(tweet_data.get("tweet"), dict) else {}
+    article_preview = tweet_data.get("article") if isinstance(tweet_data.get("article"), dict) else {}
+
+    for container in (
+        tweet_data.get("entities"),
+        tweet_info.get("entities"),
+        tweet_data.get("urls"),
+        tweet_info.get("urls"),
+        tweet_data.get("url_entities"),
+        tweet_info.get("url_entities"),
+        article_preview,
+    ):
+        candidates.extend(_extract_url_strings(container))
+
+    for text in (tweet_data.get("text"), tweet_info.get("text")):
+        if isinstance(text, str):
+            candidates.extend(URL_PATTERN.findall(text))
+
+    external_urls: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        normalized = _normalize_external_url(candidate)
+        if normalized and normalized not in seen:
+            external_urls.append(normalized)
+            seen.add(normalized)
+    return external_urls
 
 
 def build_tweet_api_url(url: str) -> str:
@@ -85,6 +165,7 @@ def normalize_tweet_payload(tweet_data: dict) -> dict:
     cover_image_url = media_urls[0] if media_urls else ""
     if article_preview and article_preview.get("image"):
         cover_image_url = article_preview["image"]
+    external_urls = extract_external_urls(tweet_data)
 
     return {
         "author_name": author_name,
@@ -100,4 +181,5 @@ def normalize_tweet_payload(tweet_data: dict) -> dict:
         "replies": replies,
         "created_at": created_at,
         "tweet_url": tweet_url,
+        "external_urls": external_urls,
     }

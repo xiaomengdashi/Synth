@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import json
 import re
@@ -99,16 +100,40 @@ async def process_task(task_id: str, url: str, config):
         summary = ""
         generated_content = ""
         cover_image_url = ""
+        source_url = url
 
         if "x.com" in url or "twitter.com" in url:
             update_step("正在尝试获取推文信息...")
-            tweet_payload = normalize_tweet_payload(fetch_tweet_data(url))
+            direct_article_id = extract_x_article_id(url)
+            tweet_payload = normalize_tweet_payload({}) if direct_article_id else normalize_tweet_payload(await asyncio.to_thread(fetch_tweet_data, url))
             title = tweet_payload["title"]
-            x_article_id = extract_x_article_id(tweet_payload["tweet_text"])
+            x_article_id = direct_article_id or extract_x_article_id(tweet_payload["tweet_text"])
+            external_source_url = next(iter(tweet_payload.get("external_urls") or []), "")
+            external_fetched = False
 
-            if x_article_id:
+            if external_source_url and not direct_article_id:
+                try:
+                    update_step("检测到推文引用了外部文章，正在抓取原网页...")
+                    article_payload = await fetch_article_content(external_source_url, update_step)
+                    title = article_payload["title"] or title
+                    summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。")
+                    if article_payload["html_content"]:
+                        generated_content = (
+                            f"## 内容摘要\n\n{summary}\n\n---\n\n"
+                            f"<!-- HTML_CONTENT_START -->\n{article_payload['html_content']}\n<!-- HTML_CONTENT_END -->"
+                        )
+                    else:
+                        generated_content = f"## 内容摘要\n\n{summary}\n\n---\n\n{article_payload['extracted_md']}"
+                    cover_image_url = article_payload["cover_image_url"] or tweet_payload["cover_image_url"]
+                    source_url = external_source_url
+                    external_fetched = True
+                except Exception:
+                    update_step("外部原文抓取失败，正在回退为保存 X 内容...")
+
+            if not external_fetched and x_article_id:
                 x_cli_payload = await fetch_x_article_via_twitter_cli(url, update_step)
                 title = x_cli_payload["title"] or title
+                cover_image_url = x_cli_payload.get("cover_image_url") or ""
                 summary = build_local_summary(x_cli_payload["content_md"], "X 长文正文已获取。")
                 generated_content = (
                     f"## 内容摘要\n\n{summary}\n\n---\n\n"
@@ -170,8 +195,8 @@ async def process_task(task_id: str, url: str, config):
             "title": title,
             "summary": summary,
             "content_md": generated_content,
-            "original_url": url,
-            "source_type": detect_source_type(url),
+            "original_url": source_url,
+            "source_type": detect_source_type(source_url),
             "cover_image_url": cover_image_url,
             "created_at": TASKS_DB[task_id]["created_at"],
         }
@@ -186,8 +211,8 @@ async def process_task(task_id: str, url: str, config):
                     title=title,
                     summary=summary,
                     content_md=generated_content,
-                    original_url=url,
-                    source_type=detect_source_type(url),
+                    original_url=source_url,
+                    source_type=detect_source_type(source_url),
                     cover_image_url=cover_image_url,
                     created_at=datetime.datetime.fromisoformat(task_created_at(TASKS_DB[task_id])),
                 )

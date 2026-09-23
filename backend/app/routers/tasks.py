@@ -1,15 +1,17 @@
 import datetime
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.database import get_db
 from app.models import Task
 from app.services.runtime_store import TASKS_DB
 from app.services.task_service import create_task_record, get_task_status, process_task
+from app.services.share_import import extract_shared_url, prepare_shared_task
+from app.routers.config import get_config
 
 router = APIRouter()
 
@@ -26,6 +28,28 @@ class ModelConfig(BaseModel):
 class TaskSubmit(BaseModel):
     url: str
     config: ModelConfig
+
+
+class ShareSubmit(BaseModel):
+    url: str = Field(default="", max_length=16000)
+    text: str = Field(default="", max_length=16000)
+    title: str = Field(default="", max_length=2000)
+    retry: bool = False
+
+
+@router.post("/share")
+async def submit_share(data: ShareSubmit, background_tasks: BackgroundTasks, db=Depends(get_db)):
+    try:
+        identity, url = extract_shared_url(data.url, data.text, data.title)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result, scheduled = await prepare_shared_task(db, identity, url, data.retry)
+    if scheduled:
+        task_id = result["task_id"]
+        TASKS_DB[task_id] = {**result, "id": task_id}
+        config = ModelConfig(**await get_config())
+        background_tasks.add_task(process_task, task_id, url, config)
+    return result
 
 
 @router.get("")

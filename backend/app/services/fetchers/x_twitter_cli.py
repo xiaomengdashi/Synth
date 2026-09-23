@@ -92,6 +92,17 @@ def _twitter_python(command: str) -> str | None:
     return None
 
 
+def _twitter_subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    for key in (
+        "PYTHONHOME",
+        "PYTHONPATH",
+        "__PYVENV_LAUNCHER__",
+    ):
+        env.pop(key, None)
+    return env
+
+
 async def _fetch_rich_article(url: str, command: str) -> dict[str, Any] | None:
     tweet_id = extract_x_tweet_id(url)
     interpreter = _twitter_python(command)
@@ -105,7 +116,7 @@ async def _fetch_rich_article(url: str, command: str) -> dict[str, Any] | None:
         tweet_id,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=os.environ.copy(),
+        env=_twitter_subprocess_env(),
     )
     try:
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=90)
@@ -134,7 +145,7 @@ async def fetch_x_article_via_twitter_cli(url: str, update_step) -> dict[str, An
         "--markdown",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
-        env=os.environ.copy(),
+        env=_twitter_subprocess_env(),
     )
 
     try:

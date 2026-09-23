@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Check, FileText, Link2, Loader2, Send, Twitter, Upload, Video, X } from 'lucide-react';
+import { ArrowRight, Check, Clipboard, FileText, Link2, Loader2, Send, Smartphone, Twitter, Upload, Video, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
@@ -40,6 +40,8 @@ export default function Home() {
   const [source, setSource] = useState<Source>('wechat');
   const [url, setUrl] = useState('');
   const [detectedSource, setDetectedSource] = useState<Source | null>(null);
+  const [clipboardMessage, setClipboardMessage] = useState('');
+  const [isPasting, setIsPasting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [htmlImportOpen, setHtmlImportOpen] = useState(false);
   const [htmlOriginalUrl, setHtmlOriginalUrl] = useState('');
@@ -124,6 +126,34 @@ export default function Home() {
     }
   };
 
+  const applyUrlInput = (nextUrl: string) => {
+    const detected = detectSourceFromUrl(nextUrl);
+    setUrl(nextUrl);
+    setDetectedSource(detected);
+    if (detected) setSource(detected);
+  };
+
+  const handlePasteImport = async () => {
+    if (!navigator.clipboard?.readText) {
+      setClipboardMessage('当前浏览器不支持直接读取剪贴板，请手动粘贴。');
+      return;
+    }
+    setIsPasting(true);
+    setClipboardMessage('');
+    try {
+      const clipboardText = (await navigator.clipboard.readText()).trim();
+      if (!clipboardText) {
+        setClipboardMessage('剪贴板里还没有可导入的内容。');
+        return;
+      }
+      applyUrlInput(clipboardText);
+    } catch {
+      setClipboardMessage('没有拿到剪贴板权限，请先允许访问，或手动粘贴。');
+    } finally {
+      setIsPasting(false);
+    }
+  };
+
   const handleHtmlFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
@@ -181,6 +211,7 @@ export default function Home() {
         <div className="import-topline">
           <h2>导入一条内容</h2>
           <div className="import-topline-actions">
+            <Link to="/share/setup" className="secondary-button"><Smartphone size={14} />iPhone 分享导入</Link>
             <span>WECHAT · X · BILIBILI</span>
             <button type="button" className="secondary-button" onClick={() => setHtmlImportOpen(true)}><Upload size={14} />导入网页 HTML</button>
           </div>
@@ -197,24 +228,24 @@ export default function Home() {
             <input
               value={url}
               onChange={(event) => {
-                const nextUrl = event.target.value;
-                const detected = detectSourceFromUrl(nextUrl);
-                setUrl(nextUrl);
-                setDetectedSource(detected);
-                if (detected) setSource(detected);
+                applyUrlInput(event.target.value);
+                setClipboardMessage('');
               }}
               placeholder={sourceMeta[source].placeholder}
               type="url"
               required
             />
           </label>
+          <button type="button" className="secondary-button import-paste-button" onClick={() => void handlePasteImport()} disabled={isSubmitting || isPasting}>
+            {isPasting ? <><Loader2 size={15} className="animate-spin" />读取中</> : <><Clipboard size={15} />粘贴并导入</>}
+          </button>
           <button type="submit" className="primary-button" disabled={isSubmitting || !url.trim()}>
             {isSubmitting ? <><Loader2 size={15} className="animate-spin" />处理中</> : <><Send size={15} />开始整理</>}
           </button>
         </form>
         <div className="import-hint">
           {detectedSource ? <Check size={13} /> : <Link2 size={13} />}
-          {detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源类型；微信安全验证不会自动打开浏览器。'}
+          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源类型；微信安全验证不会自动打开浏览器。')}
         </div>
       </motion.section>
 
