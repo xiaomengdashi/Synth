@@ -10,7 +10,6 @@ Token 未配置或请求失败时抛出异常，由调用方处理。
 
 from __future__ import annotations
 
-import os
 import re
 import math
 from datetime import datetime, timezone
@@ -48,18 +47,14 @@ class TikHubNotConfiguredError(TikHubError):
 
 
 def resolve_tikhub_token(config: Any = None) -> str:
-    """按 config.tikhubApiKey → 环境变量 TIKHUB_API_TOKEN 的顺序解析 Token。"""
+    """从配置对象读取 TikHub API Token（配置来自 SQLite app_settings 表）。"""
     token = ""
     if isinstance(config, dict):
         token = str(config.get("tikhubApiKey") or "").strip()
     elif config is not None:
         token = str(getattr(config, "tikhubApiKey", "") or "").strip()
     if not token:
-        token = os.environ.get("TIKHUB_API_TOKEN", "").strip()
-    if not token:
-        raise TikHubNotConfiguredError(
-            "未配置 TikHub API Token（config.tikhubApiKey 或环境变量 TIKHUB_API_TOKEN）。"
-        )
+        raise TikHubNotConfiguredError("未配置 TikHub API Token，请在管理后台的 TikHub 页面设置。")
     return token
 
 

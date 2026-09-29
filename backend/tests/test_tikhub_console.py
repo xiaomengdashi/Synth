@@ -34,7 +34,6 @@ def console(tmp_path, monkeypatch):
 
     asyncio.run(prepare())
     monkeypatch.setattr(settings_store, 'AsyncSessionLocal', sessions)
-    monkeypatch.delenv('TIKHUB_API_TOKEN', raising=False)
     app = FastAPI()
     app.include_router(config.router, prefix='/api/v1/config')
     app.include_router(tikhub.router, prefix='/api/v1/tikhub')
@@ -66,9 +65,8 @@ def test_public_config_masks_key_and_legacy_save_cannot_overwrite_it(console):
     assert stored()['apiKey'] == 'new-llm'
 
 
-def test_key_metadata_and_removal_use_environment_fallback(console, monkeypatch):
+def test_key_metadata_and_removal(console):
     client, write_settings, stored = console
-    monkeypatch.setenv('TIKHUB_API_TOKEN', 'environment-secret')
     write_settings({'tikhubApiKey': 'stored-secret', 'apiKey': 'llm'})
     response = client.get('/api/v1/tikhub/key')
     assert response.status_code == 200
@@ -76,11 +74,11 @@ def test_key_metadata_and_removal_use_environment_fallback(console, monkeypatch)
     assert 'stored-secret' not in response.text
     response = client.delete('/api/v1/tikhub/key')
     assert response.status_code == 200
-    assert response.json()['source'] == 'environment'
-    assert 'environment-secret' not in response.text
+    assert response.json()['source'] is None
+    assert response.json()['configured'] is False
     assert stored()['apiKey'] == 'llm'
     assert not stored()['tikhubApiKey']
-    assert client.get('/api/v1/config').json()['tikhubConfigured'] is True
+    assert client.get('/api/v1/config').json()['tikhubConfigured'] is False
 
 
 def test_verification_rejects_disabled_account_without_overwriting(console, monkeypatch):

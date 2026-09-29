@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import datetime
-import os
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -64,11 +63,10 @@ def is_masked(value: str) -> bool:
 def key_metadata(values: dict) -> dict:
     """TikHub Key 的公开元数据（不含密钥本体）。"""
     stored = str(values.get("tikhubApiKey") or "").strip()
-    token = stored or os.environ.get("TIKHUB_API_TOKEN", "").strip()
     return {
-        "configured": bool(token),
-        "source": "config" if stored else ("environment" if token else None),
-        "masked_key": mask_secret(token),
+        "configured": bool(stored),
+        "source": "config" if stored else None,
+        "masked_key": mask_secret(stored),
         "has_saved_key": bool(stored),
     }
 

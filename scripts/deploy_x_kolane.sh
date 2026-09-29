@@ -59,9 +59,7 @@ tar -C "${ROOT_DIR}/backend" -czf - app main.py requirements.txt | \
   "bash -lc 'rm -rf \"${REMOTE_APP_DIR}/backend\"/{*,.[!.]*,..?*} 2>/dev/null || true; tar -xzf - -C \"${REMOTE_APP_DIR}/backend\"'"
 
 echo "==> 写入远端环境与服务配置"
-# 从本地 SQLite 配置表读取 TikHub Token（存在才注入远端环境变量，不落入 git）
-TIKHUB_TOKEN="$(python3 -c "import sqlite3; c = sqlite3.connect('${ROOT_DIR}/backend/data/synthai.db'); r = c.execute(\"SELECT value FROM app_settings WHERE key = 'tikhubApiKey'\").fetchone(); print(r[0] if r and r[0] else '')" 2>/dev/null || true)"
-ssh -o StrictHostKeyChecking=no "${REMOTE}" "DOMAIN='${DOMAIN}' APP_NAME='${APP_NAME}' NGINX_SITE_NAME='${NGINX_SITE_NAME}' REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_WEB_DIR='${REMOTE_WEB_DIR}' BACKEND_PORT='${BACKEND_PORT}' TIKHUB_TOKEN='${TIKHUB_TOKEN}' python3 - <<'PY'
+ssh -o StrictHostKeyChecking=no "${REMOTE}" "DOMAIN='${DOMAIN}' APP_NAME='${APP_NAME}' NGINX_SITE_NAME='${NGINX_SITE_NAME}' REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_WEB_DIR='${REMOTE_WEB_DIR}' BACKEND_PORT='${BACKEND_PORT}' python3 - <<'PY'
 from pathlib import Path
 import os
 
@@ -71,7 +69,6 @@ nginx_site_name = os.environ['NGINX_SITE_NAME']
 remote_app_dir = os.environ['REMOTE_APP_DIR']
 remote_web_dir = os.environ['REMOTE_WEB_DIR']
 backend_port = os.environ['BACKEND_PORT']
-tikhub_token = os.environ.get('TIKHUB_TOKEN', '').strip()
 cert_dir = Path(f'/etc/letsencrypt/live/{domain}')
 fullchain = cert_dir / 'fullchain.pem'
 privkey = cert_dir / 'privkey.pem'
@@ -133,8 +130,6 @@ env_lines = [
     'APP_HOST=127.0.0.1',
     f'APP_PORT={backend_port}',
 ]
-if tikhub_token:
-    env_lines.append(f'TIKHUB_API_TOKEN={tikhub_token}')
 
 Path(f'/etc/{app_name}.env').write_text(
     chr(10).join(env_lines) + chr(10),

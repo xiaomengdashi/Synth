@@ -115,18 +115,7 @@ class TestResolveToken:
 
         assert resolve_tikhub_token(Config()) == "object-token"
 
-    def test_falls_back_to_env_variable(self, monkeypatch):
-        monkeypatch.delenv("TIKHUB_API_TOKEN", raising=False)
-        monkeypatch.setenv("TIKHUB_API_TOKEN", "env-token")
-        assert resolve_tikhub_token({}) == "env-token"
-        assert resolve_tikhub_token(None) == "env-token"
-
-    def test_config_takes_priority_over_env(self, monkeypatch):
-        monkeypatch.setenv("TIKHUB_API_TOKEN", "env-token")
-        assert resolve_tikhub_token({"tikhubApiKey": "dict-token"}) == "dict-token"
-
-    def test_raises_when_not_configured(self, monkeypatch):
-        monkeypatch.delenv("TIKHUB_API_TOKEN", raising=False)
+    def test_raises_when_not_configured(self):
         with pytest.raises(TikHubNotConfiguredError):
             resolve_tikhub_token({})
 
@@ -366,8 +355,7 @@ class TestFetchTikhubTweet:
         with pytest.raises(TikHubError, match="无法从链接中提取推文 ID"):
             fetch_tikhub_tweet("https://example.com/nope", {"tikhubApiKey": "tok"})
 
-    def test_requires_token(self, monkeypatch):
-        monkeypatch.delenv("TIKHUB_API_TOKEN", raising=False)
+    def test_requires_token(self):
         with pytest.raises(TikHubNotConfiguredError):
             fetch_tikhub_tweet("https://x.com/someone/status/1799000000000000001", {})
 
