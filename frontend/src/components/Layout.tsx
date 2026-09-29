@@ -70,7 +70,7 @@ export default function Layout() {
           ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '多平台查询' }]
           : location.pathname.startsWith('/admin/settings')
             ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置' }]
-            : [{ label: '后台管理' }, { label: '内容总览' }];
+            : [{ label: '后台管理', to: '/admin' }, { label: '内容总览' }];
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -151,7 +151,7 @@ export default function Layout() {
                   {crumb.to && index < adminBreadcrumbs.length - 1 ? (
                     <Link to={crumb.to}>{crumb.label}</Link>
                   ) : (
-                    <strong aria-current="page">{crumb.label}</strong>
+                    <strong aria-current={index === adminBreadcrumbs.length - 1 ? 'page' : undefined}>{crumb.label}</strong>
                   )}
                 </span>
               ))}
