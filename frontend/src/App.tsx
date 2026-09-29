@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Layout from './components/Layout';
 import Home from './features/articles/pages/Home';
@@ -30,13 +30,14 @@ function App() {
           <Route path="articles" element={<Articles />} />
           <Route path="article/:id" element={<Article />} />
           <Route path="share" element={<ShareReceive />} />
-          <Route path="share/setup" element={<ShareSetup />} />
+          <Route path="share/setup" element={<Navigate to="/admin/settings/share" replace />} />
           <Route path="admin" element={<Admin />} />
           <Route path="admin/tasks" element={<AdminTasks />} />
           <Route path="admin/articles" element={<AdminArticles />} />
           <Route path="admin/settings" element={<AdminSettings />} />
           <Route path="admin/settings/model" element={<AdminModelSettings />} />
           <Route path="admin/settings/tikhub" element={<AdminTikHubSettings />} />
+          <Route path="admin/settings/share" element={<ShareSetup />} />
           <Route path="admin/tikhub/query" element={<AdminTikHubQuery />} />
         </Route>
       </Routes>

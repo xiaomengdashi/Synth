@@ -54,7 +54,7 @@ export default function AdminSettings() {
           </div>
           <ArrowRight size={17} />
         </Link>
-        <Link to="/share/setup" className="overview-link-panel">
+        <Link to="/admin/settings/share" className="overview-link-panel">
           <span className="overview-panel-icon"><Smartphone size={19} /></span>
           <div>
             <span className="eyebrow">移动端 · 可选功能</span>

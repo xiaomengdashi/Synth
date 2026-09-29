@@ -203,7 +203,7 @@ export default function Home() {
         <div className="import-topline">
           <h2>导入一条内容</h2>
           <div className="import-topline-actions">
-            <Link to="/share/setup" className="secondary-button"><Smartphone size={14} />iPhone 分享导入</Link>
+            <Link to="/admin/settings/share" className="secondary-button"><Smartphone size={14} />iPhone 分享导入</Link>
             <span>WECHAT · X · BILIBILI</span>
             <button type="button" className="secondary-button" onClick={() => setHtmlImportOpen(true)}><Upload size={14} />导入网页 HTML</button>
           </div>
