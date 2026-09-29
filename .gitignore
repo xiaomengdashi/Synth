@@ -21,6 +21,7 @@ env/
 .venv/
 *.db
 backend/data/config.json
+backend/data/config.json.migrated
 backend/data/wechat-browser-profile/
 backend/data/wechat-browser-profile-test/
 output/
