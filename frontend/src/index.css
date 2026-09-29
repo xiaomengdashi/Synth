@@ -138,6 +138,9 @@
 .header-admin-link { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-size: 12px; font-weight: 700; text-decoration: none; }
 .header-admin-link:hover { color: #70a835; }
 .admin-breadcrumb { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 12px; }
+.admin-breadcrumb .crumb { display: inline-flex; align-items: center; gap: 10px; }
+.admin-breadcrumb .crumb a { color: var(--muted); text-decoration: none; transition: color .15s ease; }
+.admin-breadcrumb .crumb a:hover { color: var(--ink); }
 .admin-breadcrumb strong { color: var(--ink); font-weight: 700; }
 
 .site-main { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 56px 0 76px; }
