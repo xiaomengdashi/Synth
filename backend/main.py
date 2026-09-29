@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import articles, tasks, config
+from app.routers import articles, tasks, config, tikhub
 from app.config import settings
 
 
@@ -46,6 +46,7 @@ app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 app.include_router(articles.router, prefix="/api/v1/articles", tags=["articles"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
+app.include_router(tikhub.router, prefix="/api/v1/tikhub", tags=["tikhub"])
 
 
 @app.get("/")

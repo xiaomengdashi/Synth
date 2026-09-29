@@ -25,6 +25,8 @@ WECHAT_ARTICLE_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail_h5"
 BILIBILI_PARTS_PATH = "/api/v1/bilibili/web/fetch_video_parts"
 BILIBILI_BV_TO_AID_PATH = "/api/v1/bilibili/web/bv_to_aid"
 BILIBILI_PLAYER_PATH = "/api/v1/bilibili/web/fetch_one_video_v2"
+TIKHUB_USER_INFO_PATH = "/api/v1/tikhub/user/get_user_info"
+TIKHUB_DAILY_USAGE_PATH = "/api/v1/tikhub/user/get_user_daily_usage"
 
 BILIBILI_BVID_PATTERN = re.compile(r"BV[0-9A-Za-z]{10}")
 
@@ -55,8 +57,8 @@ def resolve_tikhub_token(config: Any = None) -> str:
     return token
 
 
-def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: dict | None = None) -> dict:
-    """调用 TikHub 接口并返回响应中的 data 字典。"""
+def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: dict | None = None, unwrap_data: bool = True) -> dict:
+    """调用 TikHub 接口；unwrap_data=False 用于无 data 包装的接口（如用户信息）。"""
     request_url = f"{TIKHUB_API_BASE}{path}"
     try:
         response = httpx.request(
@@ -97,6 +99,9 @@ def _tikhub_request(path: str, token: str, params: dict | None = None, json_body
     if code not in (200, 0, None):
         message = payload.get("message") or payload.get("message_zh") or str(payload)[:200]
         raise TikHubError(f"TikHub 接口返回错误 (code={code}): {message}")
+
+    if not unwrap_data:
+        return payload if isinstance(payload, dict) else {}
 
     data = payload.get("data")
     if not isinstance(data, dict):
@@ -523,4 +528,67 @@ def fetch_bilibili_video(url: str, config: Any = None) -> dict:
         "cover_image_url": "",
         "bvid": bvid,
         "chapter_info": "\n".join(chapter_lines),
+    }
+
+
+# ---------------------------------------------------------------------------
+# TikHub 账户信息（TikHub-User-API）
+# ---------------------------------------------------------------------------
+
+def verify_tikhub_token(token: str) -> dict:
+    """验证 Token 并返回简要账户信息（无效时抛出 TikHubError）。"""
+    payload = _tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False)
+    user_data = payload.get("user_data") or {}
+    api_key_data = payload.get("api_key_data") or {}
+    return {
+        "api_key": {
+            "name": api_key_data.get("api_key_name", ""),
+            "created_at": api_key_data.get("created_at"),
+            "expires_at": api_key_data.get("expires_at"),
+            "status": api_key_data.get("api_key_status"),
+            "scopes_count": len(api_key_data.get("api_key_scopes") or []),
+        },
+        "user": {
+            "balance": user_data.get("balance", 0.0),
+            "free_credit": user_data.get("free_credit", 0.0),
+            "is_active": bool(user_data.get("is_active")),
+        },
+    }
+
+
+def fetch_tikhub_account(config: Any = None) -> dict:
+    """查询账户摘要：Key 信息、余额、今日用量（按端点明细）。"""
+    token = resolve_tikhub_token(config)
+    payload = _tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False)
+    user_data = payload.get("user_data") or {}
+    api_key_data = payload.get("api_key_data") or {}
+
+    daily_usage: dict = {}
+    try:
+        daily_usage = _tikhub_request(TIKHUB_DAILY_USAGE_PATH, token) or {}
+    except TikHubError:
+        daily_usage = {}
+
+    uri_counts = daily_usage.get("uri_counts") or {}
+    return {
+        "api_key": {
+            "name": api_key_data.get("api_key_name", ""),
+            "created_at": api_key_data.get("created_at"),
+            "expires_at": api_key_data.get("expires_at"),
+            "status": api_key_data.get("api_key_status"),
+            "scopes_count": len(api_key_data.get("api_key_scopes") or []),
+        },
+        "user": {
+            "email": user_data.get("email", ""),
+            "balance": user_data.get("balance", 0.0),
+            "free_credit": user_data.get("free_credit", 0.0),
+            "is_active": bool(user_data.get("is_active")),
+        },
+        "daily_usage": {
+            "date": daily_usage.get("date", ""),
+            "usage": daily_usage.get("usage", 0.0),
+            "total_request_per_day": daily_usage.get("total_request_per_day", 0),
+            "paid_request_per_day": daily_usage.get("paid_request_per_day", 0),
+            "uri_counts": {str(k): int(v) for k, v in uri_counts.items() if v},
+        },
     }
