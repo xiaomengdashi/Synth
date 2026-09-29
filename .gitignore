@@ -20,10 +20,8 @@ venv/
 env/
 .venv/
 *.db
-backend/data/config.json
-backend/data/config.json.migrated
-backend/data/wechat-browser-profile/
-backend/data/wechat-browser-profile-test/
+# 运行时数据一律不入库（数据库/配置/浏览器 profile 等）
+backend/data/
 output/
 .playwright-cli/
 tmp_wechat_sample.html
