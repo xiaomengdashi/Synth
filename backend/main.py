@@ -41,7 +41,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 静态文件（图片等媒体）
+# 静态文件（图片等媒体）——mount 在模块加载时执行，必须先确保目录存在
+os.makedirs(settings.MEDIA_DIR, exist_ok=True)
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 
 # 路由
