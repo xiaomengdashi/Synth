@@ -67,7 +67,7 @@ export default function AdminTikHubSettings() {
     try {
       const data = await requestJson<KeyStatus>('/api/v1/tikhub/key', { method: 'DELETE' });
       setKey(data); setAccount(null); setApiKey('');
-      setNotice(data.configured ? '已移除页面保存的 Key，当前使用服务器环境变量。' : '已移除保存的 Key。');
+      setNotice('已移除保存的 Key，抓取功能将不可用，重新保存即可恢复。');
       await fetchConfig();
       await loadAccount();
     } catch (e) { setError(e instanceof Error ? e.message : '移除失败'); }
@@ -96,7 +96,7 @@ export default function AdminTikHubSettings() {
             <span className={key?.configured ? 'config-status ready' : 'config-status'}>
               {key === null ? '读取配置中' : key.configured ? '已配置' : '尚未配置'}
             </span>
-            {key?.configured && <><code>{key.masked_key}</code><span>{key.source === 'environment' ? '来自服务器环境变量' : '来自本页设置'}</span></>}
+            {key?.configured && <><code>{key.masked_key}</code><span>Key 仅保存在服务端数据库</span></>}
           </div>
           <form onSubmit={save}>
             <div className="form-field">
@@ -104,7 +104,7 @@ export default function AdminTikHubSettings() {
               <input id="tikhub-key" type="password" autoComplete="new-password" spellCheck={false} value={apiKey}
                 onChange={event => setApiKey(event.target.value)} maxLength={4096} disabled={saving}
                 placeholder={key?.configured ? '输入新 Key 以更换' : '粘贴 TikHub API Key'} />
-              <p className="form-help">Key 仅保存在后端，不会回传到浏览器。保存的 Key 优先于环境变量。</p>
+              <p className="form-help">Key 仅保存在后端数据库，不会回传到浏览器，也不再支持环境变量。</p>
             </div>
             {error && <p className="tikhub-message error" role="alert">{error}</p>}
             {notice && <p className="tikhub-message success" role="status">{notice}</p>}
@@ -116,9 +116,7 @@ export default function AdminTikHubSettings() {
         </section>
         <section className="settings-panel settings-form-panel">
           <h2><Bird size={16} /> 数据查询</h2>
-          <p>按平台浏览查询目录，选择内容详情、用户信息、评论列表或搜索接口。参数和必填项由官方接口定义提供。</p>
-          <div className="tikhub-platform-preview"><span>抖音</span><span>X / Twitter</span><span>Bilibili</span><span>微信</span><span>小红书</span><span>更多平台</span></div>
-          <p className="form-help">也可在“账户与计费”分类中查询接口价格、价格估算和阶梯折扣。查询可能消耗 TikHub 额度，以实际接口计费为准。</p>
+          <p>按平台浏览 TikHub 接口目录，查询内容详情、用户信息、评论或搜索数据；查询会按官方计费消耗额度。</p>
           <Link to="/admin/tikhub/query" className="primary-button tikhub-query-link">进入多平台查询 <ArrowRight size={14} /></Link>
         </section>
       </div>

@@ -485,8 +485,6 @@
 .tikhub-message.warning { color: #986f1e; background: #b8971310; }
 .dark .tikhub-message.warning { color: #e4c773; }
 .tikhub-message a { color: inherit; text-decoration: underline; }
-.tikhub-platform-preview { display: flex; gap: 8px; flex-wrap: wrap; margin: 18px 0; }
-.tikhub-platform-preview span { background: var(--paper); border: 1px solid var(--line); border-radius: 5px; padding: 6px 9px; font-size: 11px; color: var(--muted); }
 .tikhub-query-link { display: inline-flex; margin-top: 20px; text-decoration: none; }
 .tikhub-account { margin-top: 24px; }
 .tikhub-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 16px; }
