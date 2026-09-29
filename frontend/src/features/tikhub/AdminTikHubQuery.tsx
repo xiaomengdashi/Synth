@@ -128,10 +128,10 @@ export default function AdminTikHubQuery() {
 
   return <div className="tikhub-page">
     <AdminPageHeader eyebrow="TikHub / Explorer" title="多平台数据查询" description="选择平台与接口，填写参数，用已保存的 Key 获取实时数据。"
-      actions={<Link to="/admin/settings/tikhub" className="secondary-button"><ArrowLeft size={14} /> Key 与账户</Link>} />
-    <nav className="tikhub-tabs" aria-label="TikHub 页面"><Link to="/admin/settings/tikhub">Key 与账户</Link><Link className="active" aria-current="page" to="/admin/tikhub/query">多平台查询</Link></nav>
+      actions={<Link to="/admin/settings?tab=tikhub" className="secondary-button"><ArrowLeft size={14} /> Key 与账户</Link>} />
+    <nav className="tikhub-tabs" aria-label="TikHub 页面"><Link to="/admin/settings?tab=tikhub">Key 与账户</Link><Link className="active" aria-current="page" to="/admin/tikhub/query">多平台查询</Link></nav>
     {keyError ? <p className="tikhub-message error" role="alert">{keyError} <button className="tiny-button" onClick={() => setReload(reload + 1)}>重试</button></p>
-      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，<Link to="/admin/settings/tikhub">设置 Key</Link> 后即可查询。</p>
+      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，<Link to="/admin/settings?tab=tikhub">设置 Key</Link> 后即可查询。</p>
       : key?.configured && <p className="tikhub-key-status"><span className="config-status ready">Key 已配置</span><code>{key.masked_key}</code><span>每次查询可能计费，请按需执行。</span></p>}
     <div className="tikhub-explorer">
       <section className="settings-panel tikhub-catalog" aria-busy={loading}>
