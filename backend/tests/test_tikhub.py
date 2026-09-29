@@ -132,24 +132,25 @@ class TestResolveToken:
 
 
 class TestFetchTweetDetail:
-    def _patch_get(self, monkeypatch, response: httpx.Response):
+    def _patch_request(self, monkeypatch, response: httpx.Response):
         calls = {}
 
-        def fake_get(url, **kwargs):
+        def fake_request(method, url, **kwargs):
+            calls["method"] = method
             calls["url"] = url
             calls["kwargs"] = kwargs
             return response
 
-        monkeypatch.setattr(tikhub.httpx, "get", fake_get)
+        monkeypatch.setattr(tikhub.httpx, "request", fake_request)
         return calls
 
     def test_success_returns_data(self, monkeypatch):
-        self._patch_get(monkeypatch, httpx.Response(200, json=_tikhub_payload(_tweet_result())))
+        self._patch_request(monkeypatch, httpx.Response(200, json=_tikhub_payload(_tweet_result())))
         data = fetch_tweet_detail("123", "token")
         assert data["tweet_result_by_rest_id"]["result"]["rest_id"] == "1799000000000000001"
 
     def test_request_includes_bearer_token_and_tweet_id(self, monkeypatch):
-        calls = self._patch_get(monkeypatch, httpx.Response(200, json=_tikhub_payload(_tweet_result())))
+        calls = self._patch_request(monkeypatch, httpx.Response(200, json=_tikhub_payload(_tweet_result())))
         fetch_tweet_detail("123456", "secret-token")
         assert calls["url"] == f"{tikhub.TIKHUB_API_BASE}{tikhub.TWEET_DETAIL_PATH}"
         assert calls["kwargs"]["params"] == {"tweet_id": "123456"}
@@ -166,12 +167,20 @@ class TestFetchTweetDetail:
         ],
     )
     def test_http_errors_are_wrapped(self, monkeypatch, status, fragment):
-        self._patch_get(monkeypatch, httpx.Response(status, json={}))
+        self._patch_request(monkeypatch, httpx.Response(status, json={}))
         with pytest.raises(TikHubError, match=fragment):
             fetch_tweet_detail("123", "token")
 
+    def test_error_detail_body_is_wrapped(self, monkeypatch):
+        self._patch_request(
+            monkeypatch,
+            httpx.Response(200, json={"detail": {"code": 402, "message_zh": "余额不足"}}),
+        )
+        with pytest.raises(TikHubError, match="余额不足"):
+            fetch_tweet_detail("123", "token")
+
     def test_payload_error_code_is_wrapped(self, monkeypatch):
-        self._patch_get(
+        self._patch_request(
             monkeypatch,
             httpx.Response(200, json={"code": 404, "message": "tweet not found"}),
         )
@@ -179,10 +188,10 @@ class TestFetchTweetDetail:
             fetch_tweet_detail("123", "token")
 
     def test_network_error_is_wrapped(self, monkeypatch):
-        def fake_get(url, **kwargs):
+        def fake_request(method, url, **kwargs):
             raise httpx.ConnectError("connection refused")
 
-        monkeypatch.setattr(tikhub.httpx, "get", fake_get)
+        monkeypatch.setattr(tikhub.httpx, "request", fake_request)
         with pytest.raises(TikHubError, match="TikHub 请求失败"):
             fetch_tweet_detail("123", "token")
 
@@ -361,3 +370,114 @@ class TestFetchTikhubTweet:
         monkeypatch.delenv("TIKHUB_API_TOKEN", raising=False)
         with pytest.raises(TikHubNotConfiguredError):
             fetch_tikhub_tweet("https://x.com/someone/status/1799000000000000001", {})
+
+
+class TestFetchWechatArticle:
+    def _wechat_response(self) -> httpx.Response:
+        return httpx.Response(200, json={
+            "code": 200,
+            "data": {
+                "url": "https://mp.weixin.qq.com/s/abc",
+                "content": {
+                    "title": "公众号文章标题",
+                    "nick_name": "测试公众号",
+                    "author": "作者甲",
+                    "desc": "文章摘要",
+                    "content_noencode": '<section><img data-src="https://mmbiz.qpic.cn/a.jpg"><p style="visibility:hidden;">正文</p></section>',
+                    "content_text": "正文纯文本",
+                    "cdn_url": "https://mmbiz.qpic.cn/cover.jpg",
+                    "create_time": "2026-08-01 08:00",
+                },
+            },
+        })
+
+    def test_success_returns_article_fields(self, monkeypatch):
+        monkeypatch.setattr(tikhub.httpx, "request", lambda *a, **k: self._wechat_response())
+        article = tikhub.fetch_wechat_article("https://mp.weixin.qq.com/s/abc", {"tikhubApiKey": "tok"})
+        assert article["title"] == "公众号文章标题"
+        assert article["account_name"] == "测试公众号"
+        assert article["author"] == "作者甲"
+        assert article["cover_image_url"] == "https://mmbiz.qpic.cn/cover.jpg"
+        assert article["publish_time"] == "2026-08-01 08:00"
+
+    def test_lazy_image_and_hidden_style_are_fixed(self, monkeypatch):
+        monkeypatch.setattr(tikhub.httpx, "request", lambda *a, **k: self._wechat_response())
+        article = tikhub.fetch_wechat_article("https://mp.weixin.qq.com/s/abc", {"tikhubApiKey": "tok"})
+        assert 'src="https://mmbiz.qpic.cn/a.jpg"' in article["html_content"]
+        assert "visibility: visible" in article["html_content"]
+
+    def test_post_is_used_with_raw_false(self, monkeypatch):
+        calls = {}
+
+        def fake_request(method, url, **kwargs):
+            calls.update(method=method, url=url, kwargs=kwargs)
+            return self._wechat_response()
+
+        monkeypatch.setattr(tikhub.httpx, "request", fake_request)
+        tikhub.fetch_wechat_article("https://mp.weixin.qq.com/s/abc", {"tikhubApiKey": "tok"})
+        assert calls["method"] == "POST"
+        assert calls["kwargs"]["json"] == {"url": "https://mp.weixin.qq.com/s/abc", "raw": False}
+
+    def test_empty_article_raises(self, monkeypatch):
+        monkeypatch.setattr(
+            tikhub.httpx, "request",
+            lambda *a, **k: httpx.Response(200, json={"code": 200, "data": {"content": {}}}),
+        )
+        with pytest.raises(TikHubError, match="未返回公众号文章内容"):
+            tikhub.fetch_wechat_article("https://mp.weixin.qq.com/s/abc", {"tikhubApiKey": "tok"})
+
+
+class TestFetchBilibiliVideo:
+    def _routes(self, subtitle_body=None):
+        def route(path: str, token: str = "", params=None, json_body=None):
+            if path == tikhub.BILIBILI_PARTS_PATH:
+                return {"data": {"code": 0, "data": [
+                    {"cid": 137649199, "page": 1, "part": "视频分P标题", "duration": 213},
+                    {"cid": 137649200, "page": 2, "part": "第二P", "duration": 60},
+                ]}}
+            if path == tikhub.BILIBILI_BV_TO_AID_PATH:
+                return {"aid": 80433022}
+            if path == tikhub.BILIBILI_PLAYER_PATH:
+                subtitles = [] if subtitle_body is None else [
+                    {"lan": "zh-CN", "subtitle_url": "//aisubtitle.hdslb.com/bfs/subtitle/x.json"},
+                    {"lan": "ai-zh", "subtitle_url": "//aisubtitle.hdslb.com/bfs/subtitle/other.json"},
+                ]
+                return {"data": {"subtitle": {"subtitles": subtitles}}}
+            raise AssertionError(f"unexpected path: {path}")
+
+        return route
+
+    def test_video_payload_structure(self, monkeypatch):
+        monkeypatch.setattr(tikhub, "_tikhub_request", self._routes())
+        monkeypatch.setattr(tikhub, "_download_bilibili_subtitle", lambda subs, token: "字幕全文")
+        payload = tikhub.fetch_bilibili_video("https://www.bilibili.com/video/BV1GJ411x7h7", {"tikhubApiKey": "tok"})
+        assert payload["title"] == "视频分P标题"
+        assert payload["bvid"] == "BV1GJ411x7h7"
+        assert "P1 [03:33] 视频分P标题" in payload["chapter_info"]
+        assert "P2 [01:00] 第二P" in payload["chapter_info"]
+        assert payload["transcript_text"] == "字幕全文"
+
+    def test_subtitle_download_prefers_zh_cn(self, monkeypatch):
+        def fake_get(url, **kwargs):
+            assert url == "https://aisubtitle.hdslb.com/bfs/subtitle/x.json"
+            return httpx.Response(200, json={"body": [{"content": "第一句"}, {"content": "第二句"}]})
+
+        monkeypatch.setattr(tikhub.httpx, "get", fake_get)
+        subs = [{"lan": "ai-zh", "subtitle_url": "//other"}, {"lan": "zh-CN", "subtitle_url": "//aisubtitle.hdslb.com/bfs/subtitle/x.json"}]
+        assert tikhub._download_bilibili_subtitle(subs, "tok") == "第一句 第二句"
+
+    def test_b23_short_url_is_resolved(self, monkeypatch):
+        class FakeResponse:
+            url = "https://www.bilibili.com/video/BV1GJ411x7h7"
+
+        monkeypatch.setattr(tikhub.httpx, "get", lambda url, **kwargs: FakeResponse())
+        resolved = tikhub._resolve_b23_short_url("https://b23.tv/abc")
+        assert resolved == "https://www.bilibili.com/video/BV1GJ411x7h7"
+
+    def test_non_b23_url_skips_resolution(self):
+        url = "https://www.bilibili.com/video/BV1GJ411x7h7"
+        assert tikhub._resolve_b23_short_url(url) == url
+
+    def test_invalid_url_raises(self):
+        with pytest.raises(TikHubError, match="BVID"):
+            tikhub.fetch_bilibili_video("https://example.com/no-bv", {"tikhubApiKey": "tok"})

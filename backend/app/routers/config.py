@@ -12,9 +12,6 @@ class AppConfigModel(BaseModel):
     apiKey: str
     baseUrl: str
     modelName: str
-    biliSessdata: str | None = None
-    biliJct: str | None = None
-    biliBuvid3: str | None = None
     tikhubApiKey: str | None = None
 
 
@@ -24,9 +21,6 @@ def _public_config(data: dict) -> dict:
         "apiKey",
         "baseUrl",
         "modelName",
-        "biliSessdata",
-        "biliJct",
-        "biliBuvid3",
         "tikhubApiKey",
     }
     return {key: data.get(key, "") for key in supported_keys}
@@ -43,9 +37,7 @@ async def get_config():
         "apiKey": "",
         "baseUrl": "",
         "modelName": "",
-        "biliSessdata": "",
-        "biliJct": "",
-        "biliBuvid3": "",
+        "tikhubApiKey": "",
     }
 
 def _load_stored_config() -> dict:

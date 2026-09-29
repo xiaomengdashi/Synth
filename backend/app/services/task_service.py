@@ -8,11 +8,10 @@ import urllib.parse
 from app.database import AsyncSessionLocal
 from app.models import Article, Task
 from app.services.fetchers.article import fetch_article_content
-from app.services.fetchers.social import fetch_tweet_data, normalize_tweet_payload
-from app.services.fetchers.tikhub import TikHubNotConfiguredError, fetch_tikhub_tweet
+from app.services.fetchers.social import extract_x_article_id
+from app.services.fetchers.tikhub import TikHubError, TikHubNotConfiguredError, fetch_tikhub_tweet
 from app.services.fetchers.twitter_article_rich import render_twitter_article_result
 from app.services.fetchers.video import fetch_video_content
-from app.services.fetchers.x_twitter_cli import extract_x_article_id, fetch_x_article_via_twitter_cli
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB, article_from_db_record, task_created_at, update_task
 
 def _normalize_title(title: str | None) -> str:
@@ -105,35 +104,33 @@ async def process_task(task_id: str, url: str, config):
         source_url = url
 
         if "x.com" in url or "twitter.com" in url:
-            update_step("正在获取推文信息...")
             direct_article_id = extract_x_article_id(url)
-            tikhub_result = None
-            if not direct_article_id:
-                try:
-                    update_step("正在通过 TikHub 接口获取推文数据...")
-                    tikhub_result = await asyncio.to_thread(fetch_tikhub_tweet, url, config)
-                except TikHubNotConfiguredError:
-                    update_step("未配置 TikHub Token，使用镜像接口获取推文...")
-                except Exception as exc:
-                    update_step(f"TikHub 获取失败：{str(exc)[:120]}。回退镜像接口...")
+            if direct_article_id:
+                raise RuntimeError(
+                    "暂不支持 x.com/i/article 直链（TikHub 仅支持推文链接）。请在 X 中打开宿主推文后分享其链接。"
+                )
 
-            if tikhub_result is not None:
-                tweet_payload = tikhub_result["payload"]
-            else:
-                tweet_payload = normalize_tweet_payload({}) if direct_article_id else normalize_tweet_payload(await asyncio.to_thread(fetch_tweet_data, url))
+            update_step("正在通过 TikHub 接口获取推文数据...")
+            try:
+                tikhub_result = await asyncio.to_thread(fetch_tikhub_tweet, url, config)
+            except TikHubNotConfiguredError as exc:
+                raise RuntimeError(
+                    "未配置 TikHub API Token，无法抓取 X 内容。请在管理后台 TikHub 抓取页填写 Token。"
+                ) from exc
+            tweet_payload = tikhub_result["payload"]
 
             title = tweet_payload["title"]
             has_tikhub_article = bool(
-                tikhub_result and (tikhub_result.get("article_result") or tikhub_result.get("article_text"))
+                tikhub_result.get("article_result") or tikhub_result.get("article_text")
             )
-            x_article_id = direct_article_id or extract_x_article_id(tweet_payload["tweet_text"])
+            x_article_id = extract_x_article_id(tweet_payload["tweet_text"])
             external_source_url = next(iter(tweet_payload.get("external_urls") or []), "")
             external_fetched = False
 
             if external_source_url and not direct_article_id:
                 try:
                     update_step("检测到推文引用了外部文章，正在抓取原网页...")
-                    article_payload = await fetch_article_content(external_source_url, update_step)
+                    article_payload = await fetch_article_content(external_source_url, update_step, config)
                     title = article_payload["title"] or title
                     summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。")
                     if article_payload["html_content"]:
@@ -151,7 +148,7 @@ async def process_task(task_id: str, url: str, config):
 
             if not external_fetched and (x_article_id or has_tikhub_article):
                 x_article_payload = None
-                if tikhub_result and tikhub_result.get("article_result"):
+                if tikhub_result.get("article_result"):
                     update_step("正在通过 TikHub 数据渲染 X 长文...")
                     rendered = render_twitter_article_result(tikhub_result["article_result"])
                     if rendered.get("content_md"):
@@ -160,26 +157,17 @@ async def process_task(task_id: str, url: str, config):
                             "content_md": rendered["content_md"],
                             "cover_image_url": rendered.get("cover_image_url") or "",
                         }
-                elif tikhub_result and tikhub_result.get("article_text"):
+                elif tikhub_result.get("article_text"):
                     article_text = tikhub_result["article_text"]
                     if article_text.get("full_text"):
-                        update_step("已获取 TikHub 长文纯文本，正在尝试恢复内嵌图片...")
+                        update_step("正在读取 TikHub 返回的 X 长文全文...")
                         x_article_payload = {
                             "title": article_text["title"],
                             "content_md": article_text["full_text"],
                             "cover_image_url": article_text.get("cover_image_url") or "",
                         }
-                        # TikHub 的 full_text 不含内嵌图片；本机 twitter-cli 可用时
-                        # 用 Draft.js 富文本（含图片）覆盖纯文本版本。
-                        try:
-                            rich_payload = await fetch_x_article_via_twitter_cli(url, update_step)
-                            if rich_payload.get("content_md"):
-                                x_article_payload = rich_payload
-                                update_step(f"已恢复带图长文（{len(rich_payload.get('media_urls', []))} 张图片）...")
-                        except Exception:
-                            update_step("本机 X 登录态不可用，保存 TikHub 纯文本版本...")
                 if x_article_payload is None:
-                    x_article_payload = await fetch_x_article_via_twitter_cli(url, update_step)
+                    raise TikHubError("TikHub 未返回 X 长文正文。")
                 title = x_article_payload["title"] or title
                 cover_image_url = x_article_payload.get("cover_image_url") or ""
                 summary = build_local_summary(x_article_payload["content_md"], "X 长文正文已获取。")
@@ -217,7 +205,7 @@ async def process_task(task_id: str, url: str, config):
             cover_image_url = video_payload["cover_image_url"]
 
         else:
-            article_payload = await fetch_article_content(url, update_step)
+            article_payload = await fetch_article_content(url, update_step, config)
             title = article_payload["title"]
             summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。")
             if article_payload["html_content"]:

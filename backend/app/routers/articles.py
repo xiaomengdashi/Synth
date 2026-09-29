@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 import uuid
 
@@ -9,7 +10,7 @@ from fastapi.encoders import jsonable_encoder
 from app.database import get_db
 from app.models import Article
 from app.services.fetchers.article import parse_article_html
-from app.services.fetchers.social import fetch_tweet_data, normalize_tweet_payload
+from app.services.fetchers.tikhub import fetch_tikhub_tweet
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.task_service import build_local_summary, detect_source_type
 
@@ -44,7 +45,7 @@ async def get_articles(db: AsyncSession = Depends(get_db)):
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
     try:
-        return normalize_tweet_payload(fetch_tweet_data(url))
+        return (await asyncio.to_thread(fetch_tikhub_tweet, url, None))["payload"]
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

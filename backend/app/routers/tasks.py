@@ -20,9 +20,6 @@ class ModelConfig(BaseModel):
     modelName: str | None = None
     apiKey: str | None = None
     baseUrl: str | None = None
-    biliSessdata: str | None = None
-    biliJct: str | None = None
-    biliBuvid3: str | None = None
     tikhubApiKey: str | None = None
 
 

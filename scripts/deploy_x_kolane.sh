@@ -133,7 +133,6 @@ env_lines = [
     'DEBUG=false',
     'APP_HOST=127.0.0.1',
     f'APP_PORT={backend_port}',
-    'WECHAT_BROWSER_ENABLED=false',
 ]
 if tikhub_token:
     env_lines.append(f'TIKHUB_API_TOKEN={tikhub_token}')

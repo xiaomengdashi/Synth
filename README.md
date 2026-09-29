@@ -55,59 +55,29 @@ npm run dev  # 或 yarn dev / pnpm dev
 1. 打开浏览器访问前端地址（例如：`http://localhost:5173`）。
 2. 进入**控制台**页面（`/admin`）。
 3. 可在管理后台的**模型服务**页面保存 API Key、Base URL 以及模型名称参数（如 `gpt-4o-mini`）。这些参数将保存在后端的 `data/config.json` 中，但当前导入流程不会调用模型。
-4. 在输入框中粘贴支持的链接（微信公众号、B站、推特等），点击**开始处理**。
-5. 系统将在后台自动拉取并保存原文。微信触发安全验证时不会自动打开浏览器，任务会直接提示失败原因。
-6. 如果你能在其他环境打开微信文章，可将网页另存为 HTML，或复制完整 HTML 源码，在首页点击**导入网页 HTML**，填写原文链接后导入。
+4. 在**系统配置 → TikHub 抓取**页面填写 TikHub API Token（必填，见下节）。
+5. 在输入框中粘贴支持的链接（微信公众号、B站、推特、抖音、YouTube 等），点击**开始处理**。
 
-### 微信文章的无浏览器导入
+### 内容抓取：统一走 TikHub 第三方接口
 
-微信验证码页不能通过普通 HTTP、文章令牌或 Agent Reach 直接绕过。当前网站默认不启动浏览器：
+X/Twitter（推文与长文）、微信公众号文章、Bilibili 视频的抓取统一通过 [TikHub](https://docs.tikhub.io) 第三方接口完成，无需任何本机登录态或浏览器：
 
-- 普通微信链接可直接抓取时，自动保存文章和图片地址。
-- 微信返回安全验证页时，任务立即失败，不会保存验证码页，也不会长时间卡住。
-- 从已能打开文章的环境保存完整网页 HTML 后，可使用首页的 **导入网页 HTML** 功能；文件需要包含 `#js_content` 正文节点。
+| 平台 | TikHub 接口 | 说明 |
+|---|---|---|
+| X/Twitter | `twitter/web/fetch_tweet_detail` | 推文、长推文、X 长文全文（长文为纯文本，TikHub 不返回内嵌图片） |
+| 微信公众号 | `wechat_mp/v2/fetch_article_detail_h5`（POST） | 完整正文 HTML（内嵌图片保留），绕过微信安全验证 |
+| Bilibili | `bilibili/web/fetch_video_parts` + `bv_to_aid` + `fetch_one_video_v2` | 分P列表 + 中文字幕文稿；TikHub 的 view 类接口不可用，UP主/封面/简介缺失 |
 
-### X 抓取：TikHub 第三方接口（推荐）
+抖音、YouTube 等其他视频链接仍通过 yt-dlp 解析；CSDN、cnblogs 及普通网页仍走内置网页抓取。
 
-X/Twitter 的推文与长文抓取默认优先走 [TikHub](https://docs.tikhub.io) 第三方接口（`GET /api.tikhub.io/api/v1/twitter/web/fetch_tweet_detail`），推文、长推文（note_tweet）和 X 长文（Article 的 Draft.js 富文本）都可以直接获取，**无需本机 X 登录态，部署在服务器上也可用**。
-
-配置方式（二选一，推荐在管理后台 **系统配置 → TikHub 抓取** 页面填写）：
+配置方式（二选一，推荐在管理后台填写）：
 
 1. 管理后台填写：进入 `/admin/settings/tikhub`，保存 API Token（存储在后端 `data/config.json` 的 `tikhubApiKey` 字段）。
-2. 环境变量：部署机器上设置 `TIKHUB_API_TOKEN`（例如写入 systemd 服务的 `Environment=`）。
+2. 环境变量：部署机器上设置 `TIKHUB_API_TOKEN`。
 
-Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建。TikHub 按次计费，注意账户余额（余额不足返回 402 时会自动回退）。
+Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充值。TikHub 按次计费：X 推文 1 次/条，微信文章 1 次/篇，B站视频约 3 次/条（分P + aid 转换 + 字幕）。余额不足（402）时任务会失败并提示充值，微信文章仍可通过首页的 **导入网页 HTML** 手动导入（需包含 `#js_content` 节点）。
 
-未配置 Token 或 TikHub 请求失败（网络错误、余额不足、频率限制等）时，按以下顺序自动回退：
-
-- 普通推文：镜像接口（vxtwitter → fxtwitter → twittpr）。
-- X 长文：本机 `twitter-cli` 登录态（见下节）。
-
-### X 长文登录态抓取（可选回退）
-
-项目保留本机 X 登录态读取长文的能力，作为 TikHub 不可用时的回退方案。Cookie 不会保存到网站数据库，后端会调用本机的 `twitter-cli`。
-
-```bash
-# 建议在独立虚拟环境中安装 Agent Reach
-python3 -m venv ~/.agent-reach-venv
-source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
-agent-reach install --env=local --channels=twitter
-
-# 在浏览器登录 X 后，检查当前登录态
-twitter status
-
-# 验证长文读取
-twitter article "https://x.com/用户名/status/推文ID" --markdown
-```
-
-启动 FastAPI 的终端需要能找到 `twitter` 命令。若命令不在 PATH 中，可设置：
-
-```bash
-export SYNTHAI_TWITTER_BIN="/path/to/twitter"
-```
-
-网站提交 X 长文时，优先使用 TikHub 接口读取全文；TikHub 不可用时才回退本机 `twitter-cli` 登录态。模型参数仍可单独保存，但当前不会用于导入任务。
+注意：`x.com/i/article/...` 形式的长文直链暂不支持（TikHub 仅支持推文链接），请使用宿主推文的链接。
 
 ### iPhone 分享导入
 

@@ -3,8 +3,8 @@ import re
 import httpx
 import trafilatura
 from bs4 import BeautifulSoup, Tag
-from app.config import settings
-from app.services.fetchers.wechat_browser import fetch_wechat_article_html, is_wechat_blocked_page
+
+from app.services.fetchers.tikhub import TikHubNotConfiguredError, fetch_wechat_article
 
 
 # 微信 <pre><code> 内联样式会压成一行（white-space:nowrap + display:-webkit-box），优先级高于站点 CSS
@@ -73,13 +73,46 @@ def _normalize_wechat_code_styles(root: Tag) -> None:
             del pre["style"]
 
 
-async def fetch_article_content(url: str, update_step):
-    update_step("正在抓取公众号/文章内容...")
+async def fetch_article_content(url: str, update_step, config=None):
+    if "mp.weixin.qq.com" in url:
+        return await _fetch_wechat_via_tikhub(url, update_step, config)
+
+    update_step("正在抓取文章内容...")
     html = await fetch_article_html(url, update_step)
     result = parse_article_html(url, html)
 
     update_step(f"抓取成功: {result['title']}。正在解析正文并保存内容...")
     return result
+
+
+async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
+    """微信公众号文章统一走 TikHub H5 接口（绕过安全验证）。"""
+    import asyncio
+
+    update_step("正在通过 TikHub 接口获取公众号文章...")
+    try:
+        article = await asyncio.to_thread(fetch_wechat_article, url, config)
+    except TikHubNotConfiguredError as exc:
+        raise RuntimeError(
+            "未配置 TikHub API Token，无法抓取公众号文章。请在管理后台 TikHub 抓取页填写 Token。"
+        ) from exc
+
+    update_step(f"抓取成功: {article['title']}。正在解析正文并保存内容...")
+
+    html_content = article["html_content"]
+    soup = BeautifulSoup(f"<div id='js_content'>{html_content}</div>", "html.parser")
+    main_content = soup.find("div", id="js_content")
+    if isinstance(main_content, Tag):
+        _normalize_wechat_code_styles(main_content)
+        html_content = _normalize_html_content(url, main_content)
+
+    extracted_md = trafilatura.extract(html_content, output_format="markdown") or article["content_text"]
+    return {
+        "title": article["title"],
+        "extracted_md": extracted_md,
+        "html_content": html_content,
+        "cover_image_url": article["cover_image_url"],
+    }
 
 
 def parse_article_html(url: str, html: str) -> dict:
@@ -170,20 +203,7 @@ async def fetch_article_html(url: str, update_step):
 
     async with httpx.AsyncClient(headers=headers, follow_redirects=True, verify=False, timeout=30.0, http2=True) as http_client:
         res = await http_client.get(url)
-        html = res.text
-        if "mp.weixin.qq.com" in url:
-            soup = BeautifulSoup(html, "html.parser")
-            content = soup.find("div", {"id": "js_content"})
-            content_text = content.get_text(" ", strip=True) if content else ""
-            if is_wechat_blocked_page(str(res.url), html) or len(content_text) < 120:
-                if settings.WECHAT_BROWSER_ENABLED:
-                    update_step("普通请求被微信拦截，正在切换浏览器读取...")
-                    return await fetch_wechat_article_html(url, update_step)
-                raise RuntimeError(
-                    "微信返回安全验证页，当前已关闭自动浏览器读取。"
-                    "请在可打开文章的环境中保存网页 HTML，再使用 HTML 导入。"
-                )
-        return html
+        return res.text
 
 
 def extract_main_html(url: str, soup: BeautifulSoup) -> str:

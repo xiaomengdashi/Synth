@@ -55,9 +55,6 @@ export const useAppStore = create<AppState>((set) => ({
     modelName: 'gpt-4o-mini',
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
-    biliSessdata: '',
-    biliJct: '',
-    biliBuvid3: '',
     tikhubApiKey: '',
   },
   toggleDarkMode: () => set((state) => {

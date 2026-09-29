@@ -106,9 +106,7 @@ export default function Home() {
         body: JSON.stringify({
           url: originalUrl,
           config: {
-            biliSessdata: config.biliSessdata,
-            biliJct: config.biliJct,
-            biliBuvid3: config.biliBuvid3,
+            tikhubApiKey: config.tikhubApiKey,
           },
         }),
       });

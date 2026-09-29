@@ -20,14 +20,6 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     DEBUG: bool = True
     FRONTEND_URL: str = "http://localhost:3000"
-    # WeChat CAPTCHA pages require a user-controlled session; the service does
-    # not open a browser automatically when importing a link.
-    WECHAT_BROWSER_ENABLED: bool = False
-    WECHAT_BROWSER_PROFILE_DIR: str = str(DATA_DIR / "wechat-browser-profile")
-    WECHAT_BROWSER_EXECUTABLE_PATH: str = ""
-    WECHAT_BROWSER_HEADLESS: bool = False
-    WECHAT_BROWSER_TIMEOUT_MS: int = 45000
-    WECHAT_BROWSER_VERIFY_TIMEOUT_MS: int = 180000
 
     class Config:
         env_file = ".backend.env"

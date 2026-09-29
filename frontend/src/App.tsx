@@ -9,7 +9,6 @@ import AdminTasks from './features/tasks/pages/AdminTasks';
 import AdminArticles from './features/tasks/pages/AdminArticles';
 import AdminSettings from './features/tasks/pages/AdminSettings';
 import AdminModelSettings from './features/tasks/pages/AdminModelSettings';
-import AdminBilibiliSettings from './features/tasks/pages/AdminBilibiliSettings';
 import AdminTikHubSettings from './features/tasks/pages/AdminTikHubSettings';
 import ShareReceive from './features/sharing/ShareReceive';
 import ShareSetup from './features/sharing/ShareSetup';
@@ -36,7 +35,6 @@ function App() {
           <Route path="admin/articles" element={<AdminArticles />} />
           <Route path="admin/settings" element={<AdminSettings />} />
           <Route path="admin/settings/model" element={<AdminModelSettings />} />
-          <Route path="admin/settings/bilibili" element={<AdminBilibiliSettings />} />
           <Route path="admin/settings/tikhub" element={<AdminTikHubSettings />} />
         </Route>
       </Routes>

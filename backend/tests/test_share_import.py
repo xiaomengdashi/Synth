@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.database import Base, get_db
 from app.models import Article
 from app.routers import tasks
-from app.services.fetchers.social import normalize_tweet_payload
+from app.services.fetchers.tikhub import normalize_flat_tweet_data
 from app.services import runtime_store, task_service
 
 
@@ -157,39 +157,38 @@ def test_saved_wechat_article_is_reused_even_with_old_tracking_parameters(share_
     assert client.get("/api/v1/tasks").json()["data"] == []
 
 
-def test_direct_article_fetch_does_not_depend_on_tweet_mirror(share_client, monkeypatch):
+def test_direct_x_article_link_fails_with_clear_error(share_client, monkeypatch):
     _, sessions = share_client
     task_id = "direct-article"
     task_service.TASKS_DB[task_id] = {"id": task_id, "created_at": "2026-09-22T00:00:00"}
 
-    def unavailable_mirror(url):
-        raise AssertionError("A direct article must not be sent to a tweet-only mirror")
+    def unexpected_tikhub(*args, **kwargs):
+        raise AssertionError("i/article 直链不应调用 TikHub 推文接口")
 
-    async def article_fetch(url, update_step):
-        assert url == "https://x.com/i/article/987654321"
-        return {"title": "长文标题", "content_md": "完整长文正文", "cover_image_url": ""}
-
-    monkeypatch.setattr(task_service, "fetch_tweet_data", unavailable_mirror)
-    monkeypatch.setattr(task_service, "fetch_x_article_via_twitter_cli", article_fetch)
+    monkeypatch.setattr(task_service, "fetch_tikhub_tweet", unexpected_tikhub)
     asyncio.run(task_service.create_task_record(task_id, "https://x.com/i/article/987654321", "2026-09-22T00:00:00"))
     asyncio.run(task_service.process_task(task_id, "https://x.com/i/article/987654321", tasks.ModelConfig()))
-    assert task_service.TASKS_DB[task_id]["status"] == "completed"
-    assert "完整长文正文" in task_service.TASKS_DB[task_id]["article"]["content_md"]
+    assert task_service.TASKS_DB[task_id]["status"] == "failed"
+    assert "i/article" in task_service.TASKS_DB[task_id]["current_step"]
     task_service.TASKS_DB.pop(task_id, None)
 
 
-def test_normalized_tweet_payload_collects_external_article_urls():
-    payload = normalize_tweet_payload({
-        "tweet": {
-            "text": "推荐这篇文章 https://example.com/post?id=42",
-            "entities": {
-                "urls": [
-                    {"expanded_url": "https://example.com/post?id=42"},
-                    {"expanded_url": "https://x.com/author/status/123456789"},
-                ]
-            },
-        }
-    })
+def _flat_tweet_payload(external_url: str) -> dict:
+    return {
+        "id": "123456789",
+        "text": f"推荐阅读 {external_url}",
+        "author": {"name": "作者", "screen_name": "author", "image": "https://pbs.twimg.com/profile_images/1/a_normal.jpg"},
+        "urls": [{"expanded_url": external_url, "url": "https://t.co/x"}],
+        "entities": {"urls": [{"expanded_url": external_url}]},
+        "likes": 1, "retweets": 1, "replies": 1,
+        "created_at": "Mon Sep 28 00:00:00 +0000 2026",
+    }
+
+
+def test_flat_tweet_payload_collects_external_article_urls():
+    payload = normalize_flat_tweet_data(
+        _flat_tweet_payload("https://example.com/post?id=42")
+    )
 
     assert payload["external_urls"] == ["https://example.com/post?id=42"]
 
@@ -199,16 +198,15 @@ def test_x_share_prefers_external_article_content_over_tweet_text(share_client, 
     task_id = "tweet-with-external-article"
     task_service.TASKS_DB[task_id] = {"id": task_id, "created_at": "2026-09-22T00:00:00"}
 
-    def fetch_tweet(url):
+    def fetch_tikhub(url, config):
         assert url == "https://x.com/author/status/123456789"
         return {
-            "tweet": {
-                "text": "推荐阅读 https://example.com/deep-dive",
-                "entities": {"urls": [{"expanded_url": "https://example.com/deep-dive"}]},
-            }
+            "payload": normalize_flat_tweet_data(_flat_tweet_payload("https://example.com/deep-dive")),
+            "article_result": None,
+            "article_text": None,
         }
 
-    async def fetch_article(url, update_step):
+    async def fetch_article(url, update_step, config=None):
         assert url == "https://example.com/deep-dive"
         return {
             "title": "深度长文",
@@ -217,12 +215,8 @@ def test_x_share_prefers_external_article_content_over_tweet_text(share_client, 
             "cover_image_url": "https://example.com/cover.jpg",
         }
 
-    async def unexpected_x_article(*args, **kwargs):
-        raise AssertionError("带外链的推文不应走 X 长文抓取分支")
-
-    monkeypatch.setattr(task_service, "fetch_tweet_data", fetch_tweet)
+    monkeypatch.setattr(task_service, "fetch_tikhub_tweet", fetch_tikhub)
     monkeypatch.setattr(task_service, "fetch_article_content", fetch_article)
-    monkeypatch.setattr(task_service, "fetch_x_article_via_twitter_cli", unexpected_x_article)
     asyncio.run(task_service.create_task_record(task_id, "https://x.com/author/status/123456789", "2026-09-22T00:00:00"))
     asyncio.run(task_service.process_task(task_id, "https://x.com/author/status/123456789", tasks.ModelConfig()))
 

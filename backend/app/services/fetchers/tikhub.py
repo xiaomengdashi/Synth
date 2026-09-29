@@ -1,26 +1,32 @@
-"""TikHub 第三方接口客户端：X/Twitter 推文与长文数据获取。
+"""TikHub 第三方接口客户端：X/Twitter、微信公众号、Bilibili 数据获取。
 
-接口: GET https://api.tikhub.io/api/v1/twitter/web/fetch_tweet_detail?tweet_id=<id>
-认证: Authorization: Bearer <token>（用户控制台 https://user.tikhub.io 创建）
+统一入口 https://api.tikhub.io，认证: Authorization: Bearer <token>
+（用户控制台 https://user.tikhub.io 创建）。
 
-返回的 data 与 Twitter GraphQL TweetResultByRestId 同构，因此 X 长文的
-Draft.js content_state 可以直接交给 twitter_article_rich 渲染。
-Token 未配置或请求失败时抛出异常，由调用方回退到镜像接口 / twitter-cli。
+Twitter 线上返回扁平化结构（author/text 顶层键），与文档示例的 GraphQL
+结构不同，两种均已适配；X 长文在扁平结构下直接提供纯文本全文。
+Token 未配置或请求失败时抛出异常，由调用方处理。
 """
 
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import httpx
 
-from app.services.fetchers.social import URL_PATTERN, _normalize_external_url
+from app.services.fetchers.social import URL_PATTERN, _normalize_external_url, extract_x_tweet_id
 from app.services.fetchers.twitter_article_rich import _deep_get, _find_image_url
-from app.services.fetchers.x_twitter_cli import extract_x_tweet_id
 
 TIKHUB_API_BASE = "https://api.tikhub.io"
 TWEET_DETAIL_PATH = "/api/v1/twitter/web/fetch_tweet_detail"
+WECHAT_ARTICLE_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail_h5"
+BILIBILI_PARTS_PATH = "/api/v1/bilibili/web/fetch_video_parts"
+BILIBILI_BV_TO_AID_PATH = "/api/v1/bilibili/web/bv_to_aid"
+BILIBILI_PLAYER_PATH = "/api/v1/bilibili/web/fetch_one_video_v2"
+
+BILIBILI_BVID_PATTERN = re.compile(r"BV[0-9A-Za-z]{10}")
 
 _VISIBILITY_WRAPPER_TYPES = {"TweetWithVisibility", "TweetWithVisibilityResults"}
 
@@ -49,14 +55,17 @@ def resolve_tikhub_token(config: Any = None) -> str:
     return token
 
 
-def fetch_tweet_detail(tweet_id: str, token: str) -> dict:
-    request_url = f"{TIKHUB_API_BASE}{TWEET_DETAIL_PATH}"
+def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: dict | None = None) -> dict:
+    """调用 TikHub 接口并返回响应中的 data 字典。"""
+    request_url = f"{TIKHUB_API_BASE}{path}"
     try:
-        response = httpx.get(
+        response = httpx.request(
+            "POST" if json_body is not None else "GET",
             request_url,
-            params={"tweet_id": tweet_id},
+            params=params,
+            json=json_body,
             headers={"Authorization": f"Bearer {token}"},
-            timeout=30,
+            timeout=45,
             verify=False,
         )
     except httpx.HTTPError as exc:
@@ -66,18 +75,23 @@ def fetch_tweet_detail(tweet_id: str, token: str) -> dict:
     if status == 401:
         raise TikHubError("TikHub Token 无效、缺失或未激活 (401)。")
     if status == 402:
-        raise TikHubError("TikHub 账户余额不足 (402)。")
+        raise TikHubError("TikHub 账户余额不足 (402)，请前往 user.tikhub.io 充值。")
     if status == 404:
-        raise TikHubError(f"TikHub 未找到推文 {tweet_id} (404)。")
+        raise TikHubError(f"TikHub 未找到数据 (404): {request_url}")
     if status == 429:
         raise TikHubError("TikHub 请求过于频繁 (429)，请稍后重试。")
     if status != 200:
-        raise TikHubError(f"TikHub 接口异常 (HTTP {status})。")
+        raise TikHubError(f"TikHub 接口异常 (HTTP {status}): {request_url}")
 
     try:
         payload = response.json()
     except ValueError as exc:
         raise TikHubError("TikHub 返回了非 JSON 数据。") from exc
+
+    # 402 等错误也可能以 HTTP 200 + detail 错误体返回
+    if isinstance(payload.get("detail"), dict):
+        detail = payload["detail"]
+        raise TikHubError(f"TikHub 接口错误: {detail.get('message_zh') or detail.get('message') or str(detail)[:150]}")
 
     code = payload.get("code")
     if code not in (200, 0, None):
@@ -88,6 +102,10 @@ def fetch_tweet_detail(tweet_id: str, token: str) -> dict:
     if not isinstance(data, dict):
         raise TikHubError("TikHub 返回的数据为空。")
     return data
+
+
+def fetch_tweet_detail(tweet_id: str, token: str) -> dict:
+    return _tikhub_request(TWEET_DETAIL_PATH, token, params={"tweet_id": tweet_id})
 
 
 def _is_flat_tweet_data(data: dict) -> bool:
@@ -357,4 +375,152 @@ def fetch_tikhub_tweet(url_or_tweet_id: str, config: Any = None) -> dict:
         "payload": normalize_tikhub_tweet_result(result),
         "article_result": article_result,
         "article_text": None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 微信公众号文章
+# ---------------------------------------------------------------------------
+
+def fetch_wechat_article(url: str, config: Any = None) -> dict:
+    """通过 TikHub H5 接口获取公众号文章（绕过微信安全验证）。
+
+    返回 {title, author, account_name, digest, html_content, content_text,
+          cover_image_url, publish_time, original_url}
+    """
+    token = resolve_tikhub_token(config)
+    data = _tikhub_request(
+        WECHAT_ARTICLE_PATH,
+        token,
+        json_body={"url": str(url or "").strip(), "raw": False},
+    )
+    content = data.get("content") if isinstance(data.get("content"), dict) else {}
+    if not content.get("title") and not content.get("content_noencode"):
+        raise TikHubError("TikHub 未返回公众号文章内容（文章可能已被删除）。")
+
+    html_content = str(content.get("content_noencode") or "")
+    html_content = re.sub(r"data-src\s*=", "src=", html_content, flags=re.IGNORECASE)
+    html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
+
+    return {
+        "title": str(content.get("title") or "").strip() or "未知文章标题",
+        "author": str(content.get("author") or content.get("nick_name") or "").strip(),
+        "account_name": str(content.get("nick_name") or "").strip(),
+        "digest": str(content.get("desc") or "").strip(),
+        "html_content": html_content,
+        "content_text": str(content.get("content_text") or ""),
+        "cover_image_url": str(content.get("cdn_url") or "").strip(),
+        "publish_time": str(content.get("create_time") or "").strip(),
+        "original_url": str(data.get("url") or url or "").strip(),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Bilibili 视频
+# ---------------------------------------------------------------------------
+
+def _extract_bilibili_bvid(url: str) -> str:
+    match = BILIBILI_BVID_PATTERN.search(str(url or ""))
+    if not match:
+        raise TikHubError("无法从链接中提取 BVID（BV 号）。")
+    return match.group(0)
+
+
+def _resolve_b23_short_url(url: str) -> str:
+    """b23.tv 短链解析为最终地址（免费直连重定向，不消耗 TikHub 额度）。"""
+    if "b23.tv" not in url:
+        return url
+    try:
+        response = httpx.get(url, follow_redirects=True, timeout=15, verify=False)
+        return str(response.url)
+    except httpx.HTTPError as exc:
+        raise TikHubError(f"b23.tv 短链解析失败: {exc}") from exc
+
+
+def _download_bilibili_subtitle(subtitles: list, token: str) -> str:
+    """优先中文字幕，下载字幕 JSON 拼接为纯文本文稿。"""
+    if not subtitles:
+        return ""
+    target = next((s for s in subtitles if s.get("lan") == "zh-CN"), subtitles[0])
+    sub_url = str(target.get("subtitle_url") or "")
+    if not sub_url:
+        return ""
+    if sub_url.startswith("//"):
+        sub_url = "https:" + sub_url
+    try:
+        response = httpx.get(
+            sub_url,
+            headers={"User-Agent": "Mozilla/5.0", "Authorization": f"Bearer {token}"},
+            timeout=20,
+            verify=False,
+        )
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return ""
+    body = payload.get("body") if isinstance(payload, dict) else None
+    if not isinstance(body, list):
+        return ""
+    return " ".join(str(item.get("content") or "") for item in body).strip()
+
+
+def fetch_bilibili_video(url: str, config: Any = None) -> dict:
+    """通过 TikHub 获取 Bilibili 视频信息与字幕文稿。
+
+    TikHub 的 view 类元数据接口（fetch_one_video/v3/detail/app）当前均不可用，
+    稳定组合为：fetch_video_parts（分P/cid）→ bv_to_aid → fetch_one_video_v2
+    （player/v2 结构，含字幕列表）。视频主标题缺失时回退分P标题。
+
+    返回与原官方 API 抓取同构的 video payload。
+    """
+    token = resolve_tikhub_token(config)
+    resolved_url = _resolve_b23_short_url(str(url or "").strip())
+    bvid = _extract_bilibili_bvid(resolved_url)
+
+    parts_data = _tikhub_request(BILIBILI_PARTS_PATH, token, params={"bv_id": bvid})
+    inner = parts_data.get("data") if isinstance(parts_data.get("data"), dict) else {}
+    parts = inner.get("data") if isinstance(inner.get("data"), list) else parts_data.get("data")
+    if not isinstance(parts, list) or not parts:
+        raise TikHubError("TikHub 未返回视频分P数据（视频可能不存在或已下架）。")
+
+    chapter_lines = []
+    first_cid = None
+    for page in parts:
+        if not isinstance(page, dict):
+            continue
+        part = str(page.get("part") or "").strip()
+        duration = page.get("duration")
+        cid = page.get("cid")
+        if first_cid is None and cid:
+            first_cid = cid
+        if not part:
+            continue
+        if isinstance(duration, int) and duration > 0:
+            minutes, seconds = divmod(duration, 60)
+            chapter_lines.append(f"- P{page.get('page', len(chapter_lines) + 1)} [{minutes:02d}:{seconds:02d}] {part}")
+        else:
+            chapter_lines.append(f"- P{page.get('page', len(chapter_lines) + 1)} {part}")
+
+    transcript_text = ""
+    aid = ""
+    if first_cid:
+        try:
+            aid_data = _tikhub_request(BILIBILI_BV_TO_AID_PATH, token, params={"bv_id": bvid})
+            aid = str(aid_data.get("aid") or aid_data.get("data", {}).get("aid") or "")
+        except TikHubError:
+            aid = ""
+        if aid:
+            player_data = _tikhub_request(BILIBILI_PLAYER_PATH, token, params={"a_id": aid, "c_id": str(first_cid)})
+            player_inner = player_data.get("data") if isinstance(player_data.get("data"), dict) else {}
+            subtitles = _deep_get(player_inner, "subtitle", "subtitles") or []
+            transcript_text = _download_bilibili_subtitle(subtitles, token)
+
+    title = str((parts[0] or {}).get("part") or "").strip() or bvid
+    return {
+        "title": title,
+        "description": "",
+        "uploader": "",
+        "transcript_text": transcript_text,
+        "cover_image_url": "",
+        "bvid": bvid,
+        "chapter_info": "\n".join(chapter_lines),
     }
