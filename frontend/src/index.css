@@ -253,6 +253,7 @@
 .back-to-top:hover, .back-to-top:focus-visible { border-color: #91ae7e; background: var(--surface); outline: 0; transform: translateY(-2px); }
 
 .admin-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; margin-bottom: 32px; }
+.admin-top-actions-only { justify-content: flex-end; align-items: center; margin-bottom: 18px; min-height: 0; }
 .admin-top h1 { margin: 12px 0 8px; font-size: clamp(30px, 4vw, 46px); letter-spacing: -.06em; line-height: 1; }
 .admin-top p { margin: 0; color: var(--muted); font-size: 13px; }
 .admin-top-actions { display: flex; gap: 9px; }

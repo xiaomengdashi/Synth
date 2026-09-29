@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react';
 
-export default function AdminPageHeader({ eyebrow, title, description, actions }: { eyebrow: string; title: string; description: string; actions?: ReactNode }) {
+/**
+ * Admin 页面级动作条。页面标题与层级已由顶部面包屑表达，
+ * 这里只承载与当前页面相关的操作按钮。
+ */
+export default function AdminPageHeader({ actions }: { eyebrow?: string; title?: string; description?: string; actions?: ReactNode }) {
+  if (!actions) return null;
   return (
-    <section className="admin-top">
-      <div>
-        <div className="eyebrow">{eyebrow}</div>
-        <h1>{title}</h1>
-        <p>{description}</p>
-      </div>
+    <section className="admin-top admin-top-actions-only">
       {actions ? <div className="admin-top-actions">{actions}</div> : null}
     </section>
   );
