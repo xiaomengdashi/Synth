@@ -60,6 +60,11 @@ export default function Layout() {
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
   const isAdmin = location.pathname.startsWith('/admin');
+  // 配置中心的子分区：面包屑细化到当前 tab
+  const settingsTabLabel =
+    searchParams.get('tab') === 'model' ? '模型服务'
+      : searchParams.get('tab') === 'share' ? '手机分享导入'
+        : 'TikHub 数据服务';
   // 面包屑：上级可点击跳转，最后一级是当前位置
   const adminBreadcrumbs: { label: string; to?: string }[] =
     location.pathname === '/admin/tasks'
@@ -69,7 +74,7 @@ export default function Layout() {
         : location.pathname.startsWith('/admin/tikhub')
           ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '多平台查询' }]
           : location.pathname.startsWith('/admin/settings')
-            ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置' }]
+            ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: settingsTabLabel }]
             : [{ label: '后台管理', to: '/admin' }, { label: '内容总览' }];
 
   useEffect(() => {
