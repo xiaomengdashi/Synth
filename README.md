@@ -54,7 +54,7 @@ npm run dev  # 或 yarn dev / pnpm dev
 
 1. 打开浏览器访问前端地址（例如：`http://localhost:5173`）。
 2. 进入**控制台**页面（`/admin`）。
-3. 可在管理后台的**模型服务**页面保存 API Key、Base URL 以及模型名称参数（如 `gpt-4o-mini`）。这些参数将保存在后端的 `data/config.json` 中，但当前导入流程不会调用模型。
+3. 可在管理后台的**模型服务**页面保存 API Key、Base URL 以及模型名称参数（如 `gpt-4o-mini`）。这些参数将保存在后端 SQLite 数据库的 `app_settings` 表中，但当前导入流程不会调用模型。
 4. 在**系统配置 → TikHub 抓取**页面填写 TikHub API Token（必填，见下节）。
 5. 在输入框中粘贴支持的链接（微信公众号、B站、推特、抖音、YouTube 等），点击**开始处理**。
 
@@ -72,7 +72,7 @@ X/Twitter（推文与长文）、微信公众号文章、Bilibili 视频的抓�
 
 配置方式（二选一，推荐在管理后台填写）：
 
-1. 管理后台填写：进入 `/admin/settings/tikhub`，保存 API Token（存储在后端 `data/config.json` 的 `tikhubApiKey` 字段）。
+1. 管理后台填写：进入 `/admin/settings/tikhub`，保存 API Token（先验证有效性，存储在后端 SQLite `app_settings` 表；`data/config.json` 若存在会在启动时自动迁移）。
 2. 环境变量：部署机器上设置 `TIKHUB_API_TOKEN`。
 
 Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充值。TikHub 按次计费：X 推文 1 次/条，微信文章 1 次/篇，B站视频约 3 次/条（分P + aid 转换 + 字幕）。余额不足（402）时任务会失败并提示充值，微信文章仍可通过首页的 **导入网页 HTML** 手动导入（需包含 `#js_content` 节点）。
@@ -96,3 +96,34 @@ Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充�
 
 **Frontend:** React, TypeScript, Vite, Tailwind CSS, Zustand, React Router, Framer Motion
 **Backend:** Python, FastAPI, SQLAlchemy, SQLite, OpenAI Python SDK, yt-dlp, trafilatura, BeautifulSoup4
+
+### TikHub 账户与多平台查询
+
+- `/admin/settings/tikhub`：验证并保存/更换 Key、移除页面保存的 Key、查看余额/免费额度、Key 权限与有效期、今日用量及接口调用明细。保存的 Key 优先于 `TIKHUB_API_TOKEN`；移除后若存在环境变量则自动使用环境变量。
+- `/admin/tikhub/query`：23 个分类、996 个查询接口，支持平台筛选、接口搜索、分页、动态参数表单、字段/JSON 结果视图、复制和 JSON 导出。包含 TikHub 账户与计费，以及抖音、TikTok、小红书、B站、X、微信、YouTube、Instagram、快手、微博、知乎等内容查询。
+- “账户与计费”分类包含用户信息、每日用量、端点信息、所有端点信息、阶梯折扣与价格估算。上游每日用量接口没有日期参数，页面显示 TikHub 返回的统计日期，不提供虚构的历史日期筛选。
+- Key 只由后端保存和使用。通用配置接口只返回 `tikhubConfigured`，不会返回 TikHub Key；旧版浏览器提交的 `tikhubApiKey` 不再覆盖后端 Key。首页导入、分享导入与 X 预览也使用后端配置。
+- 查询需要 Key 具有对应权限及足够额度，部分接口另外需要平台 Cookie 等参数。所有请求都由用户点击触发，不批量自动执行或自动重试计费请求。账号信息可查询不代表所有平台接口均已授权。
+- 接口来自官方 OpenAPI 快照，查询后端只允许目录中的路径与方法，校验参数类型、必填项和范围；未接入注册设备、生成签名等非查询工具。结果中的超长整数转为字符串，避免 JavaScript 丢失 ID 精度；结果按文本展示，不执行上游 HTML。
+
+新增/完善的后端接口：
+
+| 接口 | 用途 |
+| --- | --- |
+| `GET /api/v1/tikhub/key` | 脱敏 Key、配置来源与状态 |
+| `POST /api/v1/tikhub/key` | `{ "apiKey": "..." }`，验证成功后保存 |
+| `DELETE /api/v1/tikhub/key` | 移除页面保存的 Key，保留环境变量回退 |
+| `GET /api/v1/tikhub/account` | 账户摘要和每日用量；用量失败返回独立警告 |
+| `GET /api/v1/tikhub/catalog` | `platform`、`q`、`offset`、`limit` 筛选查询目录 |
+| `POST /api/v1/tikhub/query` | `{ "endpoint_id": "GET /api/v1/twitter/web/fetch_tweet_detail", "parameters": { "tweet_id": "1808168603721650364" } }` |
+
+目录保存在 `backend/app/data/tikhub_catalog.json`，服务运行时不依赖文档站。官方接口更新后可手动重新生成并验证：
+
+```bash
+curl --fail https://api.tikhub.io/openapi.json -o /tmp/tikhub-openapi.json
+python backend/scripts/build_tikhub_catalog.py /tmp/tikhub-openapi.json
+cd backend
+python -m pytest
+```
+
+更新后需安装 `backend/requirements.txt` 中的依赖并重启后端。现有系统未提供管理员登录，部署时应在反向代理层限制管理页面及 `/api/v1/config`、`/api/v1/tikhub` 等管理接口的访问。

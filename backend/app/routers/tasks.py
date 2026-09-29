@@ -11,21 +11,13 @@ from app.models import Task
 from app.services.runtime_store import TASKS_DB
 from app.services.task_service import create_task_record, get_task_status, process_task
 from app.services.share_import import extract_shared_url, prepare_shared_task
-from app.routers.config import get_config
+from app.routers.config import get_runtime_config
 
 router = APIRouter()
 
 
-class ModelConfig(BaseModel):
-    modelName: str | None = None
-    apiKey: str | None = None
-    baseUrl: str | None = None
-    tikhubApiKey: str | None = None
-
-
 class TaskSubmit(BaseModel):
     url: str
-    config: ModelConfig
 
 
 class ShareSubmit(BaseModel):
@@ -45,7 +37,7 @@ async def submit_share(data: ShareSubmit, background_tasks: BackgroundTasks, db=
     if scheduled:
         task_id = result["task_id"]
         TASKS_DB[task_id] = {**result, "id": task_id}
-        config = ModelConfig(**await get_config())
+        config = await get_runtime_config()
         background_tasks.add_task(process_task, task_id, url, config)
     return result
 
@@ -76,7 +68,9 @@ async def submit_task(data: TaskSubmit, background_tasks: BackgroundTasks):
     except Exception as exc:
         print(f"Failed to create task in DB: {exc}")
 
-    background_tasks.add_task(process_task, task_id, data.url, data.config)
+    # 配置（含 TikHub Token）一律由服务端从 SQLite 读取，前端不回传
+    config = await get_runtime_config()
+    background_tasks.add_task(process_task, task_id, data.url, config)
     return {"task_id": task_id, "status": "pending"}
 
 

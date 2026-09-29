@@ -6,7 +6,6 @@ import {
   BookOpenText,
   CheckCircle2,
   CircleHelp,
-  FileText,
   LayoutDashboard,
   Moon,
   Newspaper,

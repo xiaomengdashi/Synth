@@ -10,6 +10,7 @@ import AdminArticles from './features/tasks/pages/AdminArticles';
 import AdminSettings from './features/tasks/pages/AdminSettings';
 import AdminModelSettings from './features/tasks/pages/AdminModelSettings';
 import AdminTikHubSettings from './features/tasks/pages/AdminTikHubSettings';
+import AdminTikHubQuery from './features/tikhub/AdminTikHubQuery';
 import ShareReceive from './features/sharing/ShareReceive';
 import ShareSetup from './features/sharing/ShareSetup';
 import { useAppStore } from './features/app/store/useAppStore';
@@ -36,6 +37,7 @@ function App() {
           <Route path="admin/settings" element={<AdminSettings />} />
           <Route path="admin/settings/model" element={<AdminModelSettings />} />
           <Route path="admin/settings/tikhub" element={<AdminTikHubSettings />} />
+          <Route path="admin/tikhub/query" element={<AdminTikHubQuery />} />
         </Route>
       </Routes>
     </BrowserRouter>

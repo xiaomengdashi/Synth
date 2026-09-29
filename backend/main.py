@@ -17,6 +17,8 @@ from app.config import settings
 async def lifespan(app: FastAPI):
     # 启动时初始化数据库
     await init_db()
+    # 旧 data/config.json 自动迁移到 SQLite（迁移后改名 .migrated 留存）
+    await config.migrate_legacy_config()
     # 确保媒体目录存在
     os.makedirs(settings.MEDIA_DIR, exist_ok=True)
     os.makedirs(settings.ARTICLES_DIR, exist_ok=True)

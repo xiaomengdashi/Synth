@@ -59,8 +59,8 @@ tar -C "${ROOT_DIR}/backend" -czf - app main.py requirements.txt | \
   "bash -lc 'rm -rf \"${REMOTE_APP_DIR}/backend\"/{*,.[!.]*,..?*} 2>/dev/null || true; tar -xzf - -C \"${REMOTE_APP_DIR}/backend\"'"
 
 echo "==> 写入远端环境与服务配置"
-# 从本地 config.json 读取 TikHub Token（存在才注入远端环境变量，不落入 git）
-TIKHUB_TOKEN="$(python3 -c "import json; print(json.load(open('${ROOT_DIR}/backend/data/config.json')).get('tikhubApiKey', ''))" 2>/dev/null || true)"
+# 从本地 SQLite 配置表读取 TikHub Token（存在才注入远端环境变量，不落入 git）
+TIKHUB_TOKEN="$(python3 -c "import sqlite3; c = sqlite3.connect('${ROOT_DIR}/backend/data/synthai.db'); r = c.execute(\"SELECT value FROM app_settings WHERE key = 'tikhubApiKey'\").fetchone(); print(r[0] if r and r[0] else '')" 2>/dev/null || true)"
 ssh -o StrictHostKeyChecking=no "${REMOTE}" "DOMAIN='${DOMAIN}' APP_NAME='${APP_NAME}' NGINX_SITE_NAME='${NGINX_SITE_NAME}' REMOTE_APP_DIR='${REMOTE_APP_DIR}' REMOTE_WEB_DIR='${REMOTE_WEB_DIR}' BACKEND_PORT='${BACKEND_PORT}' TIKHUB_TOKEN='${TIKHUB_TOKEN}' python3 - <<'PY'
 from pathlib import Path
 import os
@@ -128,7 +128,6 @@ env_lines = [
     f'DATABASE_URL=sqlite+aiosqlite:///{remote_app_dir}/data/synthai.db',
     f'MEDIA_DIR={remote_app_dir}/data/media',
     f'ARTICLES_DIR={remote_app_dir}/data/articles',
-    f'CONFIG_FILE={remote_app_dir}/data/config.json',
     f'FRONTEND_URL=https://{domain}',
     'DEBUG=false',
     'APP_HOST=127.0.0.1',

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle2, FileText, Loader2, Trash2, XCircle } from 'lucide-react';
+import { Activity, AlertCircle, CheckCircle2, Loader2, Trash2, XCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';

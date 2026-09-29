@@ -9,7 +9,7 @@ from app.database import Base, get_db
 from app.models import Article
 from app.routers import tasks
 from app.services.fetchers.tikhub import normalize_flat_tweet_data
-from app.services import runtime_store, task_service
+from app.services import runtime_store, settings_store, task_service
 
 
 @pytest.fixture
@@ -31,6 +31,7 @@ def share_client(tmp_path, monkeypatch):
         pass
 
     monkeypatch.setattr(task_service, "AsyncSessionLocal", sessions)
+    monkeypatch.setattr(settings_store, "AsyncSessionLocal", sessions)
     monkeypatch.setattr(tasks, "process_task", no_external_fetch)
     monkeypatch.setattr(runtime_store, "TASKS_DB", {})
     monkeypatch.setattr(tasks, "TASKS_DB", runtime_store.TASKS_DB)
@@ -167,7 +168,7 @@ def test_direct_x_article_link_fails_with_clear_error(share_client, monkeypatch)
 
     monkeypatch.setattr(task_service, "fetch_tikhub_tweet", unexpected_tikhub)
     asyncio.run(task_service.create_task_record(task_id, "https://x.com/i/article/987654321", "2026-09-22T00:00:00"))
-    asyncio.run(task_service.process_task(task_id, "https://x.com/i/article/987654321", tasks.ModelConfig()))
+    asyncio.run(task_service.process_task(task_id, "https://x.com/i/article/987654321", {}))
     assert task_service.TASKS_DB[task_id]["status"] == "failed"
     assert "i/article" in task_service.TASKS_DB[task_id]["current_step"]
     task_service.TASKS_DB.pop(task_id, None)
@@ -218,7 +219,7 @@ def test_x_share_prefers_external_article_content_over_tweet_text(share_client, 
     monkeypatch.setattr(task_service, "fetch_tikhub_tweet", fetch_tikhub)
     monkeypatch.setattr(task_service, "fetch_article_content", fetch_article)
     asyncio.run(task_service.create_task_record(task_id, "https://x.com/author/status/123456789", "2026-09-22T00:00:00"))
-    asyncio.run(task_service.process_task(task_id, "https://x.com/author/status/123456789", tasks.ModelConfig()))
+    asyncio.run(task_service.process_task(task_id, "https://x.com/author/status/123456789", {}))
 
     saved = task_service.TASKS_DB[task_id]["article"]
     assert task_service.TASKS_DB[task_id]["status"] == "completed"

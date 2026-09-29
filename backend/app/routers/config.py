@@ -1,64 +1,59 @@
+import json
+from pathlib import Path
+
 from fastapi import APIRouter
 from pydantic import BaseModel
-import json
-import os
-from app.config import settings
+
+from app.config import BACKEND_DIR
+from app.services import settings_store
 
 router = APIRouter()
 
-CONFIG_FILE = settings.CONFIG_FILE
+# 旧版 JSON 配置文件：启动时自动迁移到 SQLite 后改名留存
+LEGACY_CONFIG_FILE = BACKEND_DIR / "data" / "config.json"
+
 
 class AppConfigModel(BaseModel):
-    apiKey: str
-    baseUrl: str
-    modelName: str
-    tikhubApiKey: str | None = None
+    apiKey: str = ""
+    baseUrl: str = ""
+    modelName: str = ""
 
 
-def _public_config(data: dict) -> dict:
-    """Return only configuration fields that are still supported by the app."""
-    supported_keys = {
-        "apiKey",
-        "baseUrl",
-        "modelName",
-        "tikhubApiKey",
+async def migrate_legacy_config() -> bool:
+    """把 data/config.json 的配置项导入 app_settings 表（不覆盖已有值），成功后改名备份。"""
+    if not LEGACY_CONFIG_FILE.exists():
+        return False
+    try:
+        legacy = json.loads(LEGACY_CONFIG_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(legacy, dict):
+        return False
+
+    existing = await settings_store.load_settings()
+    values = {
+        key: str(legacy.get(key) or "").strip()
+        for key in settings_store.SUPPORTED_KEYS
+        if str(legacy.get(key) or "").strip() and not existing.get(key)
     }
-    return {key: data.get(key, "") for key in supported_keys}
+    if values:
+        await settings_store.save_settings(values)
+    LEGACY_CONFIG_FILE.rename(LEGACY_CONFIG_FILE.with_suffix(".json.migrated"))
+    return True
+
 
 @router.get("")
 async def get_config():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                return _public_config(json.load(f))
-        except Exception:
-            pass
-    return {
-        "apiKey": "",
-        "baseUrl": "",
-        "modelName": "",
-        "tikhubApiKey": "",
-    }
+    return settings_store.public_settings(await settings_store.load_settings())
 
-def _load_stored_config() -> dict:
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, 'r') as f:
-                stored = json.load(f)
-            if isinstance(stored, dict):
-                return stored
-        except Exception:
-            pass
-    return {}
+
+async def get_runtime_config() -> dict:
+    """Internal use only: background fetches need the saved credential."""
+    return await settings_store.load_settings()
 
 
 @router.post("")
 async def save_config(config: AppConfigModel):
-    payload = config.model_dump() if hasattr(config, 'model_dump') else config.dict()
-    # 前端旧版本不携带 tikhubApiKey 时，保留已存储的 Token 而不是清空。
-    if payload.get("tikhubApiKey") is None:
-        payload["tikhubApiKey"] = _load_stored_config().get("tikhubApiKey")
-    os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(payload, f)
-    return {"status": "success"}
+    # TikHub credentials can only change via the verified /tikhub/key endpoint.
+    await settings_store.save_settings(config.model_dump())
+    return {"status": "success", **settings_store.public_settings(await settings_store.load_settings())}

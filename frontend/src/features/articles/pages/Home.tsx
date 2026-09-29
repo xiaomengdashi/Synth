@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Clipboard, FileText, Link2, Loader2, Send, Smartphone, Twitter, Upload, Video, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
-import { formatDistanceToNow } from '../../../utils/formatDate';
 import ArticleList from '../components/ArticleList';
 
 type Source = 'wechat' | 'x' | 'bilibili';
@@ -36,7 +35,7 @@ function detectSourceFromUrl(value: string): Source | null {
 }
 
 export default function Home() {
-  const { articles, config, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
+  const { articles, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
   const [source, setSource] = useState<Source>('wechat');
   const [url, setUrl] = useState('');
   const [detectedSource, setDetectedSource] = useState<Source | null>(null);
@@ -103,12 +102,7 @@ export default function Home() {
       const response = await fetch('/api/v1/tasks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: originalUrl,
-          config: {
-            tikhubApiKey: config.tikhubApiKey,
-          },
-        }),
+        body: JSON.stringify({ url: originalUrl }),
       });
       if (!response.ok) throw new Error('提交任务失败');
       const data = await response.json();

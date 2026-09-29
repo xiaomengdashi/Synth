@@ -55,7 +55,7 @@ export const useAppStore = create<AppState>((set) => ({
     modelName: 'gpt-4o-mini',
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
-    tikhubApiKey: '',
+    tikhubConfigured: false,
   },
   toggleDarkMode: () => set((state) => {
     const newDarkMode = !state.darkMode;
@@ -90,7 +90,7 @@ export const useAppStore = create<AppState>((set) => ({
       await fetch('/api/v1/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config),
+        body: JSON.stringify({ apiKey: config.apiKey, baseUrl: config.baseUrl, modelName: config.modelName }),
       });
     } catch (e) {
       console.error('Failed to save config', e);
@@ -101,7 +101,7 @@ export const useAppStore = create<AppState>((set) => ({
       const res = await fetch('/api/v1/config');
       if (res.ok) {
         const data = await res.json();
-        if (data.apiKey || data.baseUrl) {
+        if (data && typeof data === 'object') {
           set((state) => ({ config: { ...state.config, ...data } }));
         }
       }

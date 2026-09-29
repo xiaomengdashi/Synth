@@ -10,7 +10,7 @@ export default function AdminSettings() {
   useEffect(() => { void fetchConfig(); }, [fetchConfig]);
 
   const modelReady = Boolean(config.baseUrl || config.modelName || config.apiKey);
-  const tikhubReady = Boolean(config.tikhubApiKey);
+  const tikhubReady = Boolean(config.tikhubConfigured);
 
   return (
     <div>
@@ -39,8 +39,8 @@ export default function AdminSettings() {
           <span className="overview-panel-icon"><Bird size={19} /></span>
           <div>
             <span className="eyebrow">TikHub / 02</span>
-            <h2>TikHub 抓取</h2>
-            <p>配置第三方接口 Token，X 推文/长文、公众号文章、Bilibili 视频统一走 TikHub 获取。</p>
+            <h2>TikHub 数据服务</h2>
+            <p>管理 Key、余额与用量，查询抖音、X、B站、微信等多平台数据。</p>
             <small className={tikhubReady ? 'config-status ready' : 'config-status'}><CheckCircle2 size={13} />{tikhubReady ? '已配置' : '必填配置'}</small>
           </div>
           <ArrowRight size={17} />

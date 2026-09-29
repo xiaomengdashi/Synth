@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import os
 import re
+import math
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -36,6 +38,10 @@ _VISIBILITY_WRAPPER_TYPES = {"TweetWithVisibility", "TweetWithVisibilityResults"
 class TikHubError(RuntimeError):
     """TikHub 接口调用失败（网络、鉴权、余额、数据缺失等）。"""
 
+    def __init__(self, message: str, status_code: int = 502):
+        super().__init__(message)
+        self.status_code = status_code
+
 
 class TikHubNotConfiguredError(TikHubError):
     """未配置 TikHub API Token，调用方应直接回退其他数据源。"""
@@ -57,31 +63,34 @@ def resolve_tikhub_token(config: Any = None) -> str:
     return token
 
 
-def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: dict | None = None, unwrap_data: bool = True) -> dict:
+def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: Any = None, unwrap_data: bool = True, method: str | None = None) -> dict:
     """调用 TikHub 接口；unwrap_data=False 用于无 data 包装的接口（如用户信息）。"""
     request_url = f"{TIKHUB_API_BASE}{path}"
     try:
         response = httpx.request(
-            "POST" if json_body is not None else "GET",
+            method or ("POST" if json_body is not None else "GET"),
             request_url,
             params=params,
             json=json_body,
             headers={"Authorization": f"Bearer {token}"},
             timeout=45,
-            verify=False,
         )
+    except httpx.TimeoutException as exc:
+        raise TikHubError("TikHub 请求超时，请稍后重试。", 504) from exc
     except httpx.HTTPError as exc:
-        raise TikHubError(f"TikHub 请求失败: {exc}") from exc
+        raise TikHubError("TikHub 请求失败：网络连接异常，请稍后重试。") from exc
 
     status = response.status_code
     if status == 401:
-        raise TikHubError("TikHub Token 无效、缺失或未激活 (401)。")
+        raise TikHubError("TikHub Token 无效、缺失或未激活 (401)。", 401)
+    if status == 403:
+        raise TikHubError("TikHub Key 无权访问此接口 (403)，请检查端点权限。", 403)
     if status == 402:
-        raise TikHubError("TikHub 账户余额不足 (402)，请前往 user.tikhub.io 充值。")
+        raise TikHubError("TikHub 账户余额不足 (402)，请前往 user.tikhub.io 充值。", 402)
     if status == 404:
         raise TikHubError(f"TikHub 未找到数据 (404): {request_url}")
     if status == 429:
-        raise TikHubError("TikHub 请求过于频繁 (429)，请稍后重试。")
+        raise TikHubError("TikHub 请求过于频繁 (429)，请稍后重试。", 429)
     if status != 200:
         raise TikHubError(f"TikHub 接口异常 (HTTP {status}): {request_url}")
 
@@ -90,15 +99,20 @@ def _tikhub_request(path: str, token: str, params: dict | None = None, json_body
     except ValueError as exc:
         raise TikHubError("TikHub 返回了非 JSON 数据。") from exc
 
-    # 402 等错误也可能以 HTTP 200 + detail 错误体返回
-    if isinstance(payload.get("detail"), dict):
+    if not isinstance(payload, dict):
+        raise TikHubError("TikHub 返回的数据格式错误。")
+
+    # Some upstream errors arrive as HTTP 200. Never echo credentials in messages.
+    if payload.get("detail"):
         detail = payload["detail"]
-        raise TikHubError(f"TikHub 接口错误: {detail.get('message_zh') or detail.get('message') or str(detail)[:150]}")
+        message = (detail.get('message_zh') or detail.get('message') or '请求被拒绝') if isinstance(detail, dict) else str(detail)
+        raise TikHubError(f"TikHub 接口错误: {message.replace(token, '[已隐藏]')[:250]}")
 
     code = payload.get("code")
-    if code not in (200, 0, None):
-        message = payload.get("message") or payload.get("message_zh") or str(payload)[:200]
-        raise TikHubError(f"TikHub 接口返回错误 (code={code}): {message}")
+    if code not in (200, 0, None, '200', '0'):
+        message = str(payload.get("message_zh") or payload.get("message") or "请求失败").replace(token, '[已隐藏]')[:250]
+        error_status = int(code) if str(code) in ('401', '402', '403', '429') else 502
+        raise TikHubError(f"TikHub 接口返回错误 (code={code}): {message}", error_status)
 
     if not unwrap_data:
         return payload if isinstance(payload, dict) else {}
@@ -535,60 +549,83 @@ def fetch_bilibili_video(url: str, config: Any = None) -> dict:
 # TikHub 账户信息（TikHub-User-API）
 # ---------------------------------------------------------------------------
 
-def verify_tikhub_token(token: str) -> dict:
-    """验证 Token 并返回简要账户信息（无效时抛出 TikHubError）。"""
-    payload = _tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False)
-    user_data = payload.get("user_data") or {}
-    api_key_data = payload.get("api_key_data") or {}
+def _number(value: Any, integer: bool = False) -> float | int | None:
+    try:
+        number = float(value)
+        if not math.isfinite(number):
+            return None
+        return int(number) if integer else number
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+def _boolean(value: Any) -> bool:
+    return value is True or value == 1 or str(value).lower() == "true"
+
+
+def _account_summary(payload: dict) -> dict:
+    # Both top-level user responses and standard data envelopes exist upstream.
+    payload = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    user = payload.get("user_data")
+    key = payload.get("api_key_data")
+    if not isinstance(user, dict) or not isinstance(key, dict) or "api_key_status" not in key or "is_active" not in user:
+        raise TikHubError("TikHub 账户信息不完整，无法验证 Key。")
+    scopes = key.get("api_key_scopes")
+    scopes = [str(scope) for scope in scopes] if isinstance(scopes, list) else []
     return {
         "api_key": {
-            "name": api_key_data.get("api_key_name", ""),
-            "created_at": api_key_data.get("created_at"),
-            "expires_at": api_key_data.get("expires_at"),
-            "status": api_key_data.get("api_key_status"),
-            "scopes_count": len(api_key_data.get("api_key_scopes") or []),
+            "name": str(key.get("api_key_name") or ""),
+            "created_at": key.get("created_at"),
+            "expires_at": key.get("expires_at"),
+            "status": _number(key.get("api_key_status"), integer=True),
+            "scopes": scopes,
+            "scopes_count": len(scopes),
         },
         "user": {
-            "balance": user_data.get("balance", 0.0),
-            "free_credit": user_data.get("free_credit", 0.0),
-            "is_active": bool(user_data.get("is_active")),
+            "email": str(user.get("email") or ""),
+            "balance": _number(user.get("balance")),
+            "free_credit": _number(user.get("free_credit")),
+            "is_active": _boolean(user.get("is_active")),
+            "email_verified": _boolean(user.get("email_verified")),
+            "account_disabled": _boolean(user.get("account_disabled")),
         },
     }
+
+
+def verify_tikhub_token(token: str) -> dict:
+    summary = _account_summary(_tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False))
+    if summary["api_key"]["status"] != 1 or not summary["user"]["is_active"] or summary["user"]["account_disabled"]:
+        raise TikHubError("TikHub Key 或账户未激活、已禁用。", 401)
+    expiry = summary["api_key"]["expires_at"]
+    if expiry:
+        try:
+            expires = datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
+            if expires.replace(tzinfo=expires.tzinfo or timezone.utc) <= datetime.now(timezone.utc):
+                raise TikHubError("TikHub Key 已过期，请更换 Key。", 401)
+        except ValueError:
+            raise TikHubError("TikHub Key 有效期格式异常，无法验证。")
+    return summary
 
 
 def fetch_tikhub_account(config: Any = None) -> dict:
-    """查询账户摘要：Key 信息、余额、今日用量（按端点明细）。"""
     token = resolve_tikhub_token(config)
-    payload = _tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False)
-    user_data = payload.get("user_data") or {}
-    api_key_data = payload.get("api_key_data") or {}
-
-    daily_usage: dict = {}
+    summary = _account_summary(_tikhub_request(TIKHUB_USER_INFO_PATH, token, unwrap_data=False))
+    usage = None
+    warnings = []
     try:
-        daily_usage = _tikhub_request(TIKHUB_DAILY_USAGE_PATH, token) or {}
-    except TikHubError:
-        daily_usage = {}
-
-    uri_counts = daily_usage.get("uri_counts") or {}
-    return {
-        "api_key": {
-            "name": api_key_data.get("api_key_name", ""),
-            "created_at": api_key_data.get("created_at"),
-            "expires_at": api_key_data.get("expires_at"),
-            "status": api_key_data.get("api_key_status"),
-            "scopes_count": len(api_key_data.get("api_key_scopes") or []),
-        },
-        "user": {
-            "email": user_data.get("email", ""),
-            "balance": user_data.get("balance", 0.0),
-            "free_credit": user_data.get("free_credit", 0.0),
-            "is_active": bool(user_data.get("is_active")),
-        },
-        "daily_usage": {
-            "date": daily_usage.get("date", ""),
-            "usage": daily_usage.get("usage", 0.0),
-            "total_request_per_day": daily_usage.get("total_request_per_day", 0),
-            "paid_request_per_day": daily_usage.get("paid_request_per_day", 0),
-            "uri_counts": {str(k): int(v) for k, v in uri_counts.items() if v},
-        },
-    }
+        raw = _tikhub_request(TIKHUB_DAILY_USAGE_PATH, token, unwrap_data=False)
+        daily = raw.get("data", raw)
+        if not isinstance(daily, dict) or not any(k in daily for k in ("usage", "total_request_per_day", "date")):
+            raise TikHubError("TikHub 每日用量数据格式错误。")
+        counts = daily.get("uri_counts")
+        counts = counts if isinstance(counts, dict) else {}
+        usage = {
+            "date": str(daily.get("date") or ""),
+            "usage": _number(daily.get("usage")),
+            "total_request_per_day": _number(daily.get("total_request_per_day"), integer=True),
+            "paid_request_per_day": _number(daily.get("paid_request_per_day"), integer=True),
+            "uri_counts": {str(k): _number(v, integer=True) for k, v in counts.items() if _number(v, integer=True) is not None},
+        }
+    except TikHubError as exc:
+        warnings.append(f"每日用量暂不可用：{exc}")
+    return {**summary, "daily_usage": usage, "warnings": warnings}
