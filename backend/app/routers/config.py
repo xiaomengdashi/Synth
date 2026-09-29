@@ -15,6 +15,7 @@ class AppConfigModel(BaseModel):
     biliSessdata: str | None = None
     biliJct: str | None = None
     biliBuvid3: str | None = None
+    tikhubApiKey: str | None = None
 
 
 def _public_config(data: dict) -> dict:
@@ -26,6 +27,7 @@ def _public_config(data: dict) -> dict:
         "biliSessdata",
         "biliJct",
         "biliBuvid3",
+        "tikhubApiKey",
     }
     return {key: data.get(key, "") for key in supported_keys}
 
@@ -46,9 +48,25 @@ async def get_config():
         "biliBuvid3": "",
     }
 
+def _load_stored_config() -> dict:
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                stored = json.load(f)
+            if isinstance(stored, dict):
+                return stored
+        except Exception:
+            pass
+    return {}
+
+
 @router.post("")
 async def save_config(config: AppConfigModel):
+    payload = config.model_dump() if hasattr(config, 'model_dump') else config.dict()
+    # 前端旧版本不携带 tikhubApiKey 时，保留已存储的 Token 而不是清空。
+    if payload.get("tikhubApiKey") is None:
+        payload["tikhubApiKey"] = _load_stored_config().get("tikhubApiKey")
     os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
     with open(CONFIG_FILE, 'w') as f:
-        json.dump(config.model_dump() if hasattr(config, 'model_dump') else config.dict(), f)
+        json.dump(payload, f)
     return {"status": "success"}

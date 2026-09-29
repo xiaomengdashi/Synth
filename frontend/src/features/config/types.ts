@@ -5,4 +5,5 @@ export interface AppConfig {
   biliSessdata?: string;
   biliJct?: string;
   biliBuvid3?: string;
+  tikhubApiKey?: string;
 }

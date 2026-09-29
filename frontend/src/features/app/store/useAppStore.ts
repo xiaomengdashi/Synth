@@ -58,6 +58,7 @@ export const useAppStore = create<AppState>((set) => ({
     biliSessdata: '',
     biliJct: '',
     biliBuvid3: '',
+    tikhubApiKey: '',
   },
   toggleDarkMode: () => set((state) => {
     const newDarkMode = !state.darkMode;

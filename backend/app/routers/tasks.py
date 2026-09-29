@@ -23,6 +23,7 @@ class ModelConfig(BaseModel):
     biliSessdata: str | None = None
     biliJct: str | None = None
     biliBuvid3: str | None = None
+    tikhubApiKey: str | None = None
 
 
 class TaskSubmit(BaseModel):

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { ArrowRight, CheckCircle2, Cpu, Smartphone, Video } from 'lucide-react';
+import { ArrowRight, Bird, CheckCircle2, Cpu, Smartphone, Video } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
@@ -11,6 +11,7 @@ export default function AdminSettings() {
 
   const modelReady = Boolean(config.baseUrl || config.modelName || config.apiKey);
   const bilibiliReady = Boolean(config.biliSessdata);
+  const tikhubReady = Boolean(config.tikhubApiKey);
 
   return (
     <div>
@@ -42,6 +43,16 @@ export default function AdminSettings() {
             <h2>Bilibili 抓取</h2>
             <p>配置 SESSDATA 等抓取登录态信息。</p>
             <small className={bilibiliReady ? 'config-status ready' : 'config-status'}><CheckCircle2 size={13} />{bilibiliReady ? '已配置' : '可选配置'}</small>
+          </div>
+          <ArrowRight size={17} />
+        </Link>
+        <Link to="/admin/settings/tikhub" className="overview-link-panel">
+          <span className="overview-panel-icon"><Bird size={19} /></span>
+          <div>
+            <span className="eyebrow">TikHub / 03</span>
+            <h2>TikHub 抓取</h2>
+            <p>配置第三方接口 Token，作为 X/Twitter 推文与长文的首选数据源。</p>
+            <small className={tikhubReady ? 'config-status ready' : 'config-status'}><CheckCircle2 size={13} />{tikhubReady ? '已配置' : '推荐配置'}</small>
           </div>
           <ArrowRight size={17} />
         </Link>

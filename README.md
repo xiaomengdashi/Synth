@@ -67,9 +67,25 @@ npm run dev  # 或 yarn dev / pnpm dev
 - 微信返回安全验证页时，任务立即失败，不会保存验证码页，也不会长时间卡住。
 - 从已能打开文章的环境保存完整网页 HTML 后，可使用首页的 **导入网页 HTML** 功能；文件需要包含 `#js_content` 正文节点。
 
-### X 长文登录态抓取（可选）
+### X 抓取：TikHub 第三方接口（推荐）
 
-项目支持使用本机 X 登录态读取长文。Cookie 不会保存到网站数据库，后端会调用本机的 `twitter-cli`。
+X/Twitter 的推文与长文抓取默认优先走 [TikHub](https://docs.tikhub.io) 第三方接口（`GET /api.tikhub.io/api/v1/twitter/web/fetch_tweet_detail`），推文、长推文（note_tweet）和 X 长文（Article 的 Draft.js 富文本）都可以直接获取，**无需本机 X 登录态，部署在服务器上也可用**。
+
+配置方式（二选一，推荐在管理后台 **系统配置 → TikHub 抓取** 页面填写）：
+
+1. 管理后台填写：进入 `/admin/settings/tikhub`，保存 API Token（存储在后端 `data/config.json` 的 `tikhubApiKey` 字段）。
+2. 环境变量：部署机器上设置 `TIKHUB_API_TOKEN`（例如写入 systemd 服务的 `Environment=`）。
+
+Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建。TikHub 按次计费，注意账户余额（余额不足返回 402 时会自动回退）。
+
+未配置 Token 或 TikHub 请求失败（网络错误、余额不足、频率限制等）时，按以下顺序自动回退：
+
+- 普通推文：镜像接口（vxtwitter → fxtwitter → twittpr）。
+- X 长文：本机 `twitter-cli` 登录态（见下节）。
+
+### X 长文登录态抓取（可选回退）
+
+项目保留本机 X 登录态读取长文的能力，作为 TikHub 不可用时的回退方案。Cookie 不会保存到网站数据库，后端会调用本机的 `twitter-cli`。
 
 ```bash
 # 建议在独立虚拟环境中安装 Agent Reach
@@ -91,7 +107,20 @@ twitter article "https://x.com/用户名/status/推文ID" --markdown
 export SYNTHAI_TWITTER_BIN="/path/to/twitter"
 ```
 
-网站提交 X 长文时，只使用本机 `twitter-cli` 登录态读取全文，不再需要或保存 X Article API Key。模型参数仍可单独保存，但当前不会用于导入任务。
+网站提交 X 长文时，优先使用 TikHub 接口读取全文；TikHub 不可用时才回退本机 `twitter-cli` 登录态。模型参数仍可单独保存，但当前不会用于导入任务。
+
+### iPhone 分享导入
+
+项目已内置一条 iPhone 分享链路，适合在手机上浏览 X 或微信文章时顺手保存：
+
+1. 在网站中打开 `分享导入` 设置页，也就是前端的 `/share/setup`。
+2. 前端部署时可配置 `VITE_SHARE_SHORTCUT_ICLOUD_URL`，让页面优先显示 `iCloud 快捷指令` 一键安装入口；示例见 `frontend/.env.example`。
+3. 在 iPhone 上打开该 iCloud 链接并导入 `保存到 SynthAI`，把网站地址改成手机可访问的域名或局域网地址。
+4. 如果暂时没有配置 iCloud 链接，也可以在 `/share/setup` 页面按提示手动创建快捷指令。
+5. 在 X App 或微信中打开文章，点击分享，选择 `保存到 SynthAI`。
+6. 网站会跳转到 `/share?text=...`，自动提取分享里的文章链接，创建任务，并在抓取完成后打开文章详情页。
+
+当前这条链路默认接收的是 `x.com` / `twitter.com` 的帖子或 X 长文链接，以及 `mp.weixin.qq.com` 的微信公众号文章链接；如果是 X 里转发出去的外部网页，也会优先尝试抓取原网页正文。
 
 ## 技术栈
 
