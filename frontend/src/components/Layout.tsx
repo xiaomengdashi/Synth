@@ -60,13 +60,17 @@ export default function Layout() {
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
   const isAdmin = location.pathname.startsWith('/admin');
-  const adminPageTitle = location.pathname === '/admin/tasks'
-    ? '处理任务'
-    : location.pathname === '/admin/articles'
-      ? '文章管理'
-      : location.pathname.startsWith('/admin/settings')
-        ? '系统配置'
-        : '内容总览';
+  // 面包屑：上级可点击跳转，最后一级是当前位置
+  const adminBreadcrumbs: { label: string; to?: string }[] =
+    location.pathname === '/admin/tasks'
+      ? [{ label: '后台管理', to: '/admin' }, { label: '处理任务' }]
+      : location.pathname === '/admin/articles'
+        ? [{ label: '后台管理', to: '/admin' }, { label: '文章管理' }]
+        : location.pathname.startsWith('/admin/tikhub')
+          ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '多平台查询' }]
+          : location.pathname.startsWith('/admin/settings')
+            ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置' }]
+            : [{ label: '后台管理' }, { label: '内容总览' }];
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -140,7 +144,18 @@ export default function Layout() {
               <Link to="/articles" className={location.pathname === '/articles' ? 'active' : ''}>文章库</Link>
             </nav>
           ) : (
-            <div className="admin-breadcrumb"><span>后台管理</span><span>/</span><strong>{adminPageTitle}</strong></div>
+            <div className="admin-breadcrumb" aria-label="面包屑">
+              {adminBreadcrumbs.map((crumb, index) => (
+                <span className="crumb" key={crumb.label}>
+                  {index > 0 && <span className="crumb-sep">/</span>}
+                  {crumb.to && index < adminBreadcrumbs.length - 1 ? (
+                    <Link to={crumb.to}>{crumb.label}</Link>
+                  ) : (
+                    <strong aria-current="page">{crumb.label}</strong>
+                  )}
+                </span>
+              ))}
+            </div>
           )}
           <div className="header-actions">
             <form className="header-search" onSubmit={handleSearch}>
