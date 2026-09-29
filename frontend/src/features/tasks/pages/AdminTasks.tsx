@@ -20,7 +20,7 @@ export default function AdminTasks() {
 
   return (
     <div>
-      <AdminPageHeader eyebrow="Queue / 03" title="处理任务" description="独立查看每一条链接的抓取、总结和保存状态。" actions={<span className="text-link">实时更新 <Activity size={14} /></span>} />
+      <AdminPageHeader eyebrow="Queue / 03" title="处理任务" description="独立查看每一条链接的抓取、总结和保存状态。" actions={<span className="config-status ready"><Activity size={13} />实时更新</span>} />
       <section className="admin-section">
         <div className="task-list">
           <AnimatePresence initial={false}>

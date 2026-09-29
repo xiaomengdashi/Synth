@@ -1,9 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowRight, BarChart3, CheckCircle2, ListChecks, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { formatDistanceToNow } from '../../../utils/formatDate';
+import { money, requestJson } from '../../tikhub/client';
+import type { Account } from '../../tikhub/types';
 import type { Article } from '../../articles/types';
 import type { Task } from '../types';
 
@@ -110,12 +112,14 @@ function TaskStatusChart({ tasks }: { tasks: Task[] }) {
 }
 
 export default function Admin() {
-  const { articles, tasks, config, fetchArticles, fetchTasks, fetchConfig } = useAppStore();
+  const { articles, tasks, fetchArticles, fetchTasks } = useAppStore();
+  const [account, setAccount] = useState<Account | null>(null);
   useEffect(() => {
     void fetchArticles();
     void fetchTasks();
-    void fetchConfig();
-  }, [fetchArticles, fetchTasks, fetchConfig]);
+    // TikHub 状态属于展示性信息，查询失败时静默降级
+    void requestJson<Account>('/api/v1/tikhub/account').then(setAccount).catch(() => setAccount(null));
+  }, [fetchArticles, fetchTasks]);
 
   const completedCount = tasks.filter((task) => task.status === 'completed').length;
   const processingCount = tasks.filter((task) => task.status === 'processing' || task.status === 'pending').length;
@@ -126,14 +130,13 @@ export default function Admin() {
         eyebrow="Operations / 01"
         title="内容总览"
         description="从内容增长、来源结构和任务状态，快速了解知识库的运行情况。"
-        actions={<Link to="/" className="secondary-button accent">进入前台 <ArrowRight size={14} /></Link>}
       />
 
       <section className="admin-metrics" aria-label="数据概览">
         <div className="metric"><span>文章总数</span><strong>{articles.length}</strong><small>篇</small></div>
         <div className="metric"><span>已完成任务</span><strong>{completedCount}</strong><small>条</small></div>
-        <div className="metric"><span>处理中</span><strong>{processingCount}</strong><small>{processingCount ? 'active' : 'idle'}</small></div>
-        <div className="metric"><span>模型参数</span><strong style={{ fontSize: 17 }}>{config.modelName || '未设置'}</strong></div>
+        <div className="metric"><span>处理中</span><strong>{processingCount}</strong><small>{processingCount ? '进行中' : '空闲'}</small></div>
+        <div className="metric"><span>TikHub 抓取</span><strong style={{ fontSize: 17 }}>{account?.user ? money(account.user.balance) : '未配置'}</strong><small>{account?.user ? '余额' : '前往系统配置'}</small></div>
       </section>
 
       <section className="overview-chart-grid" aria-label="内容数据图表">
