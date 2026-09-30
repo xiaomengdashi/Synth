@@ -112,6 +112,24 @@ async def get_article(article_id: str, db: AsyncSession = Depends(get_db)):
         
     raise HTTPException(status_code=404, detail="Article not found")
 
+class ArticleCategoryPayload(BaseModel):
+    category: str | None = Field(default=None, max_length=64)
+
+
+@router.patch("/{article_id}")
+async def update_article_category(article_id: str, payload: ArticleCategoryPayload, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Article).where(Article.id == article_id))
+    article = result.scalar_one_or_none()
+    if article is None:
+        raise HTTPException(status_code=404, detail="文章不存在")
+
+    value = (payload.category or "").strip()
+    article.category = value if value else None
+    await db.commit()
+    await db.refresh(article)
+    return jsonable_encoder(article)
+
+
 @router.delete("/{article_id}")
 async def delete_article(article_id: str, db: AsyncSession = Depends(get_db)):
     # 先找到关联的任务并删除（或者置空）

@@ -81,3 +81,50 @@ def public_settings(values: dict) -> dict:
         "modelName": str(values.get("modelName") or ""),
         "tikhubConfigured": key_metadata(values)["configured"],
     }
+
+
+CATEGORY_SETTINGS_KEY = "categories"
+
+
+async def load_categories() -> list[str]:
+    """分类列表存于 app_settings(JSON 数组文本),供前台菜单与后台管理共用。"""
+    import json as _json
+
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(
+            select(AppSetting).where(AppSetting.key == CATEGORY_SETTINGS_KEY)
+        )
+        stored = row.scalar_one_or_none()
+    if not stored or not stored.value:
+        return []
+    try:
+        names = _json.loads(stored.value)
+    except ValueError:
+        return []
+    return [str(name).strip() for name in names if str(name).strip()]
+
+
+async def save_categories(names: list[str]) -> list[str]:
+    """整体保存分类列表:去空、去重、保序。"""
+    import json as _json
+    import datetime as _dt
+
+    cleaned: list[str] = []
+    for name in names:
+        value = str(name).strip()
+        if value and value not in cleaned:
+            cleaned.append(value)
+
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(
+            select(AppSetting).where(AppSetting.key == CATEGORY_SETTINGS_KEY)
+        )
+        stored = row.scalar_one_or_none()
+        if stored is None:
+            stored = AppSetting(key=CATEGORY_SETTINGS_KEY, value=_json.dumps(cleaned, ensure_ascii=False))
+            session.add(stored)
+        else:
+            stored.value = _json.dumps(cleaned, ensure_ascii=False)
+            stored.updated_at = _dt.datetime.now(_dt.UTC).replace(tzinfo=None)
+        await session.commit()
+    return cleaned

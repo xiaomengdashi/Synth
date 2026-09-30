@@ -57,6 +57,7 @@ export default function Layout() {
           <nav className="public-nav" aria-label="主导航">
             <Link to="/" className={location.pathname === '/' ? 'active' : ''}>发现</Link>
             <Link to="/articles" className={location.pathname.startsWith('/article') ? 'active' : ''}>文章库</Link>
+            <Link to="/categories" className={location.pathname.startsWith('/categor') ? 'active' : ''}>分类</Link>
           </nav>
           <div className="header-actions">
             <form className="header-search" onSubmit={handleSearch} role="search">

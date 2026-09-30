@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
 import Home from './features/articles/pages/Home';
 import Articles from './features/articles/pages/Articles';
+import Categories from './features/articles/pages/Categories';
 import Article from './features/articles/pages/Article';
 import Admin from './features/tasks/pages/Admin';
 import AdminTasks from './features/tasks/pages/AdminTasks';
@@ -29,6 +30,7 @@ function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Home />} />
           <Route path="articles" element={<Articles />} />
+          <Route path="categories" element={<Categories />} />
           <Route path="article/:id" element={<Article />} />
           <Route path="share" element={<ShareReceive />} />
         </Route>

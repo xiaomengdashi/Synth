@@ -8,5 +8,6 @@ export interface Article {
   cover_image_url?: string;
   account_name?: string;
   publish_time?: string;
+  category?: string | null;
   created_at: string;
 }

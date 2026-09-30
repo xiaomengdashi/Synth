@@ -18,6 +18,7 @@ class Article(Base):
     cover_image_url = Column(Text, nullable=True)
     account_name = Column(String(255), nullable=True)
     publish_time = Column(String(64), nullable=True)
+    category = Column(String(64), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None))
     updated_at = Column(
         DateTime,

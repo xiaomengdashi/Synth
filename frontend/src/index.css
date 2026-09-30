@@ -783,6 +783,10 @@
 .tikhub-tree-row strong { color: var(--ac-ink); }
 .tikhub-tree-scalar { white-space: pre-wrap; color: var(--ac-muted); }
 
+.category-add-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.category-add-row .ac-input { flex: 1; min-width: 0; }
+.category-manage-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--ac-line); border-radius: 8px; background: var(--ac-surface-2); color: var(--ac-ink); font-size: 13px; }
+
 /* ---------- 焦点可达性 ---------- */
 .admin-console a:focus-visible,
 .admin-console button:focus-visible,
