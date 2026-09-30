@@ -455,11 +455,13 @@
   --ac-info-soft: #e9effc;
   --ac-code-bg: #f6f8fa;
   --ac-shadow: 0 8px 24px rgba(16, 24, 40, .05);
-  --ac-side-bg: #0d131c;
-  --ac-side-line: rgba(255, 255, 255, .07);
-  --ac-side-ink: #a6b2c3;
-  --ac-side-ink-strong: #f0f4f9;
-  --ac-side-label: #5a6a80;
+  --ac-side-bg: #ffffff;
+  --ac-side-line: #e6ebf2;
+  --ac-side-hover: rgba(16, 24, 40, .05);
+  --ac-side-active-bg: var(--ac-accent-soft);
+  --ac-side-ink: #5e6a7d;
+  --ac-side-ink-strong: #19222f;
+  --ac-side-label: #8a96a8;
 
   /* 旧变量映射:让 toast、share-* 等共享组件在后台同步换肤 */
   --ink: var(--ac-ink);
@@ -502,6 +504,13 @@
   --ac-info-soft: rgba(59, 130, 246, .14);
   --ac-code-bg: #0b1017;
   --ac-shadow: 0 14px 40px rgba(0, 0, 0, .35);
+  --ac-side-bg: #0a0f16;
+  --ac-side-line: rgba(255, 255, 255, .07);
+  --ac-side-hover: rgba(255, 255, 255, .05);
+  --ac-side-active-bg: rgba(47, 169, 102, .16);
+  --ac-side-ink: #92a0b4;
+  --ac-side-ink-strong: #f0f4f9;
+  --ac-side-label: #5a6a80;
 }
 
 /* ---------- 侧边栏 ---------- */
@@ -516,6 +525,7 @@
   height: 100vh;
   background: var(--ac-side-bg);
   color: var(--ac-side-ink);
+  border-right: 1px solid var(--ac-side-line);
 }
 .ac-brand { display: flex; align-items: center; gap: 10px; padding: 16px 16px 15px; border-bottom: 1px solid var(--ac-side-line); text-decoration: none; }
 .ac-brand-logo { display: grid; width: 28px; height: 28px; flex: none; place-items: center; }
@@ -528,9 +538,9 @@
 .ac-nav-label { margin: 0 0 7px; padding: 0 10px; color: var(--ac-side-label); font-size: 10px; letter-spacing: .14em; }
 .ac-nav-item { position: relative; display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px 0 14px; border-radius: 8px; color: var(--ac-side-ink); font-size: 13px; font-weight: 500; text-decoration: none; transition: background .15s ease, color .15s ease; }
 .ac-nav-item svg { flex: none; opacity: .9; }
-.ac-nav-item:hover { background: rgba(255, 255, 255, .05); color: var(--ac-side-ink-strong); }
-.ac-nav-item.active { background: rgba(74, 222, 128, .12); color: #fff; font-weight: 600; }
-.ac-nav-item.active svg { color: #4ade80; }
+.ac-nav-item:hover { background: var(--ac-side-hover); color: var(--ac-side-ink-strong); }
+.ac-nav-item.active { background: var(--ac-side-active-bg); color: var(--ac-side-ink-strong); font-weight: 600; }
+.ac-nav-item.active svg { color: var(--ac-accent); }
 .ac-nav-item.active::before { position: absolute; top: 9px; bottom: 9px; left: 0; width: 3px; border-radius: 3px; background: #4ade80; content: ''; }
 
 .ac-side-foot { display: grid; gap: 8px; padding: 14px 14px 16px; border-top: 1px solid var(--ac-side-line); }

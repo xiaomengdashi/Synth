@@ -106,7 +106,7 @@ export default function AdminLayout() {
     <div className={navOpen ? 'admin-console nav-open' : 'admin-console'}>
       <aside className="ac-sidebar" aria-label="后台侧边栏">
         <Link to="/admin" className="ac-brand">
-          <span className="ac-brand-logo"><BrandMark size={26} accent="#4ade80" ink="#f0f4f9" /></span>
+          <span className="ac-brand-logo"><BrandMark size={26} accent="var(--ac-accent)" ink="var(--ac-side-ink-strong)" /></span>
           <span className="ac-brand-text">
             <span className="ac-brand-name">SynthAI 控制台</span>
             <span className="ac-brand-sub">内容抓取与管理</span>
