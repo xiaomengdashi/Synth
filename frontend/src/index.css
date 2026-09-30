@@ -625,6 +625,8 @@
 .ac-card-desc a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .ac-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .ac-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.ac-message { margin: 0; padding: 10px 13px; border-radius: 8px; font-size: 12.5px; }
+.ac-message.error { background: var(--ac-danger-soft); color: var(--ac-danger); }
 .ac-empty { display: grid; place-items: center; gap: 6px; padding: 44px 20px; color: var(--ac-muted); font-size: 12.5px; text-align: center; }
 
 /* ---------- 表格 ---------- */

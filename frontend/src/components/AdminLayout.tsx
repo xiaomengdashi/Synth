@@ -37,6 +37,7 @@ function useAdminBreadcrumbs(pathname: string, settingsTab: string | null) {
   const settingsTabLabel =
     settingsTab === 'model' ? '模型服务'
       : settingsTab === 'share' ? '手机分享导入'
+        : settingsTab === 'token' ? '访问令牌'
         : settingsTab === 'tikhub' ? 'TikHub 数据服务'
           : null;
   if (pathname === '/admin/categories') {
