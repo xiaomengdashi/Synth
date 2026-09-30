@@ -1,15 +1,16 @@
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 /**
- * 微信公众号文章一比一复刻视图。
+ * 微信公众号文章一比一复刻视图（Shadow DOM 渲染）。
  *
- * 用 iframe 完全隔离站点样式，按 mp.weixin.qq.com 线上官方 CSS
+ * 用 Shadow DOM 隔离站点样式：按 mp.weixin.qq.com 线上官方 CSS
  * （提取自 res.wx.qq.com 样式表 + 原文页面计算样式）渲染原文 HTML，
- * 并在运行时复刻微信页面 JS 的关键行为：
+ * 并复刻微信页面 JS 的关键行为：
  *   - 图片懒加载属性转正（data-src → src）
  *   - 图片按 min(data-w, 可用宽度) 定宽、按 data-ratio 定高
  *   - visibility:hidden 修正
  * 正文 HTML 未经任何改写，内联样式原样生效，因此与原文一致。
+ * 相比旧的 iframe 方案：无高度同步、无 sandbox、无跨窗消息，天然自适应高度。
  */
 
 export interface WechatTocItem {
@@ -33,12 +34,12 @@ interface WechatArticleViewProps {
 
 /** 提取自 mp.weixin.qq.com 线上官方 CSS 的文章页核心规则（浅色模式）。 */
 const WECHAT_PAGE_CSS = `
-html { -webkit-text-size-adjust: 100%; overflow: hidden; }
-body {
-  margin: 0;
+:host { all: initial; display: block; }
+.wr-page {
   background: #fff;
   font-family: "PingFang SC NEW", system-ui, -apple-system, "Helvetica Neue", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
 }
 .rich_media_area_primary { padding: 20px 20px 0; }
 .rich_media_area_primary_inner { max-width: 677px; margin-left: auto; margin-right: auto; }
@@ -87,91 +88,66 @@ body {
 .code-snippet code:before { position: absolute; min-width: 1.5em; text-align: right; left: -2.5em; counter-increment: line; content: counter(line); display: inline; margin-right: 12px; color: rgba(0, 0, 0, .15); }
 .code-snippet_nowrap code { white-space: pre; display: flex; }
 .code-snippet__fix { font-size: 14px; margin: 10px 0; display: flex; color: #333; position: relative; background-color: rgba(0, 0, 0, .03); border: 1px solid #f0f0f0; border-radius: 2px; line-height: 26px; }
-.code-snippet__fix pre { overflow-x: auto; padding: 1em 1em 1em 0; white-space: normal; flex: 1; -webkit-overflow-scrolling: touch; }
+.code-snippet__fix pre { overflow-x: auto; padding: 1em 1em 1em 0; white-space: normal; flex:  1; -webkit-overflow-scrolling: touch; }
 .code-snippet__fix code { text-align: left; font-size: 14px; display: block; white-space: pre; position: relative; font-family: Consolas, Liberation Mono, Menlo, Courier, monospace; }
-.code-snippet__fix .code-snippet__line-index { counter-reset: line; flex-shrink: 0; height: 100%; padding: 1em; list-style-type: none; }
+.code-snippet__fix .code-snippet__line-index { counter-reset: line; flex-shrink: 0; height: 100%; padding: 1em; list-style: none; }
 .code-snippet__fix .code-snippet__line-index li { list-style-type: none; text-align: right; }
 .code-snippet__fix .code-snippet__line-index li:before { min-width: 1.5em; text-align: right; left: -2.5em; counter-increment: line; content: counter(line); display: inline; color: rgba(0, 0, 0, .15); }
 .code-snippet__comment, .code-snippet__quote { color: #afafaf; font-style: italic; }
 `;
 
-/** iframe 内运行时脚本：复刻微信页面 JS 行为 + 与父页面通信。 */
-const WECHAT_RUNTIME_SCRIPT = `
-(function () {
-  var content = document.querySelector('#js_content');
+/** Shadow DOM 内的复刻运行时：懒加载转正、显隐修正、图片定宽、标题目录。返回 resize 清理函数。 */
+function applyWechatRuntime(root: ShadowRoot, onTocItems?: (items: WechatTocItem[]) => void) {
+  const content = root.querySelector('#js_content');
   if (!content) return;
 
-  // 微信 JS 行为：图片懒加载属性转正 + 显隐修正
-  content.querySelectorAll('img[data-src]').forEach(function (img) {
-    if (!img.getAttribute('src')) img.setAttribute('src', img.getAttribute('data-src'));
+  content.querySelectorAll<HTMLImageElement>('img[data-src]').forEach((img) => {
+    if (!img.getAttribute('src')) img.setAttribute('src', img.getAttribute('data-src') || '');
   });
-  content.querySelectorAll('[style]').forEach(function (el) {
-    if (/visibility\\s*:\\s*hidden/i.test(el.getAttribute('style'))) el.style.visibility = 'visible';
+  root.querySelectorAll<HTMLElement>('[style]').forEach((el) => {
+    if (/visibility\s*:\s*hidden/i.test(el.getAttribute('style') || '')) {
+      el.style.visibility = 'visible';
+    }
   });
 
   // 微信 JS 行为：图片按 min(data-w, 可用宽度) 定宽；
   // 高度不写死（官方 CSS height:auto!important 按图片真实比例），
   // aspect-ratio 仅在加载完成前用 data-ratio（高/宽比）占位防跳动
-  function layoutImages() {
-    content.querySelectorAll('img[data-w]').forEach(function (img) {
-      var w = parseFloat(img.getAttribute('data-w'));
-      if (!w || isNaN(w)) return;
-      var parent = img.parentElement || content;
-      var avail = parent.clientWidth || content.clientWidth;
+  const layoutImages = () => {
+    content.querySelectorAll<HTMLImageElement>('img[data-w]').forEach((img) => {
+      const w = parseFloat(img.getAttribute('data-w') || '');
+      if (!w || Number.isNaN(w)) return;
+      const parent = img.parentElement || content;
+      const avail = (parent as HTMLElement).clientWidth || (content as HTMLElement).clientWidth;
       if (!avail) return;
-      var width = Math.min(w, avail);
-      var ratio = parseFloat(img.getAttribute('data-ratio'));
-      var extra = 'width: ' + width + 'px !important; height: auto !important; visibility: visible !important;';
-      if (ratio > 0 && !isNaN(ratio)) {
-        extra += ' aspect-ratio: ' + w + ' / ' + Math.round(w * ratio) + ';';
+      const width = Math.min(w, avail);
+      const ratio = parseFloat(img.getAttribute('data-ratio') || '');
+      let extra = `width: ${width}px !important; height: auto !important; visibility: visible !important;`;
+      if (ratio > 0 && !Number.isNaN(ratio)) {
+        extra += ` aspect-ratio: ${w} / ${Math.round(w * ratio)};`;
       }
       img.style.cssText = img.style.cssText
-        .replace(/width:\\s*[^;]+;?/g, '')
-        .replace(/height:\\s*[^;]+;?/g, '')
-        .replace(/aspect-ratio:\\s*[^;]+;?/g, '') + extra;
+        .replace(/width:\s*[^;]+;?/g, '')
+        .replace(/height:\s*[^;]+;?/g, '')
+        .replace(/aspect-ratio:\s*[^;]+;?/g, '') + extra;
     });
-  }
+  };
   layoutImages();
   window.addEventListener('resize', layoutImages);
 
-  // 标题目录：给标题编号并把列表发给父页面
-  var tocItems = [];
-  var seq = 0;
-  content.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(function (h) {
-    if (!h.textContent.trim()) return;
+  // 标题目录：编号并上报（文章 h1 标题不在 #js_content 内，不会被扫到）
+  const tocItems: WechatTocItem[] = [];
+  let seq = 0;
+  content.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((h) => {
+    if (!h.textContent?.trim()) return;
     seq += 1;
-    h.id = 'wx-toc-' + seq;
+    h.id = `wx-toc-${seq}`;
     tocItems.push({ id: h.id, text: h.textContent.trim(), level: Number(h.tagName.slice(1)) });
   });
+  onTocItems?.(tocItems);
 
-  // 高度同步：内容尺寸变化即上报。多来源取最大值并加少量余量，
-  // 避免舍入/图片占位误差让 iframe 冒出内部滚动条（右侧竖灰条）
-  function postHeight() {
-    var bodyH = document.body ? document.body.scrollHeight : 0;
-    var docH = document.documentElement.scrollHeight;
-    var contentBottom = content.offsetTop + content.offsetHeight;
-    var height = Math.ceil(Math.max(bodyH, docH, contentBottom) + 6);
-    parent.postMessage({ type: 'wechat-replica-height', height: height }, '*');
-  }
-  postHeight();
-  if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
-  content.addEventListener('load', postHeight, true);
-  window.addEventListener('load', postHeight);
-
-  parent.postMessage({ type: 'wechat-replica-toc', items: tocItems }, '*');
-
-  // 目录跳转：把目标元素在文档内的位置报给父页面
-  window.addEventListener('message', function (event) {
-    if (!event.data || event.data.type !== 'wechat-replica-scroll') return;
-    var el = document.getElementById(event.data.id);
-    if (!el) return;
-    parent.postMessage({
-      type: 'wechat-replica-scroll-pos',
-      top: el.getBoundingClientRect().top + (window.scrollY || 0),
-    }, '*');
-  });
-})();
-`;
+  return layoutImages;
+}
 
 function escapeHtml(text: string): string {
   return text
@@ -211,15 +187,9 @@ function buildMetaRow(accountName: string, publishTime: string): string {
   return '<div id="meta_content" class="rich_media_meta_list">' + parts.join('') + '</div>';
 }
 
-function buildSrcDoc(title: string, htmlContent: string, accountName: string, publishTime: string): string {
-  return `<!doctype html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>${WECHAT_PAGE_CSS}</style>
-</head>
-<body>
+function buildShadowHtml(title: string, htmlContent: string, accountName: string, publishTime: string): string {
+  return `<style>${WECHAT_PAGE_CSS}</style>
+<div class="wr-page">
 <div class="rich_media_area_primary">
 <div class="rich_media_area_primary_inner">
 <h1 class="rich_media_title" id="activity-name"><span class="js_title_inner">${escapeHtml(title)}</span></h1>
@@ -227,66 +197,47 @@ ${buildMetaRow(accountName, publishTime)}
 ${htmlContent}
 </div>
 </div>
-<script>${WECHAT_RUNTIME_SCRIPT}</script>
-</body>
-</html>`;
+</div>`;
 }
 
-const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewProps>(function WechatArticleView(
-  { title, htmlContent, accountName, publishTime, createdAt, onTocItems },
-  ref,
-) {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [height, setHeight] = useState(640);
-  const onTocItemsRef = useRef(onTocItems);
-  onTocItemsRef.current = onTocItems;
+const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewProps>(
+  (
+    { title, htmlContent, accountName, publishTime, createdAt, onTocItems },
+    ref,
+  ) => {
+    const hostRef = useRef<HTMLDivElement>(null);
+    const onTocItemsRef = useRef(onTocItems);
+    onTocItemsRef.current = onTocItems;
 
-  const srcDoc = useMemo(
-    () =>
-      buildSrcDoc(
+    useEffect(() => {
+      const host = hostRef.current;
+      if (!host) return;
+      const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
+      root.innerHTML = buildShadowHtml(
         title || '未知文章标题',
         htmlContent,
         (accountName || '').trim(),
         formatPublishTime(publishTime) || (createdAt ? new Date(createdAt).toLocaleDateString('zh-CN') : ''),
-      ),
-    [title, htmlContent, accountName, publishTime, createdAt],
-  );
+      );
 
-  useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
-      const frame = iframeRef.current;
-      if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data;
-      if (!data || typeof data !== 'object') return;
-      if (data.type === 'wechat-replica-height' && typeof data.height === 'number') {
-        setHeight(Math.max(320, data.height));
-      } else if (data.type === 'wechat-replica-toc' && Array.isArray(data.items)) {
-        onTocItemsRef.current?.(data.items);
-      } else if (data.type === 'wechat-replica-scroll-pos' && typeof data.top === 'number') {
-        const frameTop = frame.getBoundingClientRect().top + window.scrollY;
-        window.scrollTo({ top: Math.max(0, frameTop + data.top - 72), behavior: 'smooth' });
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, []);
+      const cleanup = applyWechatRuntime(root, (items) => onTocItemsRef.current?.(items));
+      return () => {
+        if (cleanup) window.removeEventListener('resize', cleanup);
+      };
+    }, [title, htmlContent, accountName, publishTime, createdAt]);
 
-  useImperativeHandle(ref, () => ({
-    scrollToTocItem: (id: string) => {
-      iframeRef.current?.contentWindow?.postMessage({ type: 'wechat-replica-scroll', id }, '*');
-    },
-  }));
+    useImperativeHandle(ref, () => ({
+      scrollToTocItem: (id: string) => {
+        const root = hostRef.current?.shadowRoot;
+        const el = root?.getElementById(id);
+        if (!el) return;
+        const top = el.getBoundingClientRect().top + window.scrollY - 76;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      },
+    }));
 
-  return (
-    <iframe
-      ref={iframeRef}
-      className="wechat-replica-frame"
-      title={title || '微信公众号文章原文'}
-      srcDoc={srcDoc}
-      style={{ height }}
-      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
-    />
-  );
-});
+    return <div ref={hostRef} className="wechat-replica-scope" role="article" aria-label={title || '微信公众号文章原文'} />;
+  },
+);
 
 export default WechatArticleView;
