@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.routers.admin_auth import require_admin
 from app.services.settings_store import load_categories, save_categories
 
 router = APIRouter()
@@ -21,6 +22,6 @@ async def get_categories(db: AsyncSession = Depends(get_db)):
 
 
 @router.put("")
-async def put_categories(payload: CategoryListPayload, db: AsyncSession = Depends(get_db)):
+async def put_categories(payload: CategoryListPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
     names = await save_categories(payload.names)
     return {"names": names}

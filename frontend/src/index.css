@@ -847,3 +847,21 @@
 @media (prefers-reduced-motion: reduce) {
   .admin-console *, .admin-console *::before, .admin-console *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+
+/* ---------- 后台访问门(令牌初始化/登录) ---------- */
+.admin-gate { display: grid; place-items: center; min-height: 100vh; background: var(--paper); padding: 24px; }
+.admin-gate-card { display: grid; gap: 12px; width: min(380px, 100%); padding: 30px 28px 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+.admin-gate-card[align-items] { justify-items: center; }
+.admin-gate-brand { display: flex; align-items: center; gap: 9px; color: var(--ink); font-size: 14px; font-weight: 800; letter-spacing: -.02em; }
+.admin-gate-card h1 { margin: 6px 0 0; color: var(--ink); font-size: 19px; font-weight: 800; letter-spacing: -.03em; }
+.admin-gate-card > p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.75; }
+.admin-gate-field { display: flex; align-items: center; gap: 9px; height: 44px; padding: 0 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--faint); }
+.admin-gate-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.admin-gate-field input { width: 100%; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 14px; }
+.admin-gate-field input::placeholder { color: var(--faint); }
+.admin-gate-error { margin: 0; color: var(--danger); font-size: 12px; }
+.admin-gate-submit { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; margin-top: 4px; border: 0; border-radius: 10px; background: var(--accent); color: var(--accent-ink); font-size: 13.5px; font-weight: 700; }
+.admin-gate-submit:hover:not(:disabled) { background: var(--accent-strong); }
+.admin-gate-submit:disabled { cursor: wait; opacity: .6; }
+.admin-gate .animate-spin { color: var(--muted); }

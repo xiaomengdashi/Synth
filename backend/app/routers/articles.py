@@ -14,6 +14,7 @@ from app.services.fetchers.tikhub import fetch_tikhub_tweet
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.task_service import build_local_summary, detect_source_type
 from app.routers.config import get_runtime_config
+from app.routers.admin_auth import require_admin
 
 router = APIRouter()
 
@@ -117,7 +118,7 @@ class ArticleCategoryPayload(BaseModel):
 
 
 @router.patch("/{article_id}")
-async def update_article_category(article_id: str, payload: ArticleCategoryPayload, db: AsyncSession = Depends(get_db)):
+async def update_article_category(article_id: str, payload: ArticleCategoryPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
     result = await db.execute(select(Article).where(Article.id == article_id))
     article = result.scalar_one_or_none()
     if article is None:
@@ -131,7 +132,7 @@ async def update_article_category(article_id: str, payload: ArticleCategoryPaylo
 
 
 @router.delete("/{article_id}")
-async def delete_article(article_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_article(article_id: str, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
     # 先找到关联的任务并删除（或者置空）
     from app.models import Task
     result = await db.execute(select(Task).where(Task.article_id == article_id))

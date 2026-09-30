@@ -4,6 +4,7 @@ import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { adminFetch } from '../../../utils/adminAuth';
 import { formatDistanceToNow } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
 
@@ -31,7 +32,7 @@ export default function AdminArticles() {
 
   const changeCategory = async (articleId: string, title: string, value: string) => {
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`, {
+      const res = await adminFetch(`/api/v1/articles/${articleId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ category: value }),

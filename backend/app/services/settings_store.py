@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
+import hmac
 
 from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -128,3 +130,44 @@ async def save_categories(names: list[str]) -> list[str]:
             stored.updated_at = _dt.datetime.now(_dt.UTC).replace(tzinfo=None)
         await session.commit()
     return cleaned
+
+
+ADMIN_TOKEN_KEY = "admin_token_hash"
+
+
+def hash_admin_token(token: str) -> str:
+    """单向哈希存储:数据库中不落令牌原文。"""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def get_admin_token_hash() -> str:
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(
+            select(AppSetting).where(AppSetting.key == ADMIN_TOKEN_KEY)
+        )
+        stored = row.scalar_one_or_none()
+    return (stored.value or "") if stored else ""
+
+
+async def set_admin_token_hash(value: str) -> None:
+    import datetime as _dt
+
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(
+            select(AppSetting).where(AppSetting.key == ADMIN_TOKEN_KEY)
+        )
+        stored = row.scalar_one_or_none()
+        if stored is None:
+            stored = AppSetting(key=ADMIN_TOKEN_KEY, value=value)
+            session.add(stored)
+        else:
+            stored.value = value
+            stored.updated_at = _dt.datetime.now(_dt.UTC).replace(tzinfo=None)
+        await session.commit()
+
+
+async def verify_admin_token(token: str) -> bool:
+    stored = await get_admin_token_hash()
+    if not stored:
+        return False  # 未初始化:由依赖层决定放行(首次设置流程)
+    return hmac.compare_digest(hash_admin_token(token or ""), stored)

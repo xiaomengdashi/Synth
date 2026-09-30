@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Article } from '../../articles/types';
 import type { AppConfig } from '../../config/types';
 import type { Task } from '../../tasks/types';
+import { adminFetch } from '../../../utils/adminAuth';
 
 export interface ToastMessage {
   id: string;
@@ -87,7 +88,7 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   setConfig: async (config) => {
     try {
-      const res = await fetch('/api/v1/config', {
+      const res = await adminFetch('/api/v1/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: config.apiKey, baseUrl: config.baseUrl, modelName: config.modelName }),

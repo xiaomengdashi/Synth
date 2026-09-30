@@ -17,6 +17,7 @@ import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-r
 import { useAppStore } from '../features/app/store/useAppStore';
 import { BrandMark } from './Layout';
 import ToastStack from './ToastStack';
+import AdminGate from './AdminGate';
 
 const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
   { label: '工作台', items: [{ path: '/admin', label: '总览', icon: LayoutDashboard }] },
@@ -103,6 +104,7 @@ export default function AdminLayout() {
   };
 
   return (
+    <AdminGate>
     <div className={navOpen ? 'admin-console nav-open' : 'admin-console'}>
       <aside className="ac-sidebar" aria-label="后台侧边栏">
         <Link to="/admin" className="ac-brand">
@@ -178,5 +180,6 @@ export default function AdminLayout() {
 
       <ToastStack />
     </div>
+    </AdminGate>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Tags, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
+import { adminFetch } from '../../../utils/adminAuth';
 
 /** 文章分类管理:维护前台「分类」菜单使用的分类列表。 */
 export default function AdminCategories() {
@@ -22,7 +23,7 @@ export default function AdminCategories() {
   const persist = async (next: string[]) => {
     setSaving(true);
     try {
-      const res = await fetch('/api/v1/categories', {
+      const res = await adminFetch('/api/v1/categories', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ names: next }),
