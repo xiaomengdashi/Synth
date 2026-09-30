@@ -133,7 +133,7 @@ export default function ShareReceive() {
           {manualMessage && <p className="share-inline-notice" role="status">{manualMessage}</p>}
         </form>}
       </section>
-      <div className="share-footer-links"><Link to="/admin/settings/share">设置 iPhone 分享入口</Link><Link to={hasInput ? '/admin/tasks' : '/articles'}>{hasInput ? '查看处理任务' : '打开文章库'} <ArrowRight size={14} /></Link></div>
+      <div className="share-footer-links"><Link to="/admin/share">设置 iPhone 分享入口</Link><Link to={hasInput ? '/admin/tasks' : '/articles'}>{hasInput ? '查看处理任务' : '打开文章库'} <ArrowRight size={14} /></Link></div>
     </div>
   );
 }

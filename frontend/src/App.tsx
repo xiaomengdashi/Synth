@@ -40,14 +40,12 @@ function App() {
           <Route path="tasks" element={<AdminTasks />} />
           <Route path="articles" element={<AdminArticles />} />
           <Route path="categories" element={<AdminCategories />} />
-          <Route path="settings" element={<Navigate to="/admin/settings/tikhub" replace />} />
-          <Route path="settings/model" element={<AdminModelSettings />} />
-          <Route path="settings/tikhub" element={<AdminTikHubSettings />} />
-          <Route path="settings/share" element={<ShareSetup />} />
-          <Route path="settings/token" element={<AdminTokenSettings />} />
+          <Route path="model" element={<AdminModelSettings />} />
+          <Route path="tikhub" element={<AdminTikHubSettings />} />
+          <Route path="share" element={<ShareSetup />} />
+          <Route path="token" element={<AdminTokenSettings />} />
           <Route path="tikhub/query" element={<AdminTikHubQuery />} />
         </Route>
-        <Route path="share/setup" element={<Navigate to="/admin/settings/share" replace />} />
       </Routes>
     </BrowserRouter>
   );

@@ -242,7 +242,7 @@ export default function Home() {
           {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源；微信安全验证不会自动打开浏览器。')}
         </p>
         <div className="collect-alt">
-          <Link to="/admin/settings/share"><Smartphone size={13} />iPhone 分享导入</Link>
+          <Link to="/admin/share"><Smartphone size={13} />iPhone 分享导入</Link>
           <button type="button" onClick={() => setHtmlImportOpen(true)}><Upload size={13} />导入网页 HTML</button>
         </div>
       </motion.section>

@@ -35,7 +35,7 @@ export default function ShareSetup() {
           </div>
         </div>
         <div className="ac-card-foot" style={{ justifyContent: 'flex-start' }}>
-          <Link to="/admin/settings?tab=share" className="ac-btn secondary"><ArrowLeft size={14} /> 返回配置中心</Link>
+          <Link to="/admin/share" className="ac-btn secondary"><ArrowLeft size={14} /> 返回配置中心</Link>
           <Link to="/share" className="ac-btn secondary">手动试用导入 <ArrowRight size={14} /></Link>
         </div>
       </section>

@@ -174,7 +174,7 @@ export default function Admin() {
           ) : !account.configured ? (
             <>
               <div className="ac-kpi-value is-empty">未配置</div>
-              <div className="ac-kpi-hint"><Link className="ac-link" to="/admin/settings?tab=tikhub"><Settings2 size={13} /> 前往配置 Key</Link></div>
+              <div className="ac-kpi-hint"><Link className="ac-link" to="/admin/tikhub"><Settings2 size={13} /> 前往配置 Key</Link></div>
             </>
           ) : (
             <>

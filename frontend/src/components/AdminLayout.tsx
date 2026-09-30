@@ -35,10 +35,10 @@ const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: t
   {
     label: '系统',
     items: [
-      { path: '/admin/settings/tikhub', label: 'TikHub 数据服务', icon: PlugZap },
-      { path: '/admin/settings/model', label: '模型服务', icon: Cpu },
-      { path: '/admin/settings/share', label: '手机分享导入', icon: Smartphone },
-      { path: '/admin/settings/token', label: '访问令牌', icon: KeyRound },
+      { path: '/admin/tikhub', label: 'TikHub 数据服务', icon: PlugZap },
+      { path: '/admin/model', label: '模型服务', icon: Cpu },
+      { path: '/admin/share', label: '手机分享导入', icon: Smartphone },
+      { path: '/admin/token', label: '访问令牌', icon: KeyRound },
     ],
   },
 ];
@@ -54,16 +54,16 @@ function useAdminBreadcrumbs(pathname: string) {
   if (pathname === '/admin/categories') {
     return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];
   }
-  if (pathname === '/admin/settings/model') {
+  if (pathname === '/admin/model') {
     return [{ label: '后台管理', to: '/admin' }, { label: '模型服务' }];
   }
-  if (pathname === '/admin/settings/share') {
+  if (pathname === '/admin/share') {
     return [{ label: '后台管理', to: '/admin' }, { label: '手机分享导入' }];
   }
-  if (pathname === '/admin/settings/token') {
+  if (pathname === '/admin/token') {
     return [{ label: '后台管理', to: '/admin' }, { label: '访问令牌' }];
   }
-  if (pathname.startsWith('/admin/settings/tikhub') || pathname.startsWith('/admin/tikhub')) {
+  if (pathname.startsWith('/admin/tikhub') || pathname.startsWith('/admin/tikhub')) {
     return [{ label: '后台管理', to: '/admin' }, { label: 'TikHub 数据服务' }];
   }
   return [{ label: '后台管理', to: '/admin' }, { label: '总览' }];
@@ -103,9 +103,9 @@ export default function AdminLayout() {
 
   const isNavActive = (path: string) => {
     if (path === '/admin') return location.pathname === '/admin';
-    if (path === '/admin/settings') {
-      // 面包屑里「多平台查询」挂在系统配置之下,侧边栏保持一致的选中态
-      return location.pathname.startsWith('/admin/settings') || location.pathname.startsWith('/admin/tikhub');
+    if (path === '/admin/tikhub') {
+      // 「多平台查询」挂在 TikHub 之下,侧边栏保持一致的选中态
+      return location.pathname.startsWith('/admin/tikhub');
     }
     return location.pathname === path;
   };

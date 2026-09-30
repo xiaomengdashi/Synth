@@ -127,13 +127,13 @@ export default function AdminTikHubQuery() {
 
   return <div className="ac-stack tikhub-page">
     <section className="ac-pagebar">
-      <nav className="ac-tabs" aria-label="TikHub 页面"><Link to="/admin/settings?tab=tikhub">Key 与账户</Link><Link className="active" aria-current="page" to="/admin/tikhub/query">多平台查询</Link></nav>
+      <nav className="ac-tabs" aria-label="TikHub 页面"><Link to="/admin/tikhub">Key 与账户</Link><Link className="active" aria-current="page" to="/admin/tikhub/query">多平台查询</Link></nav>
       <div className="ac-pagebar-actions">
         {key?.configured && <><span className="ac-badge success">Key 已配置</span><code className="ac-code">{key.masked_key}</code></>}
       </div>
     </section>
     {keyError ? <p className="tikhub-message error" role="alert">{keyError} <button className="ac-btn secondary sm" onClick={() => setReload(reload + 1)}>重试</button></p>
-      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，<Link to="/admin/settings?tab=tikhub">设置 Key</Link> 后即可查询。</p>
+      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，<Link to="/admin/tikhub">设置 Key</Link> 后即可查询。</p>
       : key?.configured && <p className="tikhub-key-status"><span>每次查询可能计费，请按需执行。</span></p>}
     <div className="tikhub-explorer">
       <section className="ac-card tikhub-catalog" aria-busy={loading}>
