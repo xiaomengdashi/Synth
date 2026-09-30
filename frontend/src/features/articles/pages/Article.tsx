@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article as ArticleType } from '../types';
 import ReactMarkdown from 'react-markdown';
@@ -7,7 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
@@ -165,14 +165,11 @@ function extractXSections(contentMd: string, fallbackSummary: string) {
 
 export default function Article() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const storeArticle = useAppStore((state) => state.articles.find((a) => a.id === id));
-  const deleteArticle = useAppStore((state) => state.deleteArticle);
   
   const [article, setArticle] = useState<ArticleType | null>(storeArticle || null);
   const [loading, setLoading] = useState(!storeArticle);
   const [error, setError] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [xPreview, setXPreview] = useState<XPreviewData | null>(null);
   const [tocItems, setTocItems] = useState<ArticleHeading[]>([]);
   const [activeTocId, setActiveTocId] = useState('');
@@ -369,20 +366,6 @@ export default function Article() {
     : '';
   const isXArticle = article.source_type === 'x';
 
-  const handleDelete = async () => {
-    if (!article || isDeleting) {
-      return;
-    }
-
-    setIsDeleting(true);
-    const deleted = await deleteArticle(article.id);
-    setIsDeleting(false);
-
-    if (deleted) {
-      navigate('/');
-    }
-  };
-
   return (
     <motion.article
       initial={{ opacity: 0, y: 20 }}
@@ -404,15 +387,6 @@ export default function Article() {
           >
             <ExternalLink size={13} /> 查看原文
           </a>
-          <button
-            type="button"
-            className="reader-tool danger"
-            onClick={handleDelete}
-            disabled={isDeleting}
-          >
-            {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 size={13} />}
-            {isDeleting ? '删除中' : '删除'}
-          </button>
         </div>
       </div>
 
