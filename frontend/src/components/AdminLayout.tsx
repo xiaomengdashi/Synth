@@ -109,7 +109,6 @@ export default function AdminLayout() {
           <span className="ac-brand-logo"><BrandMark size={26} accent="var(--ac-accent)" ink="var(--ac-side-ink-strong)" /></span>
           <span className="ac-brand-text">
             <span className="ac-brand-name">SynthAI 控制台</span>
-            <span className="ac-brand-sub">内容抓取与管理</span>
           </span>
         </Link>
 
