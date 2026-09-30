@@ -248,7 +248,7 @@
 .article-toc-list li.article-toc-level-4 { padding-left: 24px; }
 .article-toc-list li.article-toc-level-5 { padding-left: 34px; }
 .article-toc-list li.article-toc-level-6 { padding-left: 44px; }
-.article-toc-list a { position: relative; display: block; padding: 6px 4px 6px 0; border-left: 2px solid transparent; color: var(--muted); font-size: 12px; line-height: 1.6; text-decoration: none; transition: color .18s ease, border-color .18s ease; }
+.article-toc-list a { position: relative; display: block; padding: 6px 4px 6px 0; border-left: 2px solid transparent; color: var(--muted); font-size: 12px; line-height: 1.6; text-decoration: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .18s ease, border-color .18s ease; }
 .article-toc-list a:hover, .article-toc-list a:focus-visible { color: var(--ink); outline: 0; }
 .article-toc-list a.active { border-left-color: var(--accent); color: var(--ink); font-weight: 600; padding-left: 10px; }
 .article-toc-list li.article-toc-level-3 a.active, .article-toc-list li.article-toc-level-4 a.active, .article-toc-list li.article-toc-level-5 a.active, .article-toc-list li.article-toc-level-6 a.active { margin-left: -12px; }

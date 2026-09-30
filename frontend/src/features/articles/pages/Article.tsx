@@ -74,6 +74,7 @@ function ArticleToc({
           <li key={item.id} className={`article-toc-level-${item.level}`}>
             <a
               href={`#${item.id}`}
+              title={item.text}
               className={item.id === activeId ? 'active' : undefined}
               onClick={(event) => {
                 if (preventDefaultJump) event.preventDefault();
