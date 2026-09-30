@@ -9,6 +9,7 @@ import Article from './features/articles/pages/Article';
 import Admin from './features/tasks/pages/Admin';
 import AdminTasks from './features/tasks/pages/AdminTasks';
 import AdminArticles from './features/tasks/pages/AdminArticles';
+import AdminCategories from './features/tasks/pages/AdminCategories';
 import AdminSettings from './features/tasks/pages/AdminSettings';
 import AdminModelSettings from './features/tasks/pages/AdminModelSettings';
 import AdminTikHubSettings from './features/tasks/pages/AdminTikHubSettings';
@@ -38,6 +39,7 @@ function App() {
           <Route index element={<Admin />} />
           <Route path="tasks" element={<AdminTasks />} />
           <Route path="articles" element={<AdminArticles />} />
+          <Route path="categories" element={<AdminCategories />} />
           <Route path="settings" element={<AdminSettings />} />
           <Route path="settings/model" element={<AdminModelSettings />} />
           <Route path="settings/tikhub" element={<AdminTikHubSettings />} />

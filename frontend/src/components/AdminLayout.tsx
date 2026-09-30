@@ -10,6 +10,7 @@ import {
   Search,
   Settings2,
   Sun,
+  Tags,
   X,
 } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -23,6 +24,7 @@ const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: t
     label: '内容',
     items: [
       { path: '/admin/articles', label: '文章管理', icon: Newspaper },
+      { path: '/admin/categories', label: '文章分类', icon: Tags },
       { path: '/admin/tasks', label: '处理任务', icon: Activity },
     ],
   },
@@ -36,6 +38,9 @@ function useAdminBreadcrumbs(pathname: string, settingsTab: string | null) {
       : settingsTab === 'share' ? '手机分享导入'
         : settingsTab === 'tikhub' ? 'TikHub 数据服务'
           : null;
+  if (pathname === '/admin/categories') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];
+  }
   if (pathname === '/admin/tasks') {
     return [{ label: '后台管理', to: '/admin' }, { label: '处理任务' }];
   }
