@@ -802,7 +802,7 @@
 }
 
 @media (max-width: 960px) {
-  .ac-sidebar { position: fixed; top: 0; left: 0; height: 100dvh; transform: translateX(-103%); transition: transform .22s ease; box-shadow: 0 0 60px rgba(0, 0, 0, .4); }
+  .ac-sidebar { position: fixed; top: 0; left: 0; z-index: 60; height: 100dvh; transform: translateX(-103%); transition: transform .22s ease; box-shadow: 0 0 60px rgba(0, 0, 0, .4); }
   .admin-console.nav-open .ac-sidebar { transform: none; }
   .ac-icon-btn.ac-menu-btn { display: grid; }
   .ac-topbar-brand { display: inline-flex; }
