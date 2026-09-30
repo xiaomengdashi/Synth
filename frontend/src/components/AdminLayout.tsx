@@ -9,12 +9,12 @@ import {
   Newspaper,
   Search,
   Settings2,
-  Sparkles,
   Sun,
   X,
 } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAppStore } from '../features/app/store/useAppStore';
+import { BrandMark } from './Layout';
 import ToastStack from './ToastStack';
 
 const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
@@ -101,7 +101,7 @@ export default function AdminLayout() {
     <div className={navOpen ? 'admin-console nav-open' : 'admin-console'}>
       <aside className="ac-sidebar" aria-label="后台侧边栏">
         <Link to="/admin" className="ac-brand">
-          <span className="ac-brand-logo"><Sparkles size={16} /></span>
+          <span className="ac-brand-logo"><BrandMark size={26} accent="#4ade80" ink="#f0f4f9" /></span>
           <span className="ac-brand-text">
             <span className="ac-brand-name">SynthAI 控制台</span>
             <span className="ac-brand-sub">内容抓取与管理</span>

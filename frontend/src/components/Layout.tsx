@@ -5,18 +5,18 @@ import { useAppStore } from '../features/app/store/useAppStore';
 import ToastStack from './ToastStack';
 
 /** 品牌标:双色纸带 S(绿带 + 墨带,深色下墨带自动变暖纸白)。与 /favicon.svg 同形。 */
-export function BrandMark({ size = 26 }: { size?: number }) {
+export function BrandMark({ size = 26, accent, ink }: { size?: number; accent?: string; ink?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
       <path
         d="M23 11 C23 7.8 20.2 6.5 16 6.5 C11.8 6.5 9 7.8 9 11 C9 14.2 11.8 16.2 16.5 16.6"
-        stroke="var(--accent)"
+        stroke={accent ?? 'var(--accent)'}
         strokeWidth="5.4"
         strokeLinecap="round"
       />
       <path
         d="M9 21 C9 24.2 11.8 25.5 16 25.5 C20.2 25.5 23 24.2 23 21 C23 17.8 20.2 15.8 15.5 15.4"
-        stroke="var(--ink)"
+        stroke={ink ?? 'var(--ink)'}
         strokeWidth="5.4"
         strokeLinecap="round"
       />
