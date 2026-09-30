@@ -10,9 +10,9 @@ import Admin from './features/tasks/pages/Admin';
 import AdminTasks from './features/tasks/pages/AdminTasks';
 import AdminArticles from './features/tasks/pages/AdminArticles';
 import AdminCategories from './features/tasks/pages/AdminCategories';
-import AdminSettings from './features/tasks/pages/AdminSettings';
 import AdminModelSettings from './features/tasks/pages/AdminModelSettings';
 import AdminTikHubSettings from './features/tasks/pages/AdminTikHubSettings';
+import AdminTokenSettings from './features/tasks/pages/AdminTokenSettings';
 import AdminTikHubQuery from './features/tikhub/AdminTikHubQuery';
 import ShareReceive from './features/sharing/ShareReceive';
 import ShareSetup from './features/sharing/ShareSetup';
@@ -40,10 +40,11 @@ function App() {
           <Route path="tasks" element={<AdminTasks />} />
           <Route path="articles" element={<AdminArticles />} />
           <Route path="categories" element={<AdminCategories />} />
-          <Route path="settings" element={<AdminSettings />} />
+          <Route path="settings" element={<Navigate to="/admin/settings/tikhub" replace />} />
           <Route path="settings/model" element={<AdminModelSettings />} />
           <Route path="settings/tikhub" element={<AdminTikHubSettings />} />
           <Route path="settings/share" element={<ShareSetup />} />
+          <Route path="settings/token" element={<AdminTokenSettings />} />
           <Route path="tikhub/query" element={<AdminTikHubQuery />} />
         </Route>
         <Route path="share/setup" element={<Navigate to="/admin/settings/share" replace />} />

@@ -3,12 +3,15 @@ import {
   Activity,
   BookOpenText,
   ChevronRight,
+  Cpu,
+  KeyRound,
   LayoutDashboard,
   Menu,
   Moon,
   Newspaper,
+  PlugZap,
   Search,
-  Settings2,
+  Smartphone,
   Sun,
   Tags,
   X,
@@ -29,36 +32,39 @@ const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: t
       { path: '/admin/tasks', label: '处理任务', icon: Activity },
     ],
   },
-  { label: '系统', items: [{ path: '/admin/settings', label: '系统配置', icon: Settings2 }] },
+  {
+    label: '系统',
+    items: [
+      { path: '/admin/settings/tikhub', label: 'TikHub 数据服务', icon: PlugZap },
+      { path: '/admin/settings/model', label: '模型服务', icon: Cpu },
+      { path: '/admin/settings/share', label: '手机分享导入', icon: Smartphone },
+      { path: '/admin/settings/token', label: '访问令牌', icon: KeyRound },
+    ],
+  },
 ];
 
-/** 面包屑:上级可点击跳转,最后一级是当前位置。层级严格跟随 URL(?tab= 才细化第三级)。 */
-function useAdminBreadcrumbs(pathname: string, settingsTab: string | null) {
-  const settingsTabLabel =
-    settingsTab === 'model' ? '模型服务'
-      : settingsTab === 'share' ? '手机分享导入'
-        : settingsTab === 'token' ? '访问令牌'
-        : settingsTab === 'tikhub' ? 'TikHub 数据服务'
-          : null;
-  if (pathname === '/admin/categories') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];
-  }
+/** 面包屑:上级可点击跳转,最后一级是当前位置。 */
+function useAdminBreadcrumbs(pathname: string) {
   if (pathname === '/admin/tasks') {
     return [{ label: '后台管理', to: '/admin' }, { label: '处理任务' }];
   }
   if (pathname === '/admin/articles') {
     return [{ label: '后台管理', to: '/admin' }, { label: '文章管理' }];
   }
-  if (pathname.startsWith('/admin/tikhub')) {
-    return [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '多平台查询' }];
+  if (pathname === '/admin/categories') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];
+  }
+  if (pathname === '/admin/settings/model') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '模型服务' }];
   }
   if (pathname === '/admin/settings/share') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '手机分享导入' }];
+    return [{ label: '后台管理', to: '/admin' }, { label: '手机分享导入' }];
   }
-  if (pathname.startsWith('/admin/settings')) {
-    return settingsTabLabel
-      ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: settingsTabLabel }]
-      : [{ label: '后台管理', to: '/admin' }, { label: '系统配置' }];
+  if (pathname === '/admin/settings/token') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '访问令牌' }];
+  }
+  if (pathname.startsWith('/admin/settings/tikhub') || pathname.startsWith('/admin/tikhub')) {
+    return [{ label: '后台管理', to: '/admin' }, { label: 'TikHub 数据服务' }];
   }
   return [{ label: '后台管理', to: '/admin' }, { label: '总览' }];
 }
@@ -70,7 +76,7 @@ export default function AdminLayout() {
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
   const [navOpen, setNavOpen] = useState(false);
-  const breadcrumbs = useAdminBreadcrumbs(location.pathname, searchParams.get('tab'));
+  const breadcrumbs = useAdminBreadcrumbs(location.pathname);
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
