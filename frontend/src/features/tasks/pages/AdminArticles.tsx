@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
 import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
@@ -16,6 +17,9 @@ function getSourceLabel(sourceType: Article['source_type']) {
 export default function AdminArticles() {
   const { articles, fetchArticles, deleteArticle, pushToast } = useAppStore();
   const [categories, setCategories] = useState<string[]>([]);
+  const [query, setQuery] = useState('');
+  const [cat, setCat] = useState('all');
+  const [src, setSrc] = useState('all');
   useEffect(() => { void fetchArticles(); }, [fetchArticles]);
 
   useEffect(() => {
@@ -40,11 +44,36 @@ export default function AdminArticles() {
     }
   };
 
+  const filtered = useMemo(() => {
+    let list = articles;
+    if (cat === '__none') list = list.filter((article) => !(article.category || '').trim());
+    else if (cat !== 'all') list = list.filter((article) => (article.category || '').trim() === cat);
+    if (src !== 'all') {
+      list = list.filter((article) => (src === '__other'
+        ? !['wechat', 'x', 'bilibili'].includes(article.source_type)
+        : article.source_type === src));
+    }
+    const keyword = query.trim().toLowerCase();
+    if (keyword) {
+      list = list.filter((article) => [article.title, article.original_url]
+        .some((value) => (value || '').toLowerCase().includes(keyword)));
+    }
+    return list;
+  }, [articles, query, cat, src]);
+
+  const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
+
   return (
     <div>
       <AdminPageHeader
-        summary={<span>共 {articles.length} 篇内容</span>}
-        actions={<Link to="/articles" className="ac-btn secondary sm">打开前台文章库 <ArrowUpRight size={13} /></Link>}
+        summary={<span>{filtering ? `共 ${articles.length} 篇 · 筛选出 ${filtered.length} 篇` : `共 ${articles.length} 篇内容`}</span>}
+        actions={<>
+          <label className="ac-search" style={{ width: 220 }} aria-label="搜索文章">
+            <Search size={14} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题或链接" />
+          </label>
+          <Link to="/articles" className="ac-btn secondary sm">打开前台文章库 <ArrowUpRight size={13} /></Link>
+        </>}
       />
       <section className="ac-card">
         <div className="ac-table-wrap">
@@ -52,8 +81,22 @@ export default function AdminArticles() {
             <thead>
               <tr>
                 <th>文章</th>
-                <th>来源</th>
-                <th>分类</th>
+                <th>
+                  <select className="ac-select th-select" value={src} onChange={(event) => setSrc(event.target.value)} aria-label="按来源筛选" style={{ color: src !== 'all' ? 'var(--ac-accent)' : undefined }}>
+                    <option value="all">全部来源</option>
+                    <option value="wechat">微信公众号</option>
+                    <option value="x">X / Twitter</option>
+                    <option value="bilibili">Bilibili</option>
+                    <option value="__other">网页链接</option>
+                  </select>
+                </th>
+                <th>
+                  <select className="ac-select th-select" value={cat} onChange={(event) => setCat(event.target.value)} aria-label="按分类筛选" style={{ color: cat !== 'all' ? 'var(--ac-accent)' : undefined }}>
+                    <option value="all">全部分类</option>
+                    <option value="__none">未分类</option>
+                    {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </th>
                 <th>保存时间</th>
                 <th style={{ textAlign: 'right' }}>操作</th>
               </tr>
@@ -61,7 +104,9 @@ export default function AdminArticles() {
             <tbody>
               {articles.length === 0 ? (
                 <tr><td colSpan={5}><div className="ac-empty">还没有保存文章。</div></td></tr>
-              ) : articles.map((article) => (
+              ) : filtered.length === 0 ? (
+                <tr><td colSpan={5}><div className="ac-empty">没有符合筛选条件的文章，换个条件试试。</div></td></tr>
+              ) : filtered.map((article) => (
                 <tr key={article.id}>
                   <td>
                     <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
