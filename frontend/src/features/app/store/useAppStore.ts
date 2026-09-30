@@ -27,6 +27,7 @@ interface AppState {
   fetchArticles: () => Promise<void>;
   fetchTasks: () => Promise<void>;
   deleteArticle: (articleId: string) => Promise<boolean>;
+  updateArticle: (articleId: string, patch: Partial<Article>) => void;
 }
 
 // 从 localStorage 获取初始主题设置
@@ -82,6 +83,9 @@ export const useAppStore = create<AppState>((set) => ({
   })),
   pushToast: (toast) => set((state) => ({
     toasts: [...state.toasts, { ...toast, id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }]
+  })),
+  updateArticle: (articleId, patch) => set((state) => ({
+    articles: state.articles.map((a) => (a.id === articleId ? { ...a, ...patch } : a)),
   })),
   removeToast: (toastId) => set((state) => ({
     toasts: state.toasts.filter((toast) => toast.id !== toastId)

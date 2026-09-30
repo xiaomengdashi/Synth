@@ -16,7 +16,7 @@ function getSourceLabel(sourceType: Article['source_type']) {
 }
 
 export default function AdminArticles() {
-  const { articles, fetchArticles, deleteArticle, pushToast } = useAppStore();
+  const { articles, fetchArticles, deleteArticle, updateArticle, pushToast } = useAppStore();
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
@@ -38,7 +38,9 @@ export default function AdminArticles() {
         body: JSON.stringify({ category: value }),
       });
       if (!res.ok) throw new Error('patch failed');
-      await fetchArticles();
+      // 用 PATCH 返回的文章本地更新,避免重拉整表(线上全量响应数 MB,会明显卡顿)
+      const updated = await res.json();
+      updateArticle(articleId, { category: updated.category ?? null });
       pushToast({ title: `「${title.slice(0, 14)}${title.length > 14 ? '…' : ''}」分类已保存`, tone: 'success' });
     } catch {
       pushToast({ title: '分类保存失败，请稍后重试', tone: 'error' });
