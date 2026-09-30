@@ -91,6 +91,9 @@ function ArticleToc({
 }
 
 function extractWechatSections(contentMd: string, fallbackSummary: string) {
+  if (!contentMd) {
+    return { summaryMarkdown: fallbackSummary.trim(), bodyMarkdown: '', htmlContent: '' };
+  }
   const htmlStartIndex = contentMd.indexOf(HTML_CONTENT_START);
   const markdownContent = htmlStartIndex >= 0 ? contentMd.slice(0, htmlStartIndex) : contentMd;
   const htmlContent = htmlStartIndex >= 0
@@ -111,6 +114,7 @@ function extractWechatSections(contentMd: string, fallbackSummary: string) {
 }
 
 function extractEmbeddedXPayload(contentMd: string): XPreviewData | null {
+  if (!contentMd) return null;
   const startIndex = contentMd.indexOf(X_CONTENT_START);
   if (startIndex < 0) {
     return null;
@@ -134,6 +138,9 @@ function extractEmbeddedXPayload(contentMd: string): XPreviewData | null {
 }
 
 function extractXSections(contentMd: string, fallbackSummary: string) {
+  if (!contentMd) {
+    return { summaryMarkdown: fallbackSummary.trim(), bodyMarkdown: '', payload: null };
+  }
   const markerIndex = contentMd.indexOf(X_CONTENT_START);
   const markdownContent = markerIndex >= 0 ? contentMd.slice(0, markerIndex) : contentMd;
   const contentEndIndex = markerIndex >= 0 ? contentMd.indexOf(X_CONTENT_END, markerIndex) : -1;
@@ -219,28 +226,32 @@ export default function Article() {
   }, [tocItems, useWechatReplica, xArticleReplica]);
 
   useEffect(() => {
-    // 如果 store 中没有找到，说明可能是刷新了页面，尝试从后端拉取
-    if (!storeArticle && id) {
+    // 列表接口不再携带正文,详情页始终从详情接口拉取完整文章;
+    // store 命中时先用作占位,标题等元信息立即可见
+    if (!id) return;
+    // 列表数据不含正文,只有携带 content_md 的完整数据才可作占位直接渲染
+    if (storeArticle?.content_md) {
+      setArticle(storeArticle);
+      setLoading(false);
+    } else {
       setLoading(true);
-      fetch(`/api/v1/articles/${id}`)
-        .then(res => {
-          if (!res.ok) throw new Error('Article not found');
-          return res.json();
-        })
-        .then(data => {
-          // 因为后端返回的可能是单个对象，或者是 {data: [...]} 格式
-          // 这里的单个文章接口返回的是单个对象
-          setArticle(data);
-          setLoading(false);
-        })
-        .catch(err => {
-          console.error(err);
+    }
+    fetch(`/api/v1/articles/${id}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Article not found');
+        return res.json();
+      })
+      .then(data => {
+        setArticle(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error(err);
+        if (!storeArticle?.content_md) {
           setError(true);
           setLoading(false);
-        });
-    } else if (storeArticle) {
-      setArticle(storeArticle);
-    }
+        }
+      });
   }, [id, storeArticle]);
 
   // 仅对 CSDN 等无内联着色的代码块做 hljs；公众号正文已自带颜色，hljs 会破坏 <br/> 换行

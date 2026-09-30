@@ -16,6 +16,7 @@ export interface XArticleReplica {
 }
 
 export function extractXArticle(content: string): XArticleReplica | null {
+  if (!content) return null;
   const start = '<!-- X_ARTICLE_START -->';
   const end = '<!-- X_ARTICLE_END -->';
   const a = content.indexOf(start);

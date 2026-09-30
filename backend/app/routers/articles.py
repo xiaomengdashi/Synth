@@ -24,25 +24,30 @@ class HtmlImportPayload(BaseModel):
     html: str = Field(min_length=1)
     title: str | None = None
 
+async def _list_article_summaries(db: AsyncSession) -> dict:
+    """列表只查元信息列:正文 content_md 仅在详情接口返回,避免数 MB 级列表响应。"""
+    result = await db.execute(
+        select(
+            Article.id, Article.title, Article.summary, Article.source_type,
+            Article.cover_image_url, Article.account_name, Article.publish_time,
+            Article.category, Article.created_at, Article.updated_at,
+        ).order_by(Article.created_at.desc()).limit(50)
+    )
+    rows = [dict(row) for row in result.mappings().all()]
+
+    if not rows and ARTICLES_DB:
+        return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
+
+    return {"total": len(rows), "data": rows}
+
+
 @router.get("/")
 async def get_articles_slash(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Article).order_by(Article.created_at.desc()).limit(50))
-    articles = result.scalars().all()
-    
-    if not articles and ARTICLES_DB:
-        return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
-        
-    return {"total": len(articles), "data": jsonable_encoder(articles)}
+    return await _list_article_summaries(db)
 
 @router.get("")
 async def get_articles(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Article).order_by(Article.created_at.desc()).limit(50))
-    articles = result.scalars().all()
-    
-    if not articles and ARTICLES_DB:
-        return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
-        
-    return {"total": len(articles), "data": jsonable_encoder(articles)}
+    return await _list_article_summaries(db)
 
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
