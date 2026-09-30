@@ -33,7 +33,7 @@ interface WechatArticleViewProps {
 
 /** 提取自 mp.weixin.qq.com 线上官方 CSS 的文章页核心规则（浅色模式）。 */
 const WECHAT_PAGE_CSS = `
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; overflow: hidden; }
 body {
   margin: 0;
   background: #fff;
@@ -144,9 +144,14 @@ const WECHAT_RUNTIME_SCRIPT = `
     tocItems.push({ id: h.id, text: h.textContent.trim(), level: Number(h.tagName.slice(1)) });
   });
 
-  // 高度同步：内容尺寸变化即上报
+  // 高度同步：内容尺寸变化即上报。多来源取最大值并加少量余量，
+  // 避免舍入/图片占位误差让 iframe 冒出内部滚动条（右侧竖灰条）
   function postHeight() {
-    parent.postMessage({ type: 'wechat-replica-height', height: Math.ceil(document.documentElement.scrollHeight) }, '*');
+    var bodyH = document.body ? document.body.scrollHeight : 0;
+    var docH = document.documentElement.scrollHeight;
+    var contentBottom = content.offsetTop + content.offsetHeight;
+    var height = Math.ceil(Math.max(bodyH, docH, contentBottom) + 6);
+    parent.postMessage({ type: 'wechat-replica-height', height: height }, '*');
   }
   postHeight();
   if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
