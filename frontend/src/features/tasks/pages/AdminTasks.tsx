@@ -1,40 +1,72 @@
 import { useEffect } from 'react';
-import { Activity, AlertCircle, CheckCircle2, Loader2, Trash2, XCircle } from 'lucide-react';
+import { RefreshCw, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Task } from '../types';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { formatDistanceToNow } from '../../../utils/formatDate';
 
-function statusText(task: Task) {
-  if (task.status === 'completed') return '已完成';
-  if (task.status === 'failed') return '失败';
-  if (task.status === 'processing') return task.current_step || '处理中';
-  return '排队中';
-}
+const STATUS_BADGES: Record<Task['status'], { cls: string; label: string }> = {
+  completed: { cls: 'success', label: '已完成' },
+  processing: { cls: 'processing', label: '处理中' },
+  pending: { cls: 'pending', label: '排队中' },
+  failed: { cls: 'danger', label: '失败' },
+};
 
 export default function AdminTasks() {
   const { tasks, fetchTasks, deleteArticle } = useAppStore();
-  useEffect(() => { void fetchTasks(); }, [fetchTasks]);
+
+  // 任务由后台异步推进,定时轮询让列表自动跟进状态
+  useEffect(() => {
+    void fetchTasks();
+    const timer = window.setInterval(() => { void fetchTasks(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [fetchTasks]);
 
   return (
     <div>
-      <AdminPageHeader eyebrow="Queue / 03" title="处理任务" description="独立查看每一条链接的抓取、总结和保存状态。" actions={<span className="config-status ready"><Activity size={13} />实时更新</span>} />
-      <section className="admin-section">
-        <div className="task-list">
-          <AnimatePresence initial={false}>
-            {tasks.length === 0 ? <div className="empty-state">当前没有处理任务。请从前台提交一条链接。</div> : tasks.map((task) => (
-              <motion.div className="task-row" key={task.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-                <div className="task-main">
-                  <span className="task-icon">{task.status === 'processing' ? <Loader2 size={14} className="animate-spin" /> : task.status === 'completed' ? <CheckCircle2 size={14} /> : task.status === 'failed' ? <XCircle size={14} /> : <AlertCircle size={14} />}</span>
-                  <div className="task-copy"><strong>{statusText(task)}</strong><span title={task.original_url}>{task.original_url}</span></div>
-                </div>
-                <span className={`task-status ${task.status === 'completed' ? 'done' : task.status === 'failed' ? 'failed' : ''}`}>{formatDistanceToNow(new Date(task.created_at))}前</span>
-                {task.status === 'completed' && task.article_id ? <div className="task-actions"><Link className="tiny-button" to={`/article/${task.article_id}`}>查看文章</Link><button className="tiny-button" type="button" onClick={() => void deleteArticle(task.article_id!)}><Trash2 size={12} /></button></div> : null}
-              </motion.div>
-            ))}
-          </AnimatePresence>
+      <AdminPageHeader
+        summary={<><span>共 {tasks.length} 条任务记录</span><span>· 每 5 秒自动刷新</span></>}
+        actions={<button type="button" className="ac-btn secondary sm" onClick={() => void fetchTasks()}><RefreshCw size={13} />立即刷新</button>}
+      />
+      <section className="ac-card">
+        <div className="ac-table-wrap">
+          <table className="ac-table">
+            <thead>
+              <tr>
+                <th>链接</th>
+                <th>状态</th>
+                <th>提交时间</th>
+                <th style={{ textAlign: 'right' }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tasks.length === 0 ? (
+                <tr><td colSpan={4}><div className="ac-empty">当前没有处理任务。回到前台提交一条链接即可开始。</div></td></tr>
+              ) : tasks.map((task) => {
+                const badge = STATUS_BADGES[task.status];
+                const step = task.status === 'completed' ? '' : task.current_step;
+                return (
+                  <tr key={task.id}>
+                    <td>
+                      <span className="cell-main" title={task.original_url}>{task.original_url}</span>
+                      {step ? <span className="cell-sub">{step}</span> : null}
+                    </td>
+                    <td><span className={`ac-badge ${badge.cls}`}>{badge.label}</span></td>
+                    <td className="cell-time">{formatDistanceToNow(new Date(task.created_at))}前</td>
+                    <td>
+                      {task.status === 'completed' && task.article_id ? (
+                        <div className="ac-row-actions">
+                          <Link className="ac-btn secondary sm" to={`/article/${task.article_id}`}>查看文章</Link>
+                          <button className="ac-btn danger-ghost sm icon" type="button" onClick={() => void deleteArticle(task.article_id!)} aria-label="删除文章"><Trash2 size={13} /></button>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>

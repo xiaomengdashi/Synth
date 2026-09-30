@@ -51,18 +51,20 @@ def console(tmp_path, monkeypatch):
 
 def test_public_config_masks_key_and_legacy_save_cannot_overwrite_it(console):
     client, write_settings, stored = console
-    write_settings({'apiKey': 'llm', 'tikhubApiKey': 'real-private-token'})
+    write_settings({'apiKey': 'model-private-key', 'tikhubApiKey': 'real-private-token'})
     response = client.get('/api/v1/config')
     assert 'real-private-token' not in response.text
+    assert 'model-private-key' not in response.text
+    assert response.json()['apiKey'] == '••••-key'
     assert response.json()['tikhubConfigured'] is True
     for legacy in ['configured', '', 'stale-browser-token']:
         response = client.post('/api/v1/config', json={
-            'apiKey': 'new-llm', 'baseUrl': 'https://example.com', 'modelName': 'model',
+            'apiKey': '••••-key', 'baseUrl': 'https://example.com', 'modelName': 'model',
             'tikhubApiKey': legacy,
         })
         assert response.status_code == 200
         assert stored()['tikhubApiKey'] == 'real-private-token'
-    assert stored()['apiKey'] == 'new-llm'
+    assert stored()['apiKey'] == 'model-private-key'
 
 
 def test_key_metadata_and_removal(console):
@@ -121,6 +123,18 @@ def test_query_catalog_supports_platform_and_search_without_a_key(console):
     assert endpoint['method'] == 'GET'
     assert endpoint['parameters'][0]['name'] == 'tweet_id'
     assert endpoint['parameters'][0]['required'] is True
+
+
+def test_query_catalog_keeps_arbitrary_object_request_body(console):
+    client, _, _ = console
+    response = client.get('/api/v1/tikhub/catalog', params={
+        'platform': 'zhihu', 'q': 'fetch_scholar_search_v3',
+    })
+    assert response.status_code == 200
+    endpoint = next(item for item in response.json()['items'] if item['path'].endswith('fetch_scholar_search_v3'))
+    body = next(parameter for parameter in endpoint['parameters'] if parameter['name'] == '$body')
+    assert body['in'] == 'body_root'
+    assert body['schema']['type'] == 'object'
 
 
 def test_query_uses_saved_key_and_preserves_large_ids(console, monkeypatch):

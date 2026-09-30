@@ -1,14 +1,15 @@
 import type { ReactNode } from 'react';
 
 /**
- * Admin 页面级动作条。页面标题与层级已由顶部面包屑表达，
- * 这里只承载与当前页面相关的操作按钮。
+ * 后台页面的信息条:左侧页面级摘要,右侧页面级动作。
+ * 页面位置由顶栏面包屑表达,这里不再重复标题。
  */
-export default function AdminPageHeader({ actions }: { eyebrow?: string; title?: string; description?: string; actions?: ReactNode }) {
-  if (!actions) return null;
+export default function AdminPageHeader({ summary, actions }: { summary?: ReactNode; actions?: ReactNode }) {
+  if (!summary && !actions) return null;
   return (
-    <section className="admin-top admin-top-actions-only">
-      {actions ? <div className="admin-top-actions">{actions}</div> : null}
+    <section className="ac-pagebar">
+      {summary ? <div className="ac-pagebar-summary">{summary}</div> : null}
+      {actions ? <div className="ac-pagebar-actions">{actions}</div> : null}
     </section>
   );
 }

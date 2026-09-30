@@ -165,17 +165,42 @@ def _collect_media_urls(legacy: dict) -> list[str]:
     return media_urls
 
 
+def _pick_best_video_url(item: dict) -> str:
+    """从 video variants 里选最高码率的 mp4 直链（X 的 GIF 本质也是无音频 mp4）。"""
+    variants = item.get("variants") if isinstance(item.get("variants"), list) else []
+    mp4s = [
+        v for v in variants
+        if isinstance(v, dict) and str(v.get("content_type", "")).lower() == "video/mp4" and v.get("url")
+    ]
+    if not mp4s:
+        return ""
+    return str(max(mp4s, key=lambda v: v.get("bitrate") or 0)["url"])
+
+
 def _extract_flat_media_urls(media: Any) -> list[str]:
-    """从扁平结构的 media 字段容错提取图片/封面 URL。"""
+    """从扁平结构的 media 字段容错提取图片/封面 URL。
+
+    线上实测结构为 {"photo": [...], "video": [...]}；旧容错键（all/photos/videos）保留。
+    """
     if isinstance(media, dict):
-        media = media.get("all") or media.get("photos") or media.get("videos") or []
+        items = (
+            media.get("photo")
+            or media.get("photos")
+            or media.get("all")
+            or []
+        )
+        if not items:
+            items = media.get("video") or media.get("videos") or media.get("gif") or media.get("animated_gif") or []
+    else:
+        items = media if isinstance(media, list) else []
     media_urls: list[str] = []
-    if isinstance(media, list):
-        for item in media:
+    if isinstance(items, list):
+        for item in items:
             if isinstance(item, dict):
                 url = (
-                    item.get("url")
-                    or item.get("media_url_https")
+                    item.get("media_url_https")
+                    or item.get("media_url")
+                    or item.get("url")
                     or item.get("preview_image_url")
                     or item.get("thumbnail_url")
                     or ""
@@ -185,6 +210,30 @@ def _extract_flat_media_urls(media: Any) -> list[str]:
             elif isinstance(item, str) and item.startswith("http"):
                 media_urls.append(item)
     return media_urls
+
+
+def _extract_flat_media_items(media: Any) -> list[dict]:
+    """提取带类型的媒体列表：[{type: photo|gif|video, url, poster}]，供前端区分渲染。"""
+    if not isinstance(media, dict):
+        return []
+    items: list[dict] = []
+
+    def add(kind: str, url: str, poster: str = "") -> None:
+        if url and url.startswith("http"):
+            entry = {"type": kind, "url": url}
+            if poster:
+                entry["poster"] = poster
+            items.append(entry)
+
+    for photo in media.get("photo") or media.get("photos") or []:
+        if isinstance(photo, dict):
+            add("photo", str(photo.get("media_url_https") or photo.get("url") or ""))
+    for video in media.get("video") or media.get("videos") or media.get("gif") or media.get("animated_gif") or []:
+        if isinstance(video, dict):
+            best = _pick_best_video_url(video)
+            kind = "gif" if "gif" in str(video.get("type") or "").lower() else "video"
+            add(kind, best, str(video.get("media_url_https") or ""))
+    return items
 
 
 def _collect_external_urls(legacy: dict, note_result: dict, tweet_text: str) -> list[str]:
@@ -253,6 +302,7 @@ def normalize_flat_tweet_data(data: dict) -> dict:
     avatar_url = _normalize_avatar_url(str(author.get("image") or ""))
     tweet_text = str(data.get("text") or "")
     media_urls = _extract_flat_media_urls(data.get("media"))
+    media_items = _extract_flat_media_items(data.get("media"))
 
     article_preview = None
     if article:
@@ -297,6 +347,7 @@ def normalize_flat_tweet_data(data: dict) -> dict:
         "author_avatar_url": avatar_url,
         "tweet_text": tweet_text,
         "media_urls": media_urls,
+        "media_items": media_items,
         "article_preview": article_preview,
         "title": title or "推文内容",
         "cover_image_url": cover_image_url,

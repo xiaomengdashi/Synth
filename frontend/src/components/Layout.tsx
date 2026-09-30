@@ -1,87 +1,36 @@
 import { FormEvent, useEffect, useState } from 'react';
-import { Outlet, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import {
-  Activity,
-  ArrowUpRight,
-  BookOpenText,
-  CheckCircle2,
-  CircleHelp,
-  LayoutDashboard,
-  Moon,
-  Newspaper,
-  Search,
-  Settings2,
-  Sparkles,
-  Sun,
-  X,
-  AlertCircle,
-} from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { ArrowUpRight, Moon, Search, Sun } from 'lucide-react';
 import { useAppStore } from '../features/app/store/useAppStore';
+import ToastStack from './ToastStack';
 
-function ToastItem({
-  id,
-  title,
-  tone,
-}: {
-  id: string;
-  title: string;
-  tone: 'success' | 'error';
-}) {
-  const removeToast = useAppStore((state) => state.removeToast);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => removeToast(id), 2600);
-    return () => window.clearTimeout(timer);
-  }, [id, removeToast]);
-
+/** 品牌标:双色纸带 S(绿带 + 墨带,深色下墨带自动变暖纸白)。与 /favicon.svg 同形。 */
+export function BrandMark({ size = 26 }: { size?: number }) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.98 }}
-      className="toast-item"
-    >
-      <span className={tone === 'success' ? 'toast-icon success' : 'toast-icon error'}>
-        {tone === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
-      </span>
-      <span>{title}</span>
-      <button type="button" onClick={() => removeToast(id)} aria-label="关闭提示">
-        <X size={15} />
-      </button>
-    </motion.div>
+    <svg width={size} height={size} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <path
+        d="M23 11 C23 7.8 20.2 6.5 16 6.5 C11.8 6.5 9 7.8 9 11 C9 14.2 11.8 16.2 16.5 16.6"
+        stroke="var(--accent)"
+        strokeWidth="5.4"
+        strokeLinecap="round"
+      />
+      <path
+        d="M9 21 C9 24.2 11.8 25.5 16 25.5 C20.2 25.5 23 24.2 23 21 C23 17.8 20.2 15.8 15.5 15.4"
+        stroke="var(--ink)"
+        strokeWidth="5.4"
+        strokeLinecap="round"
+      />
+    </svg>
   );
 }
 
+/** 前台(公开页面)布局:顶部菜单栏。后台控制台使用独立的 AdminLayout。 */
 export default function Layout() {
-  const { darkMode, toggleDarkMode, toasts } = useAppStore();
+  const { darkMode, toggleDarkMode } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
-  const isAdmin = location.pathname.startsWith('/admin');
-  // 配置中心：仅在 URL 明确携带 ?tab= 时，面包屑才细化到子分区
-  const settingsTab = searchParams.get('tab');
-  const settingsTabLabel =
-    settingsTab === 'model' ? '模型服务'
-      : settingsTab === 'share' ? '手机分享导入'
-        : settingsTab === 'tikhub' ? 'TikHub 数据服务'
-          : null;
-  // 面包屑：上级可点击跳转，最后一级是当前位置
-  const adminBreadcrumbs: { label: string; to?: string }[] =
-    location.pathname === '/admin/tasks'
-      ? [{ label: '后台管理', to: '/admin' }, { label: '处理任务' }]
-      : location.pathname === '/admin/articles'
-        ? [{ label: '后台管理', to: '/admin' }, { label: '文章管理' }]
-        : location.pathname.startsWith('/admin/tikhub')
-          ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '多平台查询' }]
-          : location.pathname === '/admin/settings/share'
-            ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: '手机分享导入' }]
-            : location.pathname.startsWith('/admin/settings')
-              ? (settingsTabLabel
-                ? [{ label: '后台管理', to: '/admin' }, { label: '系统配置', to: '/admin/settings' }, { label: settingsTabLabel }]
-                : [{ label: '后台管理', to: '/admin' }, { label: '系统配置' }])
-            : [{ label: '后台管理', to: '/admin' }, { label: '内容总览' }];
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
@@ -97,113 +46,48 @@ export default function Layout() {
     navigate(query ? `/articles?q=${encodeURIComponent(query)}` : '/articles');
   };
 
-  const adminLinks = [
-    { path: '/admin', label: '总览', icon: LayoutDashboard },
-    { path: '/admin/articles', label: '文章库', icon: Newspaper },
-    { path: '/admin/tasks', label: '处理任务', icon: Activity },
-    { path: '/admin/settings', label: '系统配置', icon: Settings2 },
-  ];
-
   return (
-    <div className={isAdmin ? 'site-frame admin-frame' : 'site-frame'}>
-      {isAdmin ? (
-        <aside className="admin-sidebar">
-          <Link to="/" className="brand-mark">
-            <span className="brand-symbol"><Sparkles size={16} /></span>
-            <span>Synth<span>AI</span></span>
+    <div className="site-frame">
+      <header className="site-header">
+        <div className="site-header-inner">
+          <Link to="/" className="brand-mark" aria-label="SynthAI 首页">
+            <BrandMark />
+            <span>SynthAI</span>
           </Link>
-
-          <div className="sidebar-label">工作台</div>
-          <nav className="sidebar-nav" aria-label="后台导航">
-            {adminLinks.map((item, index) => (
-              <Link
-                to={item.path}
-                key={item.path}
-                className={location.pathname === item.path || (item.path === '/admin/settings' && location.pathname.startsWith('/admin/settings/')) ? 'active' : ''}
-              >
-                <item.icon size={17} />
-                <span>{item.label}</span>
-                {index === 0 && <span className="nav-live-dot" />}
-              </Link>
-            ))}
+          <nav className="public-nav" aria-label="主导航">
+            <Link to="/" className={location.pathname === '/' ? 'active' : ''}>发现</Link>
+            <Link to="/articles" className={location.pathname.startsWith('/article') ? 'active' : ''}>文章库</Link>
           </nav>
-
-          <div className="sidebar-spacer" />
-          <div className="sidebar-help">
-            <CircleHelp size={17} />
-            <div>
-              <strong>需要帮助？</strong>
-              <span>查看导入指南</span>
-            </div>
-            <ArrowUpRight size={15} />
-          </div>
-          <Link to="/" className="back-to-site"><BookOpenText size={16} /> 返回前台</Link>
-        </aside>
-      ) : null}
-
-      <div className="site-content">
-        <header className={isAdmin ? 'site-header admin-header' : 'site-header'}>
-          <div className="mobile-brand">
-            <Link to="/" className="brand-mark">
-              <span className="brand-symbol"><Sparkles size={15} /></span>
-              <span>Synth<span>AI</span></span>
-            </Link>
-          </div>
-          {!isAdmin ? (
-            <nav className="public-nav" aria-label="主导航">
-              <Link to="/" className={location.pathname === '/' ? 'active' : ''}>发现</Link>
-              <Link to="/articles" className={location.pathname === '/articles' ? 'active' : ''}>文章库</Link>
-            </nav>
-          ) : (
-            <div className="admin-breadcrumb" aria-label="面包屑">
-              {adminBreadcrumbs.map((crumb, index) => (
-                <span className="crumb" key={crumb.label}>
-                  {index > 0 && <span className="crumb-sep">/</span>}
-                  {crumb.to && index < adminBreadcrumbs.length - 1 ? (
-                    <Link to={crumb.to}>{crumb.label}</Link>
-                  ) : (
-                    <strong aria-current={index === adminBreadcrumbs.length - 1 ? 'page' : undefined}>{crumb.label}</strong>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
           <div className="header-actions">
-            <form className="header-search" onSubmit={handleSearch}>
+            <form className="header-search" onSubmit={handleSearch} role="search">
               <input
                 value={searchValue}
                 onChange={(event) => setSearchValue(event.target.value)}
-                placeholder="搜索文章或链接"
-                aria-label="搜索文章或链接"
+                placeholder="搜索文章"
+                aria-label="搜索文章"
               />
               <button type="submit" className="search-submit" aria-label="提交搜索">
-                <Search size={16} />
+                <Search size={15} />
               </button>
             </form>
             <button type="button" className="icon-button" onClick={toggleDarkMode} aria-label="切换主题">
-              {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            {!isAdmin && <Link to="/admin" className="header-admin-link">管理后台 <ArrowUpRight size={14} /></Link>}
+            <Link to="/admin" className="header-admin-link">管理后台 <ArrowUpRight size={13} /></Link>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className={isAdmin ? 'site-main admin-main' : 'site-main'}>
-          <Outlet />
-        </main>
+      <main className="site-main">
+        <Outlet />
+      </main>
 
-        {!isAdmin && (
-          <footer className="site-footer">
-            <span>© {new Date().getFullYear()} SynthAI</span>
-            <span>把值得读的内容，留在自己的知识库里。</span>
-          </footer>
-        )}
-      </div>
+      <footer className="site-footer">
+        <span>© {new Date().getFullYear()} SynthAI</span>
+        <span>把值得读的内容，留在自己的知识库里。</span>
+      </footer>
 
-      <div className="toast-stack">
-        <AnimatePresence>
-          {toasts.map((toast) => <ToastItem key={toast.id} {...toast} />)}
-        </AnimatePresence>
-      </div>
+      <ToastStack />
     </div>
   );
 }

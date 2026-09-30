@@ -69,9 +69,8 @@ ENABLE_CERTBOT=1 CERTBOT_EMAIL=you@example.com bash scripts/deploy_x_kolane.sh
 
 - 不同步本地 `backend/data`
 - 不删除线上 `synthai.db`
-- 不覆盖线上 `config.json`
 
-这样做是为了避免发布代码时误清空线上文章、配置和媒体文件。
+这样做是为了避免发布代码时误清空线上文章、SQLite 中的系统配置和媒体文件。
 
 ## 如果要同步数据
 
@@ -82,7 +81,7 @@ tar -C backend -czf - data | \
 ssh root@<服务器IP> "rm -rf /opt/synthai/data.bak && cp -a /opt/synthai/data /opt/synthai/data.bak 2>/dev/null || true; tar -xzf - -C /opt/synthai"
 ```
 
-建议只在你明确需要迁移本地数据库、媒体文件和配置时再做。
+建议只在你明确需要迁移本地数据库（其中包含系统配置）和媒体文件时再做。
 
 ## 常用检查
 

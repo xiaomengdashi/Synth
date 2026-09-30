@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useEffect } from 'react';
 import Layout from './components/Layout';
+import AdminLayout from './components/AdminLayout';
 import Home from './features/articles/pages/Home';
 import Articles from './features/articles/pages/Articles';
 import Article from './features/articles/pages/Article';
@@ -30,16 +31,18 @@ function App() {
           <Route path="articles" element={<Articles />} />
           <Route path="article/:id" element={<Article />} />
           <Route path="share" element={<ShareReceive />} />
-          <Route path="share/setup" element={<Navigate to="/admin/settings/share" replace />} />
-          <Route path="admin" element={<Admin />} />
-          <Route path="admin/tasks" element={<AdminTasks />} />
-          <Route path="admin/articles" element={<AdminArticles />} />
-          <Route path="admin/settings" element={<AdminSettings />} />
-          <Route path="admin/settings/model" element={<AdminModelSettings />} />
-          <Route path="admin/settings/tikhub" element={<AdminTikHubSettings />} />
-          <Route path="admin/settings/share" element={<ShareSetup />} />
-          <Route path="admin/tikhub/query" element={<AdminTikHubQuery />} />
         </Route>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Admin />} />
+          <Route path="tasks" element={<AdminTasks />} />
+          <Route path="articles" element={<AdminArticles />} />
+          <Route path="settings" element={<AdminSettings />} />
+          <Route path="settings/model" element={<AdminModelSettings />} />
+          <Route path="settings/tikhub" element={<AdminTikHubSettings />} />
+          <Route path="settings/share" element={<ShareSetup />} />
+          <Route path="tikhub/query" element={<AdminTikHubQuery />} />
+        </Route>
+        <Route path="share/setup" element={<Navigate to="/admin/settings/share" replace />} />
       </Routes>
     </BrowserRouter>
   );

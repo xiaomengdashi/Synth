@@ -7,8 +7,13 @@ import rehypeHighlight from 'rehype-highlight';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowUp, ExternalLink, Calendar, Link as LinkIcon, Loader2, Sparkles, Trash2 } from 'lucide-react';
-import { useEffect, useState, useRef } from 'react';
+import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import WechatArticleView from '../components/WechatArticleView';
+import type { WechatArticleViewHandle } from '../components/WechatArticleView';
+import XArticleView from '../components/XArticleView';
+import { extractXArticle } from '../lib/xArticle';
+import { sourceColor, sourceLabel } from '../components/ArticleList';
 
 const HTML_CONTENT_START = '<!-- HTML_CONTENT_START -->';
 const HTML_CONTENT_END = '<!-- HTML_CONTENT_END -->';
@@ -16,12 +21,19 @@ const X_CONTENT_START = '<!-- X_CONTENT_START -->';
 const X_CONTENT_END = '<!-- X_CONTENT_END -->';
 const SUMMARY_SECTION_PATTERN = /^##\s*(?:(?:AI\s*)?摘要|内容摘要)\s*\n+([\s\S]*?)\n+\s*---\s*\n*/;
 
+interface XMediaItem {
+  type: 'photo' | 'video' | 'gif';
+  url: string;
+  poster?: string;
+}
+
 interface XPreviewData {
   author_name: string;
   author_handle?: string;
   author_avatar_url?: string;
   tweet_text: string;
   media_urls: string[];
+  media_items?: XMediaItem[];
   article_preview?: {
     title?: string;
     preview_text?: string;
@@ -42,25 +54,34 @@ interface ArticleHeading {
 
 function ArticleToc({
   items,
-  open,
-  onToggle,
+  activeId,
   onNavigate,
+  preventDefaultJump,
 }: {
   items: ArticleHeading[];
-  open: boolean;
-  onToggle: () => void;
-  onNavigate: () => void;
+  activeId?: string;
+  onNavigate: (item: ArticleHeading) => void;
+  preventDefaultJump?: boolean;
 }) {
   return (
-    <nav className={`article-toc ${open ? 'is-open' : ''}`} aria-label="文章目录">
-      <button type="button" className="article-toc-toggle" onClick={onToggle} aria-expanded={open}>
-        <span><span className="article-toc-kicker">Contents</span><strong>文章目录</strong></span>
+    <nav className="article-toc" aria-label="文章目录">
+      <div className="article-toc-head">
+        <strong>目录</strong>
         <span className="article-toc-count">{items.length} 节</span>
-      </button>
+      </div>
       <ol className="article-toc-list">
         {items.map((item) => (
           <li key={item.id} className={`article-toc-level-${item.level}`}>
-            <a href={`#${item.id}`} onClick={onNavigate}>{item.text}</a>
+            <a
+              href={`#${item.id}`}
+              className={item.id === activeId ? 'active' : undefined}
+              onClick={(event) => {
+                if (preventDefaultJump) event.preventDefault();
+                onNavigate(item);
+              }}
+            >
+              {item.text}
+            </a>
           </li>
         ))}
       </ol>
@@ -154,11 +175,23 @@ export default function Article() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [xPreview, setXPreview] = useState<XPreviewData | null>(null);
   const [tocItems, setTocItems] = useState<ArticleHeading[]>([]);
-  const [tocOpen, setTocOpen] = useState(false);
+  const [activeTocId, setActiveTocId] = useState('');
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   const htmlContainerRef = useRef<HTMLDivElement>(null);
   const articleBodyRef = useRef<HTMLDivElement>(null);
+  const wechatViewRef = useRef<WechatArticleViewHandle>(null);
+
+  const wechatSections = article?.source_type === 'wechat'
+    ? extractWechatSections(article.content_md, article.summary)
+    : null;
+  const replicaHtmlContent = wechatSections?.htmlContent ?? '';
+  const useWechatReplica = Boolean(wechatSections && replicaHtmlContent);
+  // 必须记忆化：每次渲染返回新对象会让 XArticleView 的 srcDoc（含随机 nonce）不断变化，导致 iframe 无限重载闪烁
+  const xArticleReplica = useMemo(
+    () => (article?.source_type === 'x' ? extractXArticle(article.content_md) : null),
+    [article],
+  );
 
   useEffect(() => {
     const handleScroll = () => setShowBackToTop(window.scrollY > 520);
@@ -166,6 +199,26 @@ export default function Article() {
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // 目录滚动定位:非复刻路径的标题在主文档中,可直接按视口位置计算当前小节
+  useEffect(() => {
+    if (useWechatReplica || xArticleReplica || tocItems.length === 0) {
+      return;
+    }
+    const syncActive = () => {
+      let current = '';
+      for (const item of tocItems) {
+        const element = document.getElementById(item.id);
+        if (element && element.getBoundingClientRect().top <= 150) {
+          current = item.id;
+        }
+      }
+      setActiveTocId(current);
+    };
+    syncActive();
+    window.addEventListener('scroll', syncActive, { passive: true });
+    return () => window.removeEventListener('scroll', syncActive);
+  }, [tocItems, useWechatReplica, xArticleReplica]);
 
   useEffect(() => {
     // 如果 store 中没有找到，说明可能是刷新了页面，尝试从后端拉取
@@ -209,6 +262,10 @@ export default function Article() {
   }, [article]);
 
   useEffect(() => {
+    // 微信一比一复刻视图的目录由 iframe 内脚本上报；X 正文是文档流渲染，走原生扫描
+    if (useWechatReplica) {
+      return;
+    }
     const body = articleBodyRef.current;
     if (!body) {
       setTocItems([]);
@@ -235,7 +292,7 @@ export default function Article() {
       .filter((item): item is ArticleHeading => item !== null);
 
     setTocItems(headings);
-  }, [article]);
+  }, [article, useWechatReplica]);
 
   useEffect(() => {
     if (!article || article.source_type !== 'x') {
@@ -265,33 +322,36 @@ export default function Article() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
-        <p className="text-slate-500">加载文章中...</p>
+      <div className="empty-state" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+        <Loader2 size={16} className="animate-spin" />
+        加载文章中…
       </div>
     );
   }
 
   if (error || !article) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh]">
-        <h2 className="text-2xl font-bold mb-4">文章未找到</h2>
-        <Link to="/" className="text-primary hover:underline flex items-center gap-2">
-          <ArrowLeft className="w-4 h-4" /> 返回首页
-        </Link>
+      <div className="empty-state">
+        文章未找到，可能已被删除。
+        <div style={{ marginTop: 12 }}>
+          <Link to="/articles" className="text-link">返回文章库 <ArrowLeft size={13} /></Link>
+        </div>
       </div>
     );
   }
 
-  const wechatSections = article.source_type === 'wechat'
-    ? extractWechatSections(article.content_md, article.summary)
-    : null;
   const xSections = article.source_type === 'x'
     ? extractXSections(article.content_md, article.summary)
     : null;
 
+  // 普通推文的正文就是推文文字（长文走 bodyMarkdown，payload 只作兜底）
+  const xTweetMarkdown = xSections?.payload?.tweet_text?.trim()
+    ? xSections.payload.tweet_text
+    : '';
+  const xMediaItems = (xSections?.payload?.media_items ?? []).filter((item) => item.url);
+
   const markdownContent = xSections
-    ? xSections.bodyMarkdown
+    ? xSections.bodyMarkdown || xTweetMarkdown
     : wechatSections
     ? wechatSections.bodyMarkdown
     : article.content_md.includes(HTML_CONTENT_START)
@@ -299,7 +359,7 @@ export default function Article() {
       : article.content_md;
 
   const htmlContent = wechatSections
-    ? wechatSections.htmlContent
+    ? replicaHtmlContent
     : article.content_md.includes(HTML_CONTENT_START)
       ? article.content_md.split(HTML_CONTENT_START)[1].replace(HTML_CONTENT_END, '')
       : '';
@@ -324,23 +384,43 @@ export default function Article() {
   };
 
   return (
-    <motion.article 
+    <motion.article
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="max-w-4xl mx-auto"
     >
-      <Link 
-        to="/" 
-        className="inline-flex items-center gap-2 text-slate-500 hover:text-primary transition-colors mb-8"
-      >
-        <ArrowLeft className="w-4 h-4" /> 返回首页
-      </Link>
+      <div className={`reader-outer-row ${tocItems.length > 0 ? 'with-toc' : ''}`}>
+        <nav className="reader-crumbs" aria-label="位置">
+          <Link to="/articles">文章库</Link>
+          <span>/</span>
+          <span aria-current="page">{sourceLabel(article.source_type)}</span>
+        </nav>
+        <div className="reader-tools">
+          <a
+            className="reader-tool"
+            href={article.original_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink size={13} /> 查看原文
+          </a>
+          <button
+            type="button"
+            className="reader-tool danger"
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            {isDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 size={13} />}
+            {isDeleting ? '删除中' : '删除'}
+          </button>
+        </div>
+      </div>
 
-      <div className={isXArticle ? 'article-reader article-reader-x' : 'glass-panel rounded-3xl overflow-hidden shadow-xl'}>
+      <div className={`reader-layout ${tocItems.length > 0 ? 'has-toc' : ''}`}>
+      <div className={isXArticle ? 'article-reader article-reader-x' : 'article-reader'}>
         {isXArticle ? (
           <header className="x-article-header">
-            <div className="x-article-kicker"><span>X Article</span><span>{new Date(article.created_at).toLocaleDateString('zh-CN')}</span></div>
+            <div className="x-article-kicker"><span>{new Date(article.created_at).toLocaleDateString('zh-CN')}</span></div>
             <h1>{article.title}</h1>
             <div className="x-article-byline">
               <img src={xPreview?.author_avatar_url || article.cover_image_url} alt={xPreview?.author_name || 'X 作者'} />
@@ -353,146 +433,106 @@ export default function Article() {
             {xCreatedAt ? <p className="x-article-published">原文发布于 {xCreatedAt}</p> : null}
             {article.cover_image_url ? <img className="x-article-lead" src={article.cover_image_url} alt="X 文章封面" /> : null}
           </header>
-        ) : (
-          <div className="relative w-full h-64 sm:h-80 md:h-[400px] overflow-hidden">
-            <img src={article.cover_image_url} alt={article.title} className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent" />
-            <div className="absolute bottom-0 left-0 w-full p-6 md:p-10">
-              <div className="flex items-center gap-4 text-white/80 text-sm font-medium mb-4">
-                <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full"><Calendar className="w-4 h-4" />{new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
-                <span className="flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full"><LinkIcon className="w-4 h-4" />{article.source_type.toUpperCase()}</span>
-              </div>
-              <h1 className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white leading-tight">{article.title}</h1>
-            </div>
-          </div>
+        ) : useWechatReplica ? null : (
+          <header className="reader-top">
+            <h1 className="reader-title">{article.title}</h1>
+            <p className="reader-byline" style={{ '--src': sourceColor(article.source_type) } as React.CSSProperties}>
+              <i aria-hidden="true" />
+              {article.account_name ? <strong>{article.account_name}</strong> : null}
+              <span>{sourceLabel(article.source_type)} · {new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
+            </p>
+            {article.cover_image_url ? (
+              <div className="reader-cover"><img src={article.cover_image_url} alt="" /></div>
+            ) : null}
+          </header>
         )}
 
         {/* Content */}
-        <div className={isXArticle ? 'x-article-content' : 'p-6 md:p-10 lg:p-12 bg-white dark:bg-slate-900'}>
-          <div className="mb-8 flex flex-wrap justify-end gap-3">
-            <button
-              type="button"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="inline-flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300 dark:hover:bg-red-500/20"
-            >
-              {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              {isDeleting ? '删除中...' : '删除文章'}
-            </button>
-            <a 
-              href={article.original_url} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-primary hover:text-white transition-all text-sm font-medium"
-            >
-              <ExternalLink className="w-4 h-4" /> 查看原文
-            </a>
-          </div>
+        <div className={isXArticle ? 'x-article-content' : 'reader-body'}>
 
           {wechatSections?.summaryMarkdown ? (
-            <section className="relative mb-10 overflow-hidden rounded-[2rem] border border-emerald-200/80 bg-[linear-gradient(135deg,rgba(236,253,245,0.95),rgba(255,255,255,0.92),rgba(240,249,255,0.95))] p-6 shadow-[0_24px_60px_-32px_rgba(16,185,129,0.45)] dark:border-emerald-500/20 dark:bg-[linear-gradient(135deg,rgba(6,78,59,0.3),rgba(15,23,42,0.94),rgba(12,74,110,0.26))]">
-              <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-emerald-300/20 blur-3xl dark:bg-emerald-400/10" />
-              <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full bg-sky-300/20 blur-3xl dark:bg-sky-400/10" />
-
-              <div className="relative">
-                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-300/70 bg-white/80 px-4 py-2 text-sm font-semibold text-emerald-700 shadow-sm backdrop-blur dark:border-emerald-400/20 dark:bg-slate-900/60 dark:text-emerald-200">
-                  <Sparkles className="h-4 w-4" />
-                  微信文章内容导读
-                </div>
-
-                <div className="mt-5 space-y-4">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkGfm]}
-                    components={{
-                      p: ({ children }) => (
-                        <p className="text-base leading-8 text-slate-700 dark:text-slate-200 md:text-[1.05rem]">
-                          {children}
-                        </p>
-                      ),
-                      ul: ({ children }) => (
-                        <ul className="list-disc space-y-2 pl-5 text-slate-700 marker:text-emerald-500 dark:text-slate-200">
-                          {children}
-                        </ul>
-                      ),
-                      ol: ({ children }) => (
-                        <ol className="list-decimal space-y-2 pl-5 text-slate-700 marker:font-semibold marker:text-emerald-600 dark:text-slate-200 dark:marker:text-emerald-300">
-                          {children}
-                        </ol>
-                      ),
-                      li: ({ children }) => (
-                        <li className="pl-1 leading-7">
-                          {children}
-                        </li>
-                      ),
-                      strong: ({ children }) => (
-                        <strong className="font-semibold text-slate-950 dark:text-white">
-                          {children}
-                        </strong>
-                      ),
-                      h1: ({ children }) => (
-                        <h3 className="text-xl font-bold text-slate-950 dark:text-white">
-                          {children}
-                        </h3>
-                      ),
-                      h2: ({ children }) => (
-                        <h3 className="text-xl font-bold text-slate-950 dark:text-white">
-                          {children}
-                        </h3>
-                      ),
-                      h3: ({ children }) => (
-                        <h4 className="text-lg font-bold text-slate-950 dark:text-white">
-                          {children}
-                        </h4>
-                      ),
-                      blockquote: ({ children }) => (
-                        <blockquote className="border-l-4 border-emerald-400/70 bg-white/50 px-4 py-3 italic text-slate-700 dark:border-emerald-300/50 dark:bg-slate-900/40 dark:text-slate-200">
-                          {children}
-                        </blockquote>
-                      ),
-                    }}
-                  >
-                    {wechatSections.summaryMarkdown}
-                  </ReactMarkdown>
-                </div>
+            <section className="reader-summary" aria-label="内容导读">
+              <p className="reader-summary-label"><Sparkles size={12} />内容导读</p>
+              <div className="md-body">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{wechatSections.summaryMarkdown}</ReactMarkdown>
               </div>
             </section>
           ) : null}
 
-          <div className={tocItems.length > 0 ? 'article-reading-layout' : ''}>
-            {tocItems.length > 0 ? (
-              <ArticleToc
-                items={tocItems}
-                open={tocOpen}
-                onToggle={() => setTocOpen((current) => !current)}
-                onNavigate={() => setTocOpen(false)}
-              />
-            ) : null}
-            <div ref={articleBodyRef} className="article-body-content">
-              {htmlContent ? (
+          <div ref={articleBodyRef} className="article-body-content">
+              {useWechatReplica ? (
+                <WechatArticleView
+                  ref={wechatViewRef}
+                  title={article.title}
+                  htmlContent={replicaHtmlContent}
+                  accountName={article.account_name}
+                  publishTime={article.publish_time}
+                  createdAt={article.created_at}
+                  onTocItems={setTocItems}
+                />
+              ) : xArticleReplica ? (
+                <XArticleView article={xArticleReplica} />
+              ) : (
                 <>
-                  {markdownContent.trim() ? (
-                    <div className={`${isXArticle ? 'x-article-markdown' : ''} prose prose-slate dark:prose-invert max-w-none prose-img:mx-auto prose-img:rounded-xl prose-img:shadow-lg prose-img:block prose-headings:font-bold prose-a:text-primary hover:prose-a:text-blue-400 prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800`}>
+                  {xMediaItems.length > 0 ? (
+                    <div className="x-article-media">
+                      {xMediaItems.map((item, index) =>
+                        item.type === 'photo' ? (
+                          <img key={index} src={item.url} alt={`推文配图 ${index + 1}`} loading="lazy" />
+                        ) : (
+                          <video
+                            key={index}
+                            src={item.url}
+                            poster={item.poster}
+                            controls={item.type === 'video'}
+                            playsInline
+                            loop={item.type === 'gif'}
+                            muted={item.type === 'gif'}
+                            autoPlay={item.type === 'gif'}
+                          />
+                        ),
+                      )}
+                    </div>
+                  ) : null}
+                  {htmlContent ? (
+                    <>
+                      {markdownContent.trim() ? (
+                        <div className={isXArticle ? 'x-article-markdown' : 'md-body'}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                            {markdownContent}
+                          </ReactMarkdown>
+                        </div>
+                      ) : null}
+                      <div
+                        ref={htmlContainerRef}
+                        className={`article-html-container w-full ${markdownContent.trim() ? 'reader-html-gap' : ''}`}
+                        dangerouslySetInnerHTML={{ __html: htmlContent }}
+                      />
+                    </>
+                  ) : article.source_type === 'x' && xPreview && !markdownContent.trim() ? null : (
+                    <div className={isXArticle ? 'x-article-markdown' : 'md-body'}>
                       <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                         {markdownContent}
                       </ReactMarkdown>
                     </div>
-                  ) : null}
-                  <div
-                    ref={htmlContainerRef}
-                    className={`article-html-container not-prose w-full ${markdownContent.trim() ? 'mt-8 border-t border-slate-200 pt-8 dark:border-slate-800' : ''}`}
-                    dangerouslySetInnerHTML={{ __html: htmlContent }}
-                  />
+                  )}
                 </>
-              ) : article.source_type === 'x' && xPreview && !markdownContent.trim() ? null : (
-                <div className={`${isXArticle ? 'x-article-markdown' : ''} prose prose-slate dark:prose-invert max-w-none prose-img:mx-auto prose-img:rounded-xl prose-img:shadow-lg prose-img:block prose-headings:font-bold prose-a:text-primary hover:prose-a:text-blue-400 prose-pre:bg-slate-900 prose-pre:border prose-pre:border-slate-800`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                    {markdownContent}
-                  </ReactMarkdown>
-                </div>
               )}
             </div>
-          </div>
         </div>
+      </div>
+      {tocItems.length > 0 ? (
+        <ArticleToc
+          items={tocItems}
+          activeId={activeTocId}
+          preventDefaultJump={useWechatReplica}
+          onNavigate={(item) => {
+            if (useWechatReplica) {
+              wechatViewRef.current?.scrollToTocItem(item.id);
+            }
+          }}
+        />
+      ) : null}
       </div>
       {showBackToTop ? (
         <button

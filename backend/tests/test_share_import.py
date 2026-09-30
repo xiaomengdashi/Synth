@@ -236,3 +236,36 @@ def test_x_share_prefers_external_article_content_over_tweet_text(share_client, 
 
     asyncio.run(verify_saved_article())
     task_service.TASKS_DB.pop(task_id, None)
+
+
+def test_x_article_task_persists_replica_and_does_not_hide_capture_failure(share_client, monkeypatch):
+    import json
+    client, sessions = share_client
+    payload = normalize_flat_tweet_data(_flat_tweet_payload('https://x.com/i/article/987'))
+    text = {'title': 'X 长文', 'full_text': '原文内容', 'cover_image_url': ''}
+    monkeypatch.setattr(task_service, 'fetch_tikhub_tweet', lambda *args: {
+        'payload': payload, 'article_result': None, 'article_text': text,
+    })
+    async def capture(*args):
+        return {'version':1, 'status':'complete', 'body_html':'<p>原文<strong>内容</strong></p>',
+                'body_css':'', 'title':'X 长文', 'text':'原文内容', 'cover_url':'/media/x/cover.jpg',
+                'author_name':'作者', 'created_at':'', 'warnings':[], 'assets':[], 'fonts':[]}
+    monkeypatch.setattr(task_service, 'fetch_x_article_replica', capture)
+    for task_id in ('rich-x', 'partial-x'):
+        task_service.TASKS_DB[task_id] = {'id':task_id, 'created_at':'2026-09-30T00:00:00'}
+        asyncio.run(task_service.create_task_record(task_id, 'https://x.com/author/status/123456789', '2026-09-30T00:00:00'))
+        asyncio.run(task_service.process_task(task_id, 'https://x.com/author/status/123456789', {}))
+        article = task_service.TASKS_DB[task_id]['article']
+        raw = article['content_md'].split('<!-- X_ARTICLE_START -->')[1].split('<!-- X_ARTICLE_END -->')[0]
+        replica = json.loads(raw)
+        if task_id == 'rich-x':
+            assert replica['status'] == 'complete'
+            assert '<strong>' in replica['body_html']
+            assert article['cover_image_url'] == '/media/x/cover.jpg'
+        else:
+            assert replica['status'] == 'text-only'
+            assert replica['warnings']
+            assert replica['text'] == '原文内容'
+        async def fail(*args):
+            raise ValueError('没有正文')
+        monkeypatch.setattr(task_service, 'fetch_x_article_replica', fail)

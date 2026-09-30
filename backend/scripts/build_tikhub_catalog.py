@@ -59,9 +59,13 @@ def build(spec: dict) -> dict:
                                'example': param.get('example')})
             body = resolve(op.get('requestBody', {}).get('content', {}).get('application/json', {}).get('schema', {}))
             if body:
-                if body.get('type') != 'object':
+                properties = body.get('properties', {})
+                # Scalar/array bodies and arbitrary JSON objects cannot be
+                # represented as independent form fields, so preserve the
+                # complete request body as one validated JSON parameter.
+                if body.get('type') != 'object' or not properties:
                     params.append({'name': '$body', 'in': 'body_root', 'required': op.get('requestBody', {}).get('required', False), 'schema': body, 'description': body.get('description', '请求内容（JSON）'), 'example': body.get('example')})
-                for name, schema in body.get('properties', {}).items():
+                for name, schema in properties.items():
                     params.append({'name': name, 'in': 'body', 'required': name in body.get('required', []),
                                    'schema': schema, 'description': schema.get('description', ''),
                                    'example': schema.get('example')})

@@ -109,7 +109,6 @@ export default function ShareReceive() {
   const failed = task?.status === 'failed';
   return (
     <div className="share-page">
-      <div className="eyebrow">From your iPhone</div>
       <h1>把这篇好文章，收下来。</h1>
       <p className="share-lede">来自 X 或微信文章的分享，会自动整理并保存到你的文章库。</p>
       <section className="share-status-panel" aria-live="polite" aria-busy={busy}>

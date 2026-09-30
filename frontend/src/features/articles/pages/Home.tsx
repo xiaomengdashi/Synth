@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Check, Clipboard, FileText, Link2, Loader2, Send, Smartphone, Twitter, Upload, Video, X } from 'lucide-react';
+import { ArrowRight, Check, Clipboard, Link2, Loader2, Send, Smartphone, Upload, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
@@ -16,10 +16,10 @@ type TaskStatusResponse = {
   error?: string;
 };
 
-const sourceMeta: Record<Source, { label: string; icon: typeof FileText; placeholder: string }> = {
-  wechat: { label: '微信公众号', icon: FileText, placeholder: '粘贴 mp.weixin.qq.com 文章链接' },
-  x: { label: 'X / Twitter', icon: Twitter, placeholder: '粘贴 x.com 文章或帖子链接' },
-  bilibili: { label: 'Bilibili', icon: Video, placeholder: '粘贴 bilibili.com 视频链接' },
+const sourceMeta: Record<Source, { label: string; short: string; placeholder: string; color: string }> = {
+  wechat: { label: '微信公众号', short: '微信', placeholder: '粘贴 mp.weixin.qq.com 文章链接', color: 'var(--wechat)' },
+  x: { label: 'X / Twitter', short: 'X', placeholder: '粘贴 x.com 文章或帖子链接', color: 'var(--x-blue)' },
+  bilibili: { label: 'Bilibili', short: 'B 站', placeholder: '粘贴 bilibili.com 视频链接', color: 'var(--bili)' },
 };
 
 function detectSourceFromUrl(value: string): Source | null {
@@ -32,6 +32,15 @@ function detectSourceFromUrl(value: string): Source | null {
     // Keep the current selection while the user is still typing a URL.
   }
   return null;
+}
+
+function greeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return '早上好';
+  if (hour < 13) return '中午好';
+  if (hour < 18) return '下午好';
+  if (hour < 23) return '晚上好';
+  return '夜深了';
 }
 
 export default function Home() {
@@ -65,7 +74,7 @@ export default function Home() {
           if (data.status === 'completed') {
             if (data.article) addArticle(data.article);
             await fetchArticles();
-            pushToast({ title: '内容已保存，已加入前台文章库', tone: 'success' });
+            pushToast({ title: '内容已保存，已加入文章库', tone: 'success' });
           } else {
             pushToast({ title: data.current_step || '处理失败，请检查配置', tone: 'error' });
           }
@@ -187,36 +196,28 @@ export default function Home() {
   return (
     <div>
       <section className="public-hero">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55 }}>
-          <div className="eyebrow">Personal intelligence desk / 01</div>
-          <h1 className="display-title">把散落在网上的<br /><em>好内容，收回来。</em></h1>
-          <p className="lede">导入微信公众号、X 或 Bilibili 内容；遇到微信安全验证时，也可以直接导入保存的网页 HTML。</p>
-        </motion.div>
-        <motion.div className="hero-note" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .2, duration: .55 }}>
-          <strong>一条链接，进入你的知识库</strong>
-          <p>普通链接会自动整理；受保护的微信文章可通过网页 HTML 导入，内容完成后直接进入文章库。</p>
-          <span className="mono-line"><i /> pipeline ready · waiting for input</span>
-        </motion.div>
+        <motion.p className="hero-greeting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .5 }}>{greeting()}</motion.p>
+        <motion.h1 className="display-title" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55 }}>把好内容，收进来。</motion.h1>
       </section>
 
-      <motion.section className="import-strip" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .15, duration: .45 }}>
-        <div className="import-topline">
-          <h2>导入一条内容</h2>
-          <div className="import-topline-actions">
-            <Link to="/admin/settings/share" className="secondary-button"><Smartphone size={14} />iPhone 分享导入</Link>
-            <span>WECHAT · X · BILIBILI</span>
-            <button type="button" className="secondary-button" onClick={() => setHtmlImportOpen(true)}><Upload size={14} />导入网页 HTML</button>
+      <motion.section className="collect-shell" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12, duration: .5 }}>
+        <form className="collect-bar" onSubmit={handleSubmit}>
+          <div className="source-chips" role="group" aria-label="选择来源">
+            {(Object.keys(sourceMeta) as Source[]).map((value) => (
+              <button
+                key={value}
+                type="button"
+                className={`source-chip ${source === value ? 'active' : ''}`}
+                aria-pressed={source === value}
+                style={{ '--chip': sourceMeta[value].color } as React.CSSProperties}
+                onClick={() => setSource(value)}
+              >
+                <i />{sourceMeta[value].short}
+              </button>
+            ))}
           </div>
-        </div>
-        <form className="import-form" onSubmit={handleSubmit}>
-          <label className="source-select">
-            <span>{(() => { const Icon = sourceMeta[source].icon; return <Icon size={15} />; })()}</span>
-            <select value={source} onChange={(event) => setSource(event.target.value as Source)} aria-label="选择来源">
-              {Object.entries(sourceMeta).map(([value, item]) => <option key={value} value={value}>{item.label}</option>)}
-            </select>
-          </label>
-          <label className="import-input-wrap">
-            <Link2 size={16} />
+          <label className="collect-input-wrap">
+            <Link2 size={16} aria-hidden="true" />
             <input
               value={url}
               onChange={(event) => {
@@ -226,18 +227,23 @@ export default function Home() {
               placeholder={sourceMeta[source].placeholder}
               type="url"
               required
+              aria-label="粘贴内容链接"
             />
           </label>
-          <button type="button" className="secondary-button import-paste-button" onClick={() => void handlePasteImport()} disabled={isSubmitting || isPasting}>
-            {isPasting ? <><Loader2 size={15} className="animate-spin" />读取中</> : <><Clipboard size={15} />粘贴并导入</>}
+          <button type="button" className="import-paste-button" onClick={() => void handlePasteImport()} disabled={isSubmitting || isPasting} aria-label="读取剪贴板并填入" title="读取剪贴板并填入">
+            {isPasting ? <Loader2 size={15} className="animate-spin" /> : <Clipboard size={15} />}
           </button>
           <button type="submit" className="primary-button" disabled={isSubmitting || !url.trim()}>
-            {isSubmitting ? <><Loader2 size={15} className="animate-spin" />处理中</> : <><Send size={15} />开始整理</>}
+            {isSubmitting ? <><Loader2 size={15} className="animate-spin" />处理中</> : <><Send size={15} />开始导入</>}
           </button>
         </form>
-        <div className="import-hint">
+        <p className="collect-hint">
           {detectedSource ? <Check size={13} /> : <Link2 size={13} />}
-          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源类型；微信安全验证不会自动打开浏览器。')}
+          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源；微信安全验证不会自动打开浏览器。')}
+        </p>
+        <div className="collect-alt">
+          <Link to="/admin/settings/share"><Smartphone size={13} />iPhone 分享导入</Link>
+          <button type="button" onClick={() => setHtmlImportOpen(true)}><Upload size={13} />导入网页 HTML</button>
         </div>
       </motion.section>
 
@@ -273,13 +279,15 @@ export default function Home() {
         </div>
       ) : null}
 
-      <section id="latest-articles" className="article-section">
+      <section id="latest-articles" className="recent-section">
         <div className="section-heading">
-          <div><div className="eyebrow">Library / 02</div><h2>最近整理</h2><p>按生成时间排序，最新内容会出现在最前面。</p></div>
-          <span className="text-link">{articles.length} 篇文章 <ArrowRight size={14} /></span>
+          <div><h2>最近收藏</h2><p>最新整理的内容会出现在最前面。</p></div>
+          <div className="section-heading-side">
+            <span className="section-count">共 {articles.length} 篇</span>
+            {articles.length > 8 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
+          </div>
         </div>
-        <ArticleList articles={articles.slice(0, 6)} />
-        {articles.length > 6 ? <Link className="text-link" to="/articles">查看全部文章 <ArrowRight size={14} /></Link> : null}
+        <ArticleList articles={articles.slice(0, 8)} />
       </section>
     </div>
   );

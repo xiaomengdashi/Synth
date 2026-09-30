@@ -29,7 +29,7 @@ async def load_settings() -> dict[str, str]:
 async def save_settings(values: dict) -> dict[str, str]:
     """按 key upsert。出现的键全部写入（空字符串表示清空）；掩码回传跳过。"""
     written: dict[str, str] = {}
-    now = datetime.datetime.utcnow()
+    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     async with AsyncSessionLocal() as session:
         for key in SUPPORTED_KEYS:
             if key not in values:
@@ -72,9 +72,11 @@ def key_metadata(values: dict) -> dict:
 
 
 def public_settings(values: dict) -> dict:
-    """给前端的配置视图：非敏感项原样，密钥只暴露是否已配置。"""
+    """给前端的配置视图：密钥仅返回掩码，不返回数据库中的原文。"""
+    model_key = str(values.get("apiKey") or "").strip()
     return {
-        "apiKey": str(values.get("apiKey") or ""),
+        "apiKey": mask_secret(model_key),
+        "apiKeyConfigured": bool(model_key),
         "baseUrl": str(values.get("baseUrl") or ""),
         "modelName": str(values.get("modelName") or ""),
         "tikhubConfigured": key_metadata(values)["configured"],

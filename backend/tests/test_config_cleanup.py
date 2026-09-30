@@ -16,10 +16,12 @@ def test_public_settings_never_expose_tikhub_key(tmp_path, monkeypatch):
 
     asyncio.run(prepare())
     monkeypatch.setattr(settings_store, "AsyncSessionLocal", sessions)
-    asyncio.run(settings_store.save_settings({"tikhubApiKey": "real-private-token", "apiKey": "llm"}))
+    asyncio.run(settings_store.save_settings({"tikhubApiKey": "real-private-token", "apiKey": "model-private-key"}))
 
     public = settings_store.public_settings(asyncio.run(settings_store.load_settings()))
     assert "real-private-token" not in str(public)
+    assert "model-private-key" not in str(public)
     assert public["tikhubConfigured"] is True
-    assert public["apiKey"] == "llm"
+    assert public["apiKey"] == "••••-key"
+    assert public["apiKeyConfigured"] is True
     asyncio.run(engine.dispose())

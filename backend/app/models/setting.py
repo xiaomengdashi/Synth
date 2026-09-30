@@ -12,4 +12,8 @@ class AppSetting(Base):
 
     key = Column(String(100), primary_key=True)
     value = Column(Text, nullable=False, default="")
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+    )

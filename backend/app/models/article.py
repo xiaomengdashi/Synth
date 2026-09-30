@@ -16,5 +16,11 @@ class Article(Base):
     original_url = Column(Text, nullable=False)
     source_type = Column(String(50), nullable=False)
     cover_image_url = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    account_name = Column(String(255), nullable=True)
+    publish_time = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None))
+    updated_at = Column(
+        DateTime,
+        default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+    )

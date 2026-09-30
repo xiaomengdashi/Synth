@@ -25,6 +25,18 @@ test('nullable and structured parameters are parsed correctly', () => {
   assert.deepEqual(buildParameters([{ name: 'ids', schema: { type: 'array' } }], { ids: '["123", "456"]' }), { ids: ['123', '456'] });
 });
 
+test('union schemas retain string IDs and allow fractional numeric inputs', () => {
+  assert.deepEqual(buildParameters([
+    { name: 'goods_ctr_min', schema: { anyOf: [{ type: 'integer' }, { type: 'number' }, { type: 'string' }] } },
+  ], { goods_ctr_min: '0.5' }), { goods_ctr_min: '0.5' });
+  assert.deepEqual(buildParameters([
+    { name: 'mid', schema: { anyOf: [{ type: 'integer' }, { type: 'string' }] } },
+  ], { mid: '1808168603721650364' }), { mid: '1808168603721650364' });
+  assert.deepEqual(buildParameters([
+    { name: 'ratio', schema: { anyOf: [{ type: 'integer' }, { type: 'number' }] } },
+  ], { ratio: '0.5' }), { ratio: 0.5 });
+});
+
 test('HTTP errors including validation arrays and non-JSON responses stay readable', async () => {
   const original = globalThis.fetch;
   try {

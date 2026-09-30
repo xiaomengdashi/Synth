@@ -21,7 +21,7 @@ interface AppState {
   updateTask: (id: string, updates: Partial<Task>) => void;
   pushToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (toastId: string) => void;
-  setConfig: (config: AppConfig) => void;
+  setConfig: (config: AppConfig) => Promise<boolean>;
   fetchConfig: () => Promise<void>;
   fetchArticles: () => Promise<void>;
   fetchTasks: () => Promise<void>;
@@ -54,6 +54,7 @@ export const useAppStore = create<AppState>((set) => ({
   config: {
     modelName: 'gpt-4o-mini',
     apiKey: '',
+    apiKeyConfigured: false,
     baseUrl: 'https://api.openai.com/v1',
     tikhubConfigured: false,
   },
@@ -85,15 +86,19 @@ export const useAppStore = create<AppState>((set) => ({
     toasts: state.toasts.filter((toast) => toast.id !== toastId)
   })),
   setConfig: async (config) => {
-    set(() => ({ config }));
     try {
-      await fetch('/api/v1/config', {
+      const res = await fetch('/api/v1/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ apiKey: config.apiKey, baseUrl: config.baseUrl, modelName: config.modelName }),
       });
+      if (!res.ok) return false;
+      const saved = await res.json();
+      set((state) => ({ config: { ...state.config, ...saved } }));
+      return true;
     } catch (e) {
       console.error('Failed to save config', e);
+      return false;
     }
   },
   fetchConfig: async () => {

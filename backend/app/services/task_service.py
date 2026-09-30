@@ -11,6 +11,7 @@ from app.services.fetchers.article import fetch_article_content
 from app.services.fetchers.social import extract_x_article_id
 from app.services.fetchers.tikhub import TikHubError, TikHubNotConfiguredError, fetch_tikhub_tweet
 from app.services.fetchers.twitter_article_rich import render_twitter_article_result
+from app.services.fetchers.x_article import fetch_x_article_replica
 from app.services.fetchers.video import fetch_video_content
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB, article_from_db_record, task_created_at, update_task
 
@@ -102,6 +103,8 @@ async def process_task(task_id: str, url: str, config):
         generated_content = ""
         cover_image_url = ""
         source_url = url
+        account_name = ""
+        publish_time = ""
 
         if "x.com" in url or "twitter.com" in url:
             direct_article_id = extract_x_article_id(url)
@@ -166,16 +169,37 @@ async def process_task(task_id: str, url: str, config):
                             "content_md": article_text["full_text"],
                             "cover_image_url": article_text.get("cover_image_url") or "",
                         }
-                if x_article_payload is None:
-                    raise TikHubError("TikHub 未返回 X 长文正文。")
-                title = x_article_payload["title"] or title
-                cover_image_url = x_article_payload.get("cover_image_url") or ""
-                summary = build_local_summary(x_article_payload["content_md"], "X 长文正文已获取。")
+                metadata = {
+                    **tweet_payload,
+                    "title": (x_article_payload or {}).get("title") or title,
+                    "full_text": (tikhub_result.get("article_text") or {}).get("full_text", ""),
+                }
+                try:
+                    replica = await fetch_x_article_replica(url, metadata, update_step)
+                except Exception as exc:
+                    if not x_article_payload:
+                        raise TikHubError("X 原文补采失败，且 TikHub 未返回可保存的正文。") from exc
+                    replica = {
+                        "version": 1, "status": "text-only", "body_html": "", "body_css": "",
+                        "title": x_article_payload["title"], "text": x_article_payload["content_md"],
+                        "cover_url": x_article_payload.get("cover_image_url") or "",
+                        "author_name": tweet_payload.get("author_name", ""),
+                        "author_handle": tweet_payload.get("author_handle", ""),
+                        "author_avatar_url": tweet_payload.get("author_avatar_url", ""),
+                        "created_at": tweet_payload.get("created_at", ""), "source_url": url,
+                        "fonts": [], "assets": [], "text_verified": False,
+                        "warnings": ["原页面补采失败，当前仅保存 TikHub 正文，配图、动画及原始排版可能缺失。请重新抓取。"],
+                    }
+                title = replica["title"] or title
+                cover_image_url = replica.get("cover_url") or ""
+                account_name = replica.get("author_name") or ""
+                publish_time = replica.get("created_at") or ""
+                summary = build_local_summary(replica["text"], "X 长文正文已获取。")
                 generated_content = (
                     f"## 内容摘要\n\n{summary}\n\n---\n\n"
-                    f"<!-- X_CONTENT_START -->\n"
-                    f"{x_article_payload['content_md']}\n"
-                    f"<!-- X_CONTENT_END -->"
+                    f"<!-- X_ARTICLE_START -->\n"
+                    f"{json.dumps(replica, ensure_ascii=False)}\n"
+                    f"<!-- X_ARTICLE_END -->"
                 )
 
             if not generated_content:
@@ -216,6 +240,8 @@ async def process_task(task_id: str, url: str, config):
             else:
                 generated_content = f"## 内容摘要\n\n{summary}\n\n---\n\n{article_payload['extracted_md']}"
             cover_image_url = article_payload["cover_image_url"]
+            account_name = article_payload.get("account_name") or ""
+            publish_time = article_payload.get("publish_time") or ""
 
         title = _normalize_title(title)
 
@@ -226,14 +252,17 @@ async def process_task(task_id: str, url: str, config):
             img_prompt = urllib.parse.quote(f"Technology AI abstract {title[:10]}")
             cover_image_url = f"https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt={img_prompt}&image_size=landscape_16_9"
 
+        source_type = detect_source_type(source_url)
         article_data = {
             "id": article_id,
             "title": title,
             "summary": summary,
             "content_md": generated_content,
             "original_url": source_url,
-            "source_type": detect_source_type(source_url),
+            "source_type": source_type,
             "cover_image_url": cover_image_url,
+            "account_name": account_name,
+            "publish_time": publish_time,
             "created_at": TASKS_DB[task_id]["created_at"],
         }
 
@@ -248,8 +277,10 @@ async def process_task(task_id: str, url: str, config):
                     summary=summary,
                     content_md=generated_content,
                     original_url=source_url,
-                    source_type=detect_source_type(source_url),
+                    source_type=source_type,
                     cover_image_url=cover_image_url,
+                    account_name=account_name,
+                    publish_time=publish_time,
                     created_at=datetime.datetime.fromisoformat(task_created_at(TASKS_DB[task_id])),
                 )
             )

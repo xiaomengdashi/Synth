@@ -15,4 +15,4 @@ class Task(Base):
     current_step = Column(String(100), nullable=True)
     error_message = Column(Text, nullable=True)
     article_id = Column(String, ForeignKey("articles.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None))

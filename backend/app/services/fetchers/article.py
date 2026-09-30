@@ -86,7 +86,12 @@ async def fetch_article_content(url: str, update_step, config=None):
 
 
 async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
-    """微信公众号文章统一走 TikHub H5 接口（绕过安全验证）。"""
+    """微信公众号文章统一走 TikHub H5 接口（绕过安全验证）。
+
+    正文按原文存储（内联样式、<br> 换行、hidden 装饰等一律保留），
+    由前端微信复刻视图按官方页面 CSS 渲染；代码块规范化仅用于
+    trafilatura 文本提取的副本，不落库。
+    """
     import asyncio
 
     update_step("正在通过 TikHub 接口获取公众号文章...")
@@ -99,20 +104,54 @@ async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
 
     update_step(f"抓取成功: {article['title']}。正在解析正文并保存内容...")
 
-    html_content = article["html_content"]
-    soup = BeautifulSoup(f"<div id='js_content'>{html_content}</div>", "html.parser")
-    main_content = soup.find("div", id="js_content")
-    if isinstance(main_content, Tag):
-        _normalize_wechat_code_styles(main_content)
-        html_content = _normalize_html_content(url, main_content)
+    html_content = _ensure_wechat_root(article["html_content"])
 
-    extracted_md = trafilatura.extract(html_content, output_format="markdown") or article["content_text"]
+    # 摘要提取用规范化副本（代码块压行处理只为提取纯文本，不影响存储内容）
+    extract_root = BeautifulSoup(html_content, "html.parser")
+    _normalize_wechat_code_styles(extract_root)
+    extracted_md = trafilatura.extract(str(extract_root), output_format="markdown") or article["content_text"]
     return {
         "title": article["title"],
         "extracted_md": extracted_md,
         "html_content": html_content,
         "cover_image_url": article["cover_image_url"],
+        "account_name": article.get("account_name") or "",
+        "publish_time": article.get("publish_time") or "",
     }
+
+
+def _ensure_wechat_root(html_content: str) -> str:
+    """确保正文只有一个 js_content 根节点（TikHub 通常自带，缺失时补壳）。"""
+    soup = BeautifulSoup(html_content or "", "html.parser")
+    root = soup.find("div", id="js_content")
+    if isinstance(root, Tag):
+        return str(root)
+    return (
+        '<div class="rich_media_content js_underline_content defaultNoSetting" id="js_content">'
+        f"{html_content}</div>"
+    )
+
+
+def _extract_wechat_page_meta(soup: BeautifulSoup) -> tuple[str, str]:
+    """从手动保存的整页 HTML 中提取公众号名与发布时间。"""
+    account_name = ""
+    js_name = soup.find(id="js_name")
+    if isinstance(js_name, Tag):
+        account_name = js_name.get_text(" ", strip=True)
+    if not account_name:
+        nickname = re.search(r'var\s+nickname\s*=\s*(?:htmlDecode\()?"([^"]+)"', str(soup))
+        if nickname:
+            account_name = nickname.group(1)
+
+    publish_time = ""
+    publish_tag = soup.find(id="publish_time")
+    if isinstance(publish_tag, Tag):
+        publish_time = publish_tag.get_text(" ", strip=True)
+    if not publish_time:
+        ct_match = re.search(r'var\s+ct\s*=\s*"?(\d{10,13})"?', str(soup))
+        if ct_match:
+            publish_time = ct_match.group(1)
+    return account_name, publish_time
 
 
 def parse_article_html(url: str, html: str) -> dict:
@@ -148,19 +187,31 @@ def parse_article_html(url: str, html: str) -> dict:
             "cover_image_url": cover_image_url,
         }
 
-    if "mp.weixin.qq.com" in url and isinstance(main_content, Tag):
-        _normalize_wechat_code_styles(main_content)
-    html_content = _normalize_html_content(url, main_content)
+    account_name = ""
+    publish_time = ""
+    if "mp.weixin.qq.com" in url:
+        # 微信正文按原文存储，代码规范化只作用于提取副本
+        account_name, publish_time = _extract_wechat_page_meta(soup)
+        html_content = str(main_content)
+        extract_root = BeautifulSoup(html_content, "html.parser")
+        _normalize_wechat_code_styles(extract_root)
+        extracted_md = trafilatura.extract(str(extract_root), output_format="markdown")
+    else:
+        html_content = _normalize_html_content(url, main_content)
+        extracted_md = trafilatura.extract(html_content, output_format="markdown")
+
     content_text = main_content.get_text(" ", strip=True)
     if not content_text:
         raise ValueError("保存的 HTML 正文为空，未导入。")
-    extracted_md = trafilatura.extract(html_content, output_format="markdown") or content_text
+    extracted_md = extracted_md or content_text
 
     return {
         "title": _normalize_title(title),
         "extracted_md": extracted_md,
         "html_content": html_content,
         "cover_image_url": cover_image_url,
+        "account_name": account_name,
+        "publish_time": publish_time,
     }
 
 

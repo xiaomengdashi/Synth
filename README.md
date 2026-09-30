@@ -55,7 +55,7 @@ npm run dev  # 或 yarn dev / pnpm dev
 1. 打开浏览器访问前端地址（例如：`http://localhost:5173`）。
 2. 进入**控制台**页面（`/admin`）。
 3. 可在管理后台的**模型服务**页面保存 API Key、Base URL 以及模型名称参数（如 `gpt-4o-mini`）。这些参数将保存在后端 SQLite 数据库的 `app_settings` 表中，但当前导入流程不会调用模型。
-4. 在**系统配置 → TikHub 抓取**页面填写 TikHub API Token（必填，见下节）。
+4. 在**系统配置 → TikHub**页面填写 TikHub API Token（必填，见下节）。
 5. 在输入框中粘贴支持的链接（微信公众号、B站、推特、抖音、YouTube 等），点击**开始处理**。
 
 ### 内容抓取：统一走 TikHub 第三方接口
@@ -70,7 +70,7 @@ X/Twitter（推文与长文）、微信公众号文章、Bilibili 视频的抓�
 
 抖音、YouTube 等其他视频链接仍通过 yt-dlp 解析；CSDN、cnblogs 及普通网页仍走内置网页抓取。
 
-配置方式：进入管理后台 `/admin/settings/tikhub`，保存 API Token（先验证有效性，存储在后端 SQLite `app_settings` 表；`data/config.json` 若存在会在启动时自动迁移）。这是唯一的配置入口——服务器部署后也在此页面设置一次即可。",
+配置方式：进入管理后台 `/admin/settings?tab=tikhub`，保存 API Token（先验证有效性，存储在后端 SQLite `app_settings` 表）。服务器部署后也在此页面设置一次即可。
 
 
 Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充值。TikHub 按次计费：X 推文 1 次/条，微信文章 1 次/篇，B站视频约 3 次/条（分P + aid 转换 + 字幕）。余额不足（402）时任务会失败并提示充值，微信文章仍可通过首页的 **导入网页 HTML** 手动导入（需包含 `#js_content` 节点）。
@@ -97,7 +97,7 @@ Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充�
 
 ### TikHub 账户与多平台查询
 
-- `/admin/settings/tikhub`：验证并保存/更换 Key、移除页面保存的 Key、查看余额/免费额度、Key 权限与有效期、今日用量及接口调用明细。Key 仅保存在服务端 SQLite，不再支持环境变量，也不会返回给前端。
+- `/admin/settings?tab=tikhub`：验证并保存/更换 Key、移除页面保存的 Key、查看余额/免费额度、Key 权限与有效期、今日用量及接口调用明细。Key 仅保存在服务端 SQLite，不再支持环境变量，也不会返回给前端。
 - `/admin/tikhub/query`：23 个分类、996 个查询接口，支持平台筛选、接口搜索、分页、动态参数表单、字段/JSON 结果视图、复制和 JSON 导出。包含 TikHub 账户与计费，以及抖音、TikTok、小红书、B站、X、微信、YouTube、Instagram、快手、微博、知乎等内容查询。
 - “账户与计费”分类包含用户信息、每日用量、端点信息、所有端点信息、阶梯折扣与价格估算。上游每日用量接口没有日期参数，页面显示 TikHub 返回的统计日期，不提供虚构的历史日期筛选。
 - Key 只由后端保存和使用。通用配置接口只返回 `tikhubConfigured`，不会返回 TikHub Key；旧版浏览器提交的 `tikhubApiKey` 不再覆盖后端 Key。首页导入、分享导入与 X 预览也使用后端配置。

@@ -15,7 +15,13 @@ export async function requestJson<T>(url: string, init?: RequestInit): Promise<T
 }
 
 export function fieldSchema(schema: ParameterSchema): ParameterSchema {
-  return schema.anyOf?.find(item => item.type !== 'null') || schema;
+  const choices = schema.anyOf?.filter(item => item.type !== 'null') || [];
+  if (choices.length <= 1) return choices[0] || schema;
+  // Preserve identifiers and documented string filters when the API accepts
+  // either a number or a string. This also avoids JavaScript precision loss.
+  return choices.find(item => item.type === 'string')
+    || choices.find(item => item.type === 'number')
+    || choices[0];
 }
 
 export function schemaType(schema: ParameterSchema): string {

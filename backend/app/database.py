@@ -27,6 +27,16 @@ async def init_db():
     from . import models  # noqa: F401 — 触发模型注册
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all 不会给已有表加列，轻量迁移补充新列
+        from sqlalchemy import text
+
+        for column in ("account_name", "publish_time"):
+            try:
+                await conn.execute(
+                    text(f"ALTER TABLE articles ADD COLUMN {column} VARCHAR(255)")
+                )
+            except Exception:
+                pass  # 列已存在
 
 
 async def get_db():

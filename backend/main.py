@@ -2,14 +2,13 @@
 SynthAI Backend — FastAPI Application Entry Point
 """
 import os
-import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import articles, tasks, config, tikhub
+from app.routers import articles, tasks, config, tikhub, models
 from app.config import settings
 
 
@@ -17,8 +16,6 @@ from app.config import settings
 async def lifespan(app: FastAPI):
     # 启动时初始化数据库
     await init_db()
-    # 旧 data/config.json 自动迁移到 SQLite（迁移后改名 .migrated 留存）
-    await config.migrate_legacy_config()
     # 确保媒体目录存在
     os.makedirs(settings.MEDIA_DIR, exist_ok=True)
     os.makedirs(settings.ARTICLES_DIR, exist_ok=True)
@@ -45,11 +42,21 @@ app.add_middleware(
 os.makedirs(settings.MEDIA_DIR, exist_ok=True)
 app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
 
+# Public local X fonts must also load inside an opaque sandboxed article frame.
+@app.middleware("http")
+async def public_article_assets(request, call_next):
+    response = await call_next(request)
+    if request.url.path.startswith("/media/x/"):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 # 路由
 app.include_router(articles.router, prefix="/api/v1/articles", tags=["articles"])
 app.include_router(tasks.router, prefix="/api/v1/tasks", tags=["tasks"])
 app.include_router(config.router, prefix="/api/v1/config", tags=["config"])
 app.include_router(tikhub.router, prefix="/api/v1/tikhub", tags=["tikhub"])
+app.include_router(models.router, prefix="/api/v1/models", tags=["models"])
 
 
 @app.get("/")

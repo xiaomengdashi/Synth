@@ -75,6 +75,8 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
         "original_url": data.original_url.strip(),
         "source_type": detect_source_type(data.original_url),
         "cover_image_url": parsed["cover_image_url"],
+        "account_name": parsed.get("account_name") or "",
+        "publish_time": parsed.get("publish_time") or "",
         "created_at": created_at.isoformat(),
     }
 
@@ -87,6 +89,8 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
             original_url=data.original_url.strip(),
             source_type=detect_source_type(data.original_url),
             cover_image_url=parsed["cover_image_url"],
+            account_name=parsed.get("account_name") or "",
+            publish_time=parsed.get("publish_time") or "",
             created_at=created_at,
         )
     )

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { ArrowUpRight, ArrowRight, FileText, Trash2 } from 'lucide-react';
-import { Link, useNavigate } from 'react-router-dom';
+import { ArrowUpRight, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import { formatDistanceToNow } from '../../../utils/formatDate';
@@ -15,33 +15,45 @@ function getSourceLabel(sourceType: Article['source_type']) {
 
 export default function AdminArticles() {
   const { articles, fetchArticles, deleteArticle } = useAppStore();
-  const navigate = useNavigate();
   useEffect(() => { void fetchArticles(); }, [fetchArticles]);
 
   return (
     <div>
-      <AdminPageHeader eyebrow="Library / 02" title="文章管理" description="管理前台文章库中的内容，查看、删除或进入独立阅读页。" actions={<Link to="/articles" className="secondary-button">打开前台文章库 <ArrowUpRight size={14} /></Link>} />
-      <section className="admin-section">
-        <div className="section-heading"><div><h2>全部文章</h2><p>共 {articles.length} 篇内容。</p></div></div>
-        <div className="task-list">
-          {articles.length === 0 ? <div className="empty-state">还没有保存文章。</div> : articles.map((article) => (
-            <div
-              className="task-row article-management-row"
-              key={article.id}
-              role="link"
-              tabIndex={0}
-              onClick={() => navigate(`/article/${article.id}`)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  navigate(`/article/${article.id}`);
-                }
-              }}
-            >
-              <div className="task-main"><span className="task-icon"><FileText size={14} /></span><div className="task-copy"><strong>{article.title}</strong><span>{getSourceLabel(article.source_type)} · {formatDistanceToNow(new Date(article.created_at))}前</span></div></div>
-              <div className="task-actions"><ArrowRight className="article-row-arrow" size={15} /><button className="tiny-button" type="button" onClick={(event) => { event.stopPropagation(); void deleteArticle(article.id); }} aria-label="删除文章"><Trash2 size={12} /></button></div>
-            </div>
-          ))}
+      <AdminPageHeader
+        summary={<span>共 {articles.length} 篇内容</span>}
+        actions={<Link to="/articles" className="ac-btn secondary sm">打开前台文章库 <ArrowUpRight size={13} /></Link>}
+      />
+      <section className="ac-card">
+        <div className="ac-table-wrap">
+          <table className="ac-table">
+            <thead>
+              <tr>
+                <th>文章</th>
+                <th>来源</th>
+                <th>保存时间</th>
+                <th style={{ textAlign: 'right' }}>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {articles.length === 0 ? (
+                <tr><td colSpan={4}><div className="ac-empty">还没有保存文章。</div></td></tr>
+              ) : articles.map((article) => (
+                <tr key={article.id}>
+                  <td>
+                    <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
+                    <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
+                  </td>
+                  <td>{getSourceLabel(article.source_type)}</td>
+                  <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}前</td>
+                  <td>
+                    <div className="ac-row-actions">
+                      <button className="ac-btn danger-ghost sm" type="button" onClick={() => void deleteArticle(article.id)} aria-label={`删除「${article.title}」`}><Trash2 size={13} />删除</button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
