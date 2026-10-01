@@ -47,7 +47,7 @@ export default function Articles() {
         article.summary,
         article.original_url,
         article.source_type,
-      ].some((value) => value.toLocaleLowerCase().includes(normalizedQuery)));
+      ].some((value) => (value || '').toLocaleLowerCase().includes(normalizedQuery)));
     }
     const factor = sort === 'new' ? -1 : 1;
     return [...list].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
