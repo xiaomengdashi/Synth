@@ -78,6 +78,20 @@ async def get_articles(
 ):
     return await _list_article_summaries(db, limit, offset, category)
 
+@router.get("/stats")
+async def get_articles_stats(db: AsyncSession = Depends(get_db)):
+    """来源聚合计数(供筛选签精确计数,与渐进加载解耦)。"""
+    rows = (await db.execute(
+        select(Article.source_type, func.count()).group_by(Article.source_type)
+    )).all()
+    sources = {"wechat": 0, "x": 0, "bilibili": 0, "other": 0}
+    total = 0
+    for source_type, count in rows:
+        key = source_type if source_type in sources else "other"
+        sources[key] += count
+        total += count
+    return {"sources": sources, "total": total}
+
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
     try:

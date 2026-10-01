@@ -4,6 +4,7 @@ import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
+import ArticleListFooter from '../../articles/components/ArticleListFooter';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatDistanceToNow } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
@@ -16,12 +17,19 @@ function getSourceLabel(sourceType: Article['source_type']) {
 }
 
 export default function AdminArticles() {
-  const { articles, fetchArticles, deleteArticle, updateArticle, pushToast } = useAppStore();
+  const { articles, articlesTotal, articlesLoading, fetchArticles, deleteArticle, updateArticle, pushToast } = useAppStore();
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [src, setSrc] = useState('all');
   useEffect(() => { void fetchArticles(); }, [fetchArticles]);
+
+  const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
+
+  // 筛选/搜索是纯前端过滤,必须等全量文章到位才不漏结果;浏览态走渐进加载
+  useEffect(() => {
+    if (filtering && !articlesLoading) void fetchArticles({ reset: true, all: true });
+  }, [filtering, articlesLoading, fetchArticles]);
 
   useEffect(() => {
     fetch('/api/v1/categories')
@@ -67,12 +75,10 @@ export default function AdminArticles() {
     return list;
   }, [articles, query, cat, src]);
 
-  const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
-
   return (
     <div>
       <AdminPageHeader
-        summary={<span>{filtering ? `共 ${articles.length} 篇 · 筛选出 ${filtered.length} 篇` : `共 ${articles.length} 篇内容`}</span>}
+        summary={<span>{filtering ? `共 ${articlesTotal || articles.length} 篇 · 筛选出 ${filtered.length} 篇` : `共 ${articlesTotal || articles.length} 篇内容`}</span>}
         actions={<>
           <label className="ac-search" style={{ width: 220 }} aria-label="搜索文章">
             <Search size={14} />
@@ -109,7 +115,7 @@ export default function AdminArticles() {
             </thead>
             <tbody>
               {articles.length === 0 ? (
-                <tr><td colSpan={5}><div className="ac-empty">还没有保存文章。</div></td></tr>
+                <tr><td colSpan={5}><div className="ac-empty">{articlesLoading ? '正在加载文章…' : '还没有保存文章。'}</div></td></tr>
               ) : filtered.length === 0 ? (
                 <tr><td colSpan={5}><div className="ac-empty">没有符合筛选条件的文章，换个条件试试。</div></td></tr>
               ) : filtered.map((article) => (
@@ -141,6 +147,7 @@ export default function AdminArticles() {
             </tbody>
           </table>
         </div>
+        {!filtering && articles.length > 0 && <ArticleListFooter emptyCount={articles.length} />}
       </section>
     </div>
   );

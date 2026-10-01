@@ -27,6 +27,7 @@ interface AppState {
   fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string }) => Promise<void>;
   articlesHasMore: boolean;
   articlesLoading: boolean;
+  articlesTotal: number;
   fetchTasks: () => Promise<void>;
   deleteArticle: (articleId: string) => Promise<boolean>;
   updateArticle: (articleId: string, patch: Partial<Article>) => void;
@@ -54,6 +55,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   articles: [],
   articlesHasMore: true,
   articlesLoading: false,
+  articlesTotal: 0,
   tasks: [],
   toasts: [],
   darkMode: initialDarkMode,
@@ -76,10 +78,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return { darkMode: newDarkMode };
   }),
   addArticle: (article) => set((state) => {
+    const isNew = !state.articles.some((item) => item.id === article.id);
     const nextArticles = state.articles.filter((item) => item.id !== article.id);
     nextArticles.unshift(article);
     nextArticles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return { articles: nextArticles };
+    return { articles: nextArticles, articlesTotal: isNew ? state.articlesTotal + 1 : state.articlesTotal };
   }),
   addTask: (task) => set((state) => ({ tasks: [task, ...state.tasks] })),
   updateTask: (id, updates) => set((state) => ({
@@ -150,6 +153,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         return {
           articles: merged,
           articlesHasMore: offset + page.length < data.total,
+          articlesTotal: data.total,
           articlesLoading: false,
         };
       });
@@ -177,6 +181,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (res.ok) {
         set((state) => ({
           articles: state.articles.filter((a) => a.id !== articleId),
+          articlesTotal: Math.max(0, state.articlesTotal - 1),
           tasks: state.tasks.filter((t) => t.article_id !== articleId),
           toasts: [...state.toasts, {
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,

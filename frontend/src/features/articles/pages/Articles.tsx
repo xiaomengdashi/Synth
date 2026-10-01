@@ -20,6 +20,15 @@ const FILTERS: { value: SourceFilter | 'all'; label: string; color?: string }[] 
 export default function Articles() {
   const articles = useAppStore((state) => state.articles);
   const fetchArticles = useAppStore((state) => state.fetchArticles);
+  const articlesTotal = useAppStore((state) => state.articlesTotal);
+  const [sourceCounts, setSourceCounts] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/v1/articles/stats')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setSourceCounts(data?.sources ?? null))
+      .catch(() => setSourceCounts(null));
+  }, [articles.length]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>('list');
   const [sort, setSort] = useState<SortOrder>('new');
@@ -28,14 +37,6 @@ export default function Articles() {
   const source = searchParams.get('source') || 'all';
 
   useEffect(() => { void fetchArticles({ reset: true, all: Boolean(source !== 'all' || query) }); }, [fetchArticles, source, query]);
-
-  const counts = useMemo(() => {
-    const base = { wechat: 0, x: 0, bilibili: 0 } as Record<SourceFilter, number>;
-    for (const article of articles) {
-      if (article.source_type in base) base[article.source_type as SourceFilter] += 1;
-    }
-    return base;
-  }, [articles]);
 
   const filteredArticles = useMemo(() => {
     let list = articles;
@@ -61,6 +62,7 @@ export default function Articles() {
   };
 
   const activeFilterLabel = source === 'all' ? null : sourceLabel(source as Article['source_type']);
+  const filtering = Boolean(query) || source !== 'all';
 
   return (
     <div>
@@ -69,7 +71,7 @@ export default function Articles() {
           <h1>文章库</h1>
           <p>{query ? `正在筛选包含“${query}”的文章。` : '按时间整理的全部收藏内容。'}</p>
         </div>
-        <span className="section-count">共 {filteredArticles.length} 篇</span>
+        <span className="section-count">{filtering ? `筛选出 ${filteredArticles.length} 篇` : `共 ${articlesTotal} 篇`}</span>
       </section>
 
       <section className="filter-bar">
@@ -85,7 +87,9 @@ export default function Articles() {
             >
               {filter.color ? <i /> : null}
               {filter.label}
-              <em>{filter.value === 'all' ? articles.length : counts[filter.value as SourceFilter]}</em>
+              <em>{filter.value === 'all'
+                ? (sourceCounts ? sourceCounts.wechat + sourceCounts.x + sourceCounts.bilibili + sourceCounts.other : articlesTotal)
+                : (sourceCounts ? sourceCounts[filter.value as keyof typeof sourceCounts] : 0)}</em>
             </button>
           ))}
         </div>

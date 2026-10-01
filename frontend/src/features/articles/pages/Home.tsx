@@ -284,8 +284,7 @@ export default function Home() {
         <div className="section-heading">
           <div><h2>最近收藏</h2><p>最新整理的内容会出现在最前面。</p></div>
           <div className="section-heading-side">
-            <span className="section-count">共 {articles.length} 篇</span>
-            {articles.length > 8 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
+            {articles.length > 4 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
           </div>
         </div>
         <ArticleList articles={articles} />

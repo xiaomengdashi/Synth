@@ -408,9 +408,11 @@
   .import-paste-button { order: 6; }
   .collect-bar .primary-button { order: 7; flex: 1; }
   .article-grid { grid-template-columns: 1fr; }
-  .article-row { grid-template-columns: 76px minmax(0, 1fr); gap: 12px; padding: 13px 14px 13px 21px; }
-  .article-row-cover { width: 76px; height: 52px; }
-  .article-row-side { grid-column: 2; display: flex; align-items: center; justify-content: flex-start; gap: 12px; margin-top: 2px; }
+  .article-row { grid-template-columns: 64px minmax(0, 1fr); gap: 11px; padding: 12px 14px 12px 20px; }
+  .article-row-cover { width: 64px; height: 48px; }
+  .article-row-side { grid-column: 2; display: flex; align-items: center; gap: 10px; margin-top: 3px; }
+  .article-row-side .meta-source { font-size: 11px; }
+  .article-row-side time { font-size: 10px; }
   .reader-top { padding-top: 22px; }
   .reader-body { padding: 22px 18px 36px; }
   .x-article-header { padding: 22px 20px 0; }
