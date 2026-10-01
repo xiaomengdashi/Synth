@@ -6,6 +6,7 @@ import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
 import ArticleList from '../components/ArticleList';
+import ArticleListFooter from '../components/ArticleListFooter';
 
 type Source = 'wechat' | 'x' | 'bilibili';
 type TaskStatusResponse = {
@@ -287,7 +288,8 @@ export default function Home() {
             {articles.length > 8 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
           </div>
         </div>
-        <ArticleList articles={articles.slice(0, 8)} />
+        <ArticleList articles={articles} />
+        <ArticleListFooter emptyCount={articles.length} />
       </section>
     </div>
   );

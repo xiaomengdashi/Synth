@@ -24,7 +24,9 @@ interface AppState {
   removeToast: (toastId: string) => void;
   setConfig: (config: AppConfig) => Promise<boolean>;
   fetchConfig: () => Promise<void>;
-  fetchArticles: () => Promise<void>;
+  fetchArticles: (options?: { reset?: boolean; all?: boolean }) => Promise<void>;
+  articlesHasMore: boolean;
+  articlesLoading: boolean;
   fetchTasks: () => Promise<void>;
   deleteArticle: (articleId: string) => Promise<boolean>;
   updateArticle: (articleId: string, patch: Partial<Article>) => void;
@@ -48,8 +50,10 @@ if (initialDarkMode) {
   document.documentElement.classList.remove('dark');
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   articles: [],
+  articlesHasMore: true,
+  articlesLoading: false,
   tasks: [],
   toasts: [],
   darkMode: initialDarkMode,
@@ -119,17 +123,36 @@ export const useAppStore = create<AppState>((set) => ({
       console.error('Failed to fetch config', e);
     }
   },
-  fetchArticles: async () => {
+  // 渐进加载:每次拉 5 篇元信息,滚动到底继续取下一页
+  fetchArticles: async (options) => {
+    const reset = options?.reset ?? false;
+    const fetchAll = options?.all ?? false;
+    const state = get();
+    if (state.articlesLoading) return;
+    if (!reset && !state.articlesHasMore) return;
+
+    const pageSize = fetchAll ? 50 : 5;
+    const offset = reset ? 0 : state.articles.length;
+    set({ articlesLoading: true });
     try {
-      const res = await fetch('/api/v1/articles');
+      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}`);
       if (!res.ok) throw new Error(`Articles API returned ${res.status}`);
       const data = await res.json();
       if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');
-      const nextArticles = [...data.data];
-      nextArticles.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-      set(() => ({ articles: nextArticles }));
+      const page = data.data as Article[];
+      set((current) => {
+        const merged = reset
+          ? page
+          : [...current.articles, ...page.filter((item) => !current.articles.some((a) => a.id === item.id))];
+        return {
+          articles: merged,
+          articlesHasMore: offset + page.length < data.total,
+          articlesLoading: false,
+        };
+      });
     } catch (e) {
       console.error('Failed to fetch articles', e);
+      set({ articlesLoading: false });
     }
   },
   fetchTasks: async () => {

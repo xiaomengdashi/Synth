@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import func, select
 from fastapi.encoders import jsonable_encoder
 from app.database import get_db
 from app.models import Article
@@ -24,30 +24,48 @@ class HtmlImportPayload(BaseModel):
     html: str = Field(min_length=1)
     title: str | None = None
 
-async def _list_article_summaries(db: AsyncSession) -> dict:
-    """列表只查元信息列:正文 content_md 仅在详情接口返回,避免数 MB 级列表响应。"""
+async def _list_article_summaries(db: AsyncSession, limit: int, offset: int) -> dict:
+    """列表分页返回元信息列:正文 content_md 仅在详情接口返回。
+
+    limit 上限 50;按 created_at 倒序,offset 渐进翻页。
+    """
+    limit = max(1, min(limit, 50))
+    offset = max(0, offset)
     result = await db.execute(
         select(
             Article.id, Article.title, Article.summary, Article.source_type,
             Article.cover_image_url, Article.account_name, Article.publish_time,
             Article.category, Article.created_at, Article.updated_at,
-        ).order_by(Article.created_at.desc()).limit(50)
+        )
+        .order_by(Article.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     rows = [dict(row) for row in result.mappings().all()]
 
-    if not rows and ARTICLES_DB:
+    if not rows and offset == 0 and ARTICLES_DB:
         return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
 
-    return {"total": len(rows), "data": rows}
+    total_result = await db.execute(select(func.count()).select_from(Article))
+    total = total_result.scalar_one()
+    return {"total": total, "data": rows}
 
 
 @router.get("/")
-async def get_articles_slash(db: AsyncSession = Depends(get_db)):
-    return await _list_article_summaries(db)
+async def get_articles_slash(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=5, ge=1, le=50, description="每页数量"),
+    offset: int = Query(default=0, ge=0, description="偏移量"),
+):
+    return await _list_article_summaries(db, limit, offset)
 
 @router.get("")
-async def get_articles(db: AsyncSession = Depends(get_db)):
-    return await _list_article_summaries(db)
+async def get_articles(
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=5, ge=1, le=50, description="每页数量"),
+    offset: int = Query(default=0, ge=0, description="偏移量"),
+):
+    return await _list_article_summaries(db, limit, offset)
 
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):

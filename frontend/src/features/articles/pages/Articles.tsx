@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList, { sourceLabel } from '../components/ArticleList';
+import ArticleListFooter from '../components/ArticleListFooter';
 import type { Article } from '../types';
 import { useAppStore } from '../../app/store/useAppStore';
 
@@ -26,7 +27,7 @@ export default function Articles() {
   const query = searchParams.get('q')?.trim() || '';
   const source = searchParams.get('source') || 'all';
 
-  useEffect(() => { void fetchArticles(); }, [fetchArticles]);
+  useEffect(() => { void fetchArticles({ reset: true, all: Boolean(source !== 'all' || query) }); }, [fetchArticles, source, query]);
 
   const counts = useMemo(() => {
     const base = { wechat: 0, x: 0, bilibili: 0 } as Record<SourceFilter, number>;
@@ -108,6 +109,7 @@ export default function Articles() {
             ? `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}的文章，换个筛选试试。`
             : '还没有文章。粘贴一条链接，开始建立你的第一篇知识卡片。'}
         />
+        {!query && source === 'all' ? <ArticleListFooter emptyCount={filteredArticles.length} /> : null}
       </section>
     </div>
   );

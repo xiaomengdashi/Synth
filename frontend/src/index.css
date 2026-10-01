@@ -867,3 +867,6 @@
 .admin-gate-submit:hover:not(:disabled) { background: var(--accent-strong); }
 .admin-gate-submit:disabled { cursor: wait; opacity: .6; }
 .admin-gate .animate-spin { color: var(--muted); }
+
+/* ---------- 列表渐进加载 ---------- */
+.list-loading-note, .list-end-note { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 22px 0 4px; color: var(--faint); font-size: 12px; }

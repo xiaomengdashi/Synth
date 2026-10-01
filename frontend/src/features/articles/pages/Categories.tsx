@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList from '../components/ArticleList';
+import ArticleListFooter from '../components/ArticleListFooter';
 import { useAppStore } from '../../app/store/useAppStore';
 
 /** 分类由后台维护;前台按分类浏览收藏的文章。 */
@@ -12,7 +13,7 @@ export default function Categories() {
 
   const active = searchParams.get('cat') || 'all';
 
-  useEffect(() => { void fetchArticles(); }, [fetchArticles]);
+  useEffect(() => { void fetchArticles({ reset: true, all: active !== 'all' }); }, [fetchArticles, active]);
 
   useEffect(() => {
     fetch('/api/v1/categories')
@@ -88,6 +89,7 @@ export default function Categories() {
             ? `「${activeLabel}」下还没有文章，到后台文章管理里为文章选择分类。`
             : '还没有文章。粘贴一条链接，开始建立你的第一篇知识卡片。'}
         />
+        {!activeLabel ? <ArticleListFooter emptyCount={filtered.length} /> : null}
       </section>
     </div>
   );
