@@ -30,21 +30,24 @@ export default function AdminArticles() {
       .catch(() => setCategories([]));
   }, []);
 
-  const changeCategory = async (articleId: string, title: string, value: string) => {
-    try {
-      const res = await adminFetch(`/api/v1/articles/${articleId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category: value }),
+  // 乐观更新:先改界面再存后端,失败自动回滚
+  const changeCategory = (articleId: string, title: string, value: string) => {
+    const previous = articles.find((a) => a.id === articleId)?.category ?? null;
+    updateArticle(articleId, { category: value });
+    const rollback = () => updateArticle(articleId, { category: previous });
+    adminFetch(`/api/v1/articles/${articleId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category: value }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('patch failed');
+        pushToast({ title: `「${title.slice(0, 14)}${title.length > 14 ? '…' : ''}」分类已保存`, tone: 'success' });
+      })
+      .catch(() => {
+        rollback();
+        pushToast({ title: '分类保存失败，已恢复原分类', tone: 'error' });
       });
-      if (!res.ok) throw new Error('patch failed');
-      // 用 PATCH 返回的文章本地更新,避免重拉整表(线上全量响应数 MB,会明显卡顿)
-      const updated = await res.json();
-      updateArticle(articleId, { category: updated.category ?? null });
-      pushToast({ title: `「${title.slice(0, 14)}${title.length > 14 ? '…' : ''}」分类已保存`, tone: 'success' });
-    } catch {
-      pushToast({ title: '分类保存失败，请稍后重试', tone: 'error' });
-    }
   };
 
   const filtered = useMemo(() => {
@@ -120,7 +123,7 @@ export default function AdminArticles() {
                     <select
                       className="ac-select"
                       value={article.category || ''}
-                      onChange={(event) => void changeCategory(article.id, article.title, event.target.value)}
+                      onChange={(event) => changeCategory(article.id, article.title, event.target.value)}
                       aria-label={`选择「${article.title}」的分类`}
                     >
                       <option value="">未分类</option>
