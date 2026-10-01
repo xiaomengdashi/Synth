@@ -141,7 +141,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const offset = reset ? 0 : state.articles.length;
     set({ articlesLoading: true });
     try {
-      const catParam = category === '__none__' ? '__none__' : category;
+      const catParam = category === '__none' ? '__none__' : category;
       const catQuery = catParam ? `&category=${encodeURIComponent(catParam)}` : '';
       const sourceQuery = source ? `&source=${encodeURIComponent(source)}` : '';
       const qQuery = keyword ? `&q=${encodeURIComponent(keyword)}` : '';

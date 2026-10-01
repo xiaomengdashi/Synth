@@ -33,7 +33,7 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
     filters = []
-    if category == '__none__':
+    if category in ('__none__', '__none'):
         filters.append((Article.category.is_(None)) | (Article.category == ''))
     elif category:
         filters.append(func.trim(Article.category) == category)
