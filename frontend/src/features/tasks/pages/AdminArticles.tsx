@@ -22,7 +22,7 @@ export default function AdminArticles() {
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [src, setSrc] = useState('all');
-  useEffect(() => { void fetchArticles(); }, [fetchArticles]);
+  useEffect(() => { void fetchArticles({ reset: true, all: true }); }, [fetchArticles]);
 
   const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
 

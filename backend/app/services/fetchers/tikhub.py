@@ -10,6 +10,7 @@ Token 未配置或请求失败时抛出异常，由调用方处理。
 
 from __future__ import annotations
 
+import html
 import re
 import math
 from datetime import datetime, timezone
@@ -23,6 +24,7 @@ from app.services.fetchers.twitter_article_rich import _deep_get, _find_image_ur
 TIKHUB_API_BASE = "https://api.tikhub.io"
 TWEET_DETAIL_PATH = "/api/v1/twitter/web/fetch_tweet_detail"
 WECHAT_ARTICLE_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail_h5"
+WECHAT_ARTICLE_DETAIL_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail"
 BILIBILI_PARTS_PATH = "/api/v1/bilibili/web/fetch_video_parts"
 BILIBILI_BV_TO_AID_PATH = "/api/v1/bilibili/web/bv_to_aid"
 BILIBILI_PLAYER_PATH = "/api/v1/bilibili/web/fetch_one_video_v2"
@@ -448,24 +450,41 @@ def fetch_tikhub_tweet(url_or_tweet_id: str, config: Any = None) -> dict:
 # ---------------------------------------------------------------------------
 
 def fetch_wechat_article(url: str, config: Any = None) -> dict:
-    """通过 TikHub H5 接口获取公众号文章（绕过微信安全验证）。
+    """通过 TikHub 接口获取公众号文章（绕过微信安全验证）。
+
+    优先 H5 接口（普通图文返回官方正文 HTML）。H5 端正文为空时（新版沉浸式
+    页面 / 图片消息等）回落非 H5 接口：图片消息（item_show_type=8）正文是
+    长图，按微信原生输出形态构造 js_content HTML（摘要段落 +
+    data-src/data-w/data-ratio 图片），由前端复刻视图按官方 CSS 渲染。
 
     返回 {title, author, account_name, digest, html_content, content_text,
-          cover_image_url, publish_time, original_url}
+          cover_image_url, publish_time, original_url, content_type}
     """
     token = resolve_tikhub_token(config)
+    article_url = str(url or "").strip()
     data = _tikhub_request(
         WECHAT_ARTICLE_PATH,
         token,
-        json_body={"url": str(url or "").strip(), "raw": False},
+        json_body={"url": article_url, "raw": False},
     )
     content = data.get("content") if isinstance(data.get("content"), dict) else {}
+    content_type = "rich_text"
+    if not str(content.get("content_noencode") or "").strip():
+        fallback_content, fallback_url = _fetch_wechat_article_fallback(article_url, token)
+        if fallback_content:
+            content = fallback_content
+            if fallback_url:
+                data["url"] = fallback_url
     if not content.get("title") and not content.get("content_noencode"):
         raise TikHubError("TikHub 未返回公众号文章内容（文章可能已被删除）。")
 
-    html_content = str(content.get("content_noencode") or "")
-    html_content = re.sub(r"data-src\s*=", "src=", html_content, flags=re.IGNORECASE)
-    html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
+    if str(content.get("content_noencode") or "").strip():
+        html_content = str(content.get("content_noencode"))
+        html_content = re.sub(r"data-src\s*=", "src=", html_content, flags=re.IGNORECASE)
+        html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
+    else:
+        html_content = _build_wechat_image_message_html(content)
+        content_type = "image"
 
     return {
         "title": str(content.get("title") or "").strip() or "未知文章标题",
@@ -473,11 +492,69 @@ def fetch_wechat_article(url: str, config: Any = None) -> dict:
         "account_name": str(content.get("nick_name") or "").strip(),
         "digest": str(content.get("desc") or "").strip(),
         "html_content": html_content,
-        "content_text": str(content.get("content_text") or ""),
+        "content_text": str(content.get("content_text") or content.get("desc") or ""),
         "cover_image_url": str(content.get("cdn_url") or "").strip(),
         "publish_time": str(content.get("create_time") or "").strip(),
         "original_url": str(data.get("url") or url or "").strip(),
+        "content_type": content_type,
     }
+
+
+def _fetch_wechat_article_fallback(url: str, token: str) -> tuple[dict, str]:
+    """H5 接口正文为空时回落非 H5 接口。返回 (content, 最终文章链接)。"""
+    try:
+        data = _tikhub_request(
+            WECHAT_ARTICLE_DETAIL_PATH,
+            token,
+            json_body={"url": url, "raw": False},
+        )
+    except TikHubError:
+        return {}, ""
+    content = data.get("content") if isinstance(data.get("content"), dict) else {}
+    final_url = url
+    link = str(content.get("link") or "").strip()
+    if link:
+        # TikHub 返回的 link 带 HTML 转义（&amp;），还原为可直接访问的长链
+        final_url = html.unescape(link)
+    return content, final_url
+
+
+def _build_wechat_image_message_html(content: dict) -> str:
+    """按微信图片消息的原生输出形态构造正文 HTML。
+
+    微信对图片消息（item_show_type=8）输出的正文同样是 #js_content 容器：
+    摘要文字为 <p> 段落，图片为 <img data-src data-w data-ratio>（高/宽比），
+    与普通图文共用了前端复刻视图的懒加载转正和定宽逻辑。
+    """
+    desc = str(content.get("desc") or content.get("content_text") or "")
+    paragraphs = "".join(
+        f"<p>{html.escape(part.strip())}</p>"
+        for part in desc.replace("\\x0a", "\n").split("\n")
+        if part.strip()
+    )
+    images = []
+    for pic in content.get("picture_page_info_list") or []:
+        if not isinstance(pic, dict):
+            continue
+        img_url = html.unescape(str(pic.get("cdn_url") or "")).strip()
+        if not img_url:
+            continue
+        attrs = f'data-src="{img_url}"'
+        try:
+            width = float(pic.get("width") or 0)
+            height = float(pic.get("height") or 0)
+        except (TypeError, ValueError):
+            width = height = 0
+        if width > 0:
+            attrs += f' data-w="{int(width)}"'
+            if height > 0:
+                attrs += f' data-ratio="{height / width:.6f}"'
+        images.append(f'<img class="rich_pages wxw-img" {attrs}>')
+    body = f"{paragraphs}{''.join(images)}"
+    return (
+        '<div class="rich_media_content js_underline_content defaultNoSetting" id="js_content">'
+        f"{body}</div>"
+    )
 
 
 # ---------------------------------------------------------------------------

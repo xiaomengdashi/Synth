@@ -40,7 +40,7 @@ function countArticlesByDay(articles: Article[]) {
   return { days, counts };
 }
 
-function ArticleTrendChart({ articles }: { articles: Article[] }) {
+function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; articlesTotal: number }) {
   const { days, counts } = countArticlesByDay(articles);
   const chartWidth = 680;
   const chartHeight = 220;
@@ -58,7 +58,7 @@ function ArticleTrendChart({ articles }: { articles: Article[] }) {
         <span className="ac-card-caption">近 7 天</span>
       </div>
       <div className="ac-card-body">
-        <div className="chart-summary"><strong>{articles.length}</strong><span>篇累计内容</span><TrendingUp size={14} /></div>
+        <div className="chart-summary"><strong>{Math.max(articlesTotal, articles.length)}</strong><span>篇累计内容</span><TrendingUp size={14} /></div>
         <svg className="trend-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="近七天文章生成数量趋势图">
           {[0, 1, 2, 3].map((line) => {
             const y = padding.top + ((chartHeight - padding.top - padding.bottom) / 3) * line;
@@ -77,12 +77,17 @@ function ArticleTrendChart({ articles }: { articles: Article[] }) {
   );
 }
 
-function SourceBreakdown({ articles }: { articles: Article[] }) {
-  const sourceCounts = Object.entries(sourceLabels)
-    .map(([source, label]) => ({ source: source as Article['source_type'], label, count: articles.filter((article) => article.source_type === source).length }))
-    .filter((item) => item.count > 0)
-    .sort((a, b) => b.count - a.count);
-  const total = articles.length || 1;
+function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourceStats: { wechat: number; x: number; bilibili: number; other: number } | null }) {
+  const sourceCounts = (sourceStats
+    ? (Object.entries(sourceLabels) as [string, string][])
+        .map(([source, label]) => ({ source: source as Article['source_type'], label, count: (sourceStats as Record<string, number>)[source] || 0 }))
+        .filter((item) => item.count > 0)
+    : Object.entries(sourceLabels)
+        .map(([source, label]) => ({ source: source as Article['source_type'], label, count: articles.filter((article) => article.source_type === source).length }))
+        .filter((item) => item.count > 0)
+  ).sort((a, b) => b.count - a.count);
+  const statTotal = sourceStats ? sourceStats.wechat + sourceStats.x + sourceStats.bilibili + sourceStats.other : 0;
+  const total = statTotal || articles.length || 1;
 
   return (
     <div className="ac-card">
@@ -126,10 +131,16 @@ function TaskStatusChart({ tasks }: { tasks: Task[] }) {
 
 export default function Admin() {
   const { articles, tasks, fetchArticles, fetchTasks } = useAppStore();
+  const articlesTotal = useAppStore((state) => state.articlesTotal);
+  const [sourceStats, setSourceStats] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
   useEffect(() => {
-    void fetchArticles();
+    void fetchArticles({ reset: true, all: true });
+    fetch('/api/v1/articles/stats')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setSourceStats(data?.sources ?? null))
+      .catch(() => setSourceStats(null));
     void fetchTasks();
     // TikHub 状态属于展示性信息，查询失败时静默降级
     void requestJson<Account>('/api/v1/tikhub/account')
@@ -146,7 +157,7 @@ export default function Admin() {
       <section className="ac-kpis" aria-label="数据概览">
         <div className="ac-kpi">
           <div className="ac-kpi-label"><span className="ac-kpi-icon"><FileText size={14} /></span>文章总数</div>
-          <div className="ac-kpi-value">{articles.length}<small>篇</small></div>
+          <div className="ac-kpi-value">{Math.max(articlesTotal, articles.length)}<small>篇</small></div>
           <div className="ac-kpi-hint">已进入前台文章库</div>
         </div>
         <div className="ac-kpi">
@@ -186,8 +197,8 @@ export default function Admin() {
       </section>
 
       <section className="ac-dash-grid" aria-label="内容数据图表">
-        <ArticleTrendChart articles={articles} />
-        <SourceBreakdown articles={articles} />
+        <ArticleTrendChart articles={articles} articlesTotal={Math.max(articlesTotal, articles.length)} />
+        <SourceBreakdown articles={articles} sourceStats={sourceStats} />
         <div className="ac-card ac-span-2">
           <div className="ac-card-head">
             <h2 className="ac-card-title"><Newspaper size={15} /> 最近文章</h2>

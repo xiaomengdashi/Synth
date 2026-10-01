@@ -6,7 +6,6 @@ import { useAppStore } from '../../app/store/useAppStore';
 export default function ArticleListFooter({ emptyCount, category }: { emptyCount: number; category?: string }) {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const hasMore = useAppStore((state) => state.articlesHasMore);
-  const loading = useAppStore((state) => state.articlesLoading);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
