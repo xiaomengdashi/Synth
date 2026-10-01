@@ -17,6 +17,8 @@ import AdminTikHubQuery from './features/tikhub/AdminTikHubQuery';
 import ShareReceive from './features/sharing/ShareReceive';
 import ShareSetup from './features/sharing/ShareSetup';
 import { useAppStore } from './features/app/store/useAppStore';
+import ErrorBoundary from './components/ErrorBoundary';
+import NotFound from './components/NotFound';
 
 function App() {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
@@ -27,26 +29,30 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Layout />}>
-          <Route index element={<Home />} />
-          <Route path="articles" element={<Articles />} />
-          <Route path="categories" element={<Categories />} />
-          <Route path="article/:id" element={<Article />} />
-          <Route path="share" element={<ShareReceive />} />
-        </Route>
-        <Route path="/admin" element={<AdminLayout />}>
-          <Route index element={<Admin />} />
-          <Route path="tasks" element={<AdminTasks />} />
-          <Route path="articles" element={<AdminArticles />} />
-          <Route path="categories" element={<AdminCategories />} />
-          <Route path="model" element={<AdminModelSettings />} />
-          <Route path="tikhub" element={<AdminTikHubSettings />} />
-          <Route path="share" element={<ShareSetup />} />
-          <Route path="token" element={<AdminTokenSettings />} />
-          <Route path="tikhub/query" element={<AdminTikHubQuery />} />
-        </Route>
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/" element={<Layout />}>
+            <Route index element={<Home />} />
+            <Route path="articles" element={<Articles />} />
+            <Route path="categories" element={<Categories />} />
+            <Route path="article/:id" element={<Article />} />
+            <Route path="share" element={<ShareReceive />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Admin />} />
+            <Route path="tasks" element={<AdminTasks />} />
+            <Route path="articles" element={<AdminArticles />} />
+            <Route path="categories" element={<AdminCategories />} />
+            <Route path="model" element={<AdminModelSettings />} />
+            <Route path="tikhub" element={<AdminTikHubSettings />} />
+            <Route path="share" element={<ShareSetup />} />
+            <Route path="token" element={<AdminTokenSettings />} />
+            <Route path="tikhub/query" element={<AdminTikHubQuery />} />
+            <Route path="*" element={<NotFound />} />
+          </Route>
+        </Routes>
+      </ErrorBoundary>
     </BrowserRouter>
   );
 }

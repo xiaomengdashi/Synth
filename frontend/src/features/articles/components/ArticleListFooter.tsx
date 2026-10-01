@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 
-/** 滚动到底自动续载下一页文章(渐进式,每次 5 篇)。 */
-export default function ArticleListFooter({ emptyCount, category }: { emptyCount: number; category?: string }) {
+/** 滚动到底自动续载下一页文章(渐进式,每次 5 篇);筛选条件原样透传给后端。 */
+export default function ArticleListFooter({ emptyCount, category, source, q }: { emptyCount: number; category?: string; source?: string; q?: string }) {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const hasMore = useAppStore((state) => state.articlesHasMore);
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -12,11 +12,11 @@ export default function ArticleListFooter({ emptyCount, category }: { emptyCount
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) void fetchArticles({ category });
+      if (entries[0].isIntersecting) void fetchArticles({ category, source, q });
     }, { rootMargin: '400px' });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchArticles, emptyCount, category]);
+  }, [fetchArticles, emptyCount, category, source, q]);
 
   if (!hasMore) {
     return emptyCount >= 5 ? (

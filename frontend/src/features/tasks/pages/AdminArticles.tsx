@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import { ArrowUpRight, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import ArticleListFooter from '../../articles/components/ArticleListFooter';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatDistanceToNow } from '../../../utils/formatDate';
@@ -22,14 +23,26 @@ export default function AdminArticles() {
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [src, setSrc] = useState('all');
-  useEffect(() => { void fetchArticles({ reset: true, all: true }); }, [fetchArticles]);
-
+  const [pendingDelete, setPendingDelete] = useState<Article | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
 
-  // 筛选/搜索是纯前端过滤,必须等全量文章到位才不漏结果;浏览态走渐进加载
+  // 筛选/搜索走后端查询参数;参数没变不重取,加载中的变更等本轮结束自动补取(修掉旧的循环重取)
+  const lastKey = useRef('');
   useEffect(() => {
-    if (filtering && !articlesLoading) void fetchArticles({ reset: true, all: true });
-  }, [filtering, articlesLoading, fetchArticles]);
+    if (articlesLoading) return;
+    const keyword = query.trim();
+    const key = `${cat}|${src}|${keyword}`;
+    if (lastKey.current === key) return;
+    lastKey.current = key;
+    void fetchArticles({
+      reset: true,
+      all: true,
+      category: cat === 'all' ? undefined : cat,
+      source: src === 'all' ? undefined : src,
+      q: keyword || undefined,
+    });
+  }, [fetchArticles, cat, src, query, articlesLoading]);
 
   useEffect(() => {
     fetch('/api/v1/categories')
@@ -58,27 +71,10 @@ export default function AdminArticles() {
       });
   };
 
-  const filtered = useMemo(() => {
-    let list = articles;
-    if (cat === '__none') list = list.filter((article) => !(article.category || '').trim());
-    else if (cat !== 'all') list = list.filter((article) => (article.category || '').trim() === cat);
-    if (src !== 'all') {
-      list = list.filter((article) => (src === '__other'
-        ? !['wechat', 'x', 'bilibili'].includes(article.source_type)
-        : article.source_type === src));
-    }
-    const keyword = query.trim().toLowerCase();
-    if (keyword) {
-      list = list.filter((article) => [article.title, article.original_url]
-        .some((value) => (value || '').toLowerCase().includes(keyword)));
-    }
-    return list;
-  }, [articles, query, cat, src]);
-
   return (
     <div>
       <AdminPageHeader
-        summary={<span>{filtering ? `共 ${articlesTotal || articles.length} 篇 · 筛选出 ${filtered.length} 篇` : `共 ${articlesTotal || articles.length} 篇内容`}</span>}
+        summary={<span>{filtering ? `筛选出 ${articlesTotal} 篇` : `共 ${articlesTotal || articles.length} 篇内容`}</span>}
         actions={<>
           <label className="ac-search" style={{ width: 220 }} aria-label="搜索文章">
             <Search size={14} />
@@ -115,10 +111,8 @@ export default function AdminArticles() {
             </thead>
             <tbody>
               {articles.length === 0 ? (
-                <tr><td colSpan={5}><div className="ac-empty">{articlesLoading ? '正在加载文章…' : '还没有保存文章。'}</div></td></tr>
-              ) : filtered.length === 0 ? (
-                <tr><td colSpan={5}><div className="ac-empty">没有符合筛选条件的文章，换个条件试试。</div></td></tr>
-              ) : filtered.map((article) => (
+                <tr><td colSpan={5}><div className="ac-empty">{articlesLoading ? '正在加载文章…' : filtering ? '没有符合筛选条件的文章，换个条件试试。' : '还没有保存文章。'}</div></td></tr>
+              ) : articles.map((article) => (
                 <tr key={article.id}>
                   <td>
                     <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
@@ -136,10 +130,10 @@ export default function AdminArticles() {
                       {categories.map((name) => <option key={name} value={name}>{name}</option>)}
                     </select>
                   </td>
-                  <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}前</td>
+                  <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</td>
                   <td>
                     <div className="ac-row-actions">
-                      <button className="ac-btn danger-ghost sm" type="button" onClick={() => void deleteArticle(article.id)} aria-label={`删除「${article.title}」`}><Trash2 size={13} />删除</button>
+                      <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}><Trash2 size={13} />删除</button>
                     </div>
                   </td>
                 </tr>
@@ -147,8 +141,30 @@ export default function AdminArticles() {
             </tbody>
           </table>
         </div>
-        {!filtering && articles.length > 0 && <ArticleListFooter emptyCount={articles.length} />}
+        {articles.length > 0 && (
+          <ArticleListFooter
+            emptyCount={articles.length}
+            category={cat === 'all' ? undefined : cat}
+            source={src === 'all' ? undefined : src}
+            q={query.trim() || undefined}
+          />
+        )}
       </section>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="删除这篇文章？"
+        description={pendingDelete ? `「${pendingDelete.title}」将被永久删除，不可恢复。` : undefined}
+        busy={deleting}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          setDeleting(true);
+          void deleteArticle(pendingDelete.id).then(() => {
+            setDeleting(false);
+            setPendingDelete(null);
+          });
+        }}
+      />
     </div>
   );
 }

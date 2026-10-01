@@ -67,7 +67,7 @@ export default function ArticleList({
                 </span>
                 <span className="article-row-side">
                   <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
-                  <time>{formatDistanceToNow(new Date(article.created_at))}前</time>
+                  <time>{formatDistanceToNow(new Date(article.created_at))}</time>
                 </span>
               </Link>
             </motion.div>
@@ -98,7 +98,7 @@ export default function ArticleList({
               <Link to={`/article/${article.id}`} style={{ textDecoration: 'none' }}><h3>{article.title}</h3></Link>
               <p>{article.summary}</p>
               <div className="article-meta">
-                <span className="meta-source"><i />{sourceLabel(article.source_type)} · {formatDistanceToNow(new Date(article.created_at))}前</span>
+                <span className="meta-source"><i />{sourceLabel(article.source_type)} · {formatDistanceToNow(new Date(article.created_at))}</span>
                 <span className="read-arrow"><ArrowRight size={13} /></span>
               </div>
             </div>

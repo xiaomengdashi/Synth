@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList from '../components/ArticleList';
 import ArticleListFooter from '../components/ArticleListFooter';
@@ -7,6 +7,7 @@ import { useAppStore } from '../../app/store/useAppStore';
 /** 分类由后台维护;前台按分类浏览收藏的文章。 */
 export default function Categories() {
   const articles = useAppStore((state) => state.articles);
+  const articlesLoading = useAppStore((state) => state.articlesLoading);
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const [searchParams, setSearchParams] = useSearchParams();
   const [names, setNames] = useState<string[]>([]);
@@ -28,7 +29,14 @@ export default function Categories() {
       .catch(() => { setCounts({}); setUncategorized(0); });
   }, [articles.length]);
 
-  useEffect(() => { void fetchArticles({ reset: true, category: active !== 'all' ? active : undefined }); }, [fetchArticles, active]);
+  // 分类切换走后端过滤;参数没变不重取,加载中的变更等本轮结束自动补取(防快速连点显示错分类数据)
+  const lastKey = useRef('');
+  useEffect(() => {
+    if (articlesLoading) return;
+    if (lastKey.current === active) return;
+    lastKey.current = active;
+    void fetchArticles({ reset: true, category: active !== 'all' ? active : undefined });
+  }, [fetchArticles, active, articlesLoading]);
 
   useEffect(() => {
     fetch('/api/v1/categories')

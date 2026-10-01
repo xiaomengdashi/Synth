@@ -218,7 +218,7 @@ export default function Admin() {
                   <tr key={article.id}>
                     <td><Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link></td>
                     <td>{sourceLabels[article.source_type]}</td>
-                    <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}前</td>
+                    <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</td>
                   </tr>
                 ))}
               </tbody>

@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from fastapi.encoders import jsonable_encoder
 from app.database import get_db
 from app.models import Article
@@ -24,22 +24,35 @@ class HtmlImportPayload(BaseModel):
     html: str = Field(min_length=1)
     title: str | None = None
 
-async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, category: str = '') -> dict:
+async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, category: str = '', source: str = '', q: str = '') -> dict:
     """列表分页返回元信息列:正文 content_md 仅在详情接口返回。
 
     limit 上限 50;按 created_at 倒序,offset 渐进翻页。
+    category/source/q 为可选过滤,搜索匹配标题、摘要与原文链接。
     """
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
+    filters = []
+    if category == '__none__':
+        filters.append((Article.category.is_(None)) | (Article.category == ''))
+    elif category:
+        filters.append(func.trim(Article.category) == category)
+    if source:
+        filters.append(Article.source_type == source)
+    if q:
+        keyword = f"%{q.strip()}%"
+        filters.append(or_(
+            Article.title.ilike(keyword),
+            Article.summary.ilike(keyword),
+            Article.original_url.ilike(keyword),
+        ))
     query = select(
         Article.id, Article.title, Article.summary, Article.source_type,
         Article.cover_image_url, Article.account_name, Article.publish_time,
         Article.category, Article.created_at, Article.updated_at,
     )
-    if category == '__none__':
-        query = query.where((Article.category.is_(None)) | (Article.category == ''))
-    elif category:
-        query = query.where(func.trim(Article.category) == category)
+    for condition in filters:
+        query = query.where(condition)
     result = await db.execute(
         query.order_by(Article.created_at.desc())
         .limit(limit)
@@ -47,15 +60,13 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
     )
     rows = [dict(row) for row in result.mappings().all()]
 
-    if not rows and offset == 0 and ARTICLES_DB:
+    # 内存兜底仅在无任何过滤时生效;带过滤条件时必须走 DB 计数,否则搜索会静默漏结果
+    if not rows and offset == 0 and not filters and ARTICLES_DB:
         return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
 
-    if category == '__none__':
-        count_query = select(func.count()).select_from(Article).where((Article.category.is_(None)) | (Article.category == ''))
-    elif category:
-        count_query = select(func.count()).select_from(Article).where(func.trim(Article.category) == category)
-    else:
-        count_query = select(func.count()).select_from(Article)
+    count_query = select(func.count()).select_from(Article)
+    for condition in filters:
+        count_query = count_query.where(condition)
     total = (await db.execute(count_query)).scalar_one()
     return {"total": total, "data": rows}
 
@@ -66,8 +77,10 @@ async def get_articles_slash(
     limit: int = Query(default=5, ge=1, le=50, description="每页数量"),
     offset: int = Query(default=0, ge=0, description="偏移量"),
     category: str = Query(default="", description="按分类过滤,__none__ 为未分类"),
+    source: str = Query(default="", description="按来源过滤:wechat/x/bilibili"),
+    q: str = Query(default="", description="搜索标题、摘要与原文链接"),
 ):
-    return await _list_article_summaries(db, limit, offset, category)
+    return await _list_article_summaries(db, limit, offset, category, source, q)
 
 @router.get("")
 async def get_articles(
@@ -75,8 +88,10 @@ async def get_articles(
     limit: int = Query(default=5, ge=1, le=50, description="每页数量"),
     offset: int = Query(default=0, ge=0, description="偏移量"),
     category: str = Query(default="", description="按分类过滤,__none__ 为未分类"),
+    source: str = Query(default="", description="按来源过滤:wechat/x/bilibili"),
+    q: str = Query(default="", description="搜索标题、摘要与原文链接"),
 ):
-    return await _list_article_summaries(db, limit, offset, category)
+    return await _list_article_summaries(db, limit, offset, category, source, q)
 
 @router.get("/stats")
 async def get_articles_stats(db: AsyncSession = Depends(get_db)):

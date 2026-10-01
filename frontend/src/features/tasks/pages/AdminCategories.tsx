@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Plus, Tags, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import { adminFetch } from '../../../utils/adminAuth';
 
 /** 文章分类管理:维护前台「分类」菜单使用的分类列表。 */
@@ -11,6 +12,8 @@ export default function AdminCategories() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetch('/api/v1/categories')
@@ -50,10 +53,6 @@ export default function AdminCategories() {
     void persist([...names, value]);
   };
 
-  const remove = (name: string) => {
-    void persist(names.filter((item) => item !== name));
-  };
-
   return (
     <div>
       <AdminPageHeader
@@ -88,7 +87,7 @@ export default function AdminCategories() {
               {names.map((name) => (
                 <div key={name} className="category-manage-row">
                   <span>{name}</span>
-                  <button type="button" className="ac-btn danger-ghost sm" onClick={() => remove(name)} disabled={saving}>
+                  <button type="button" className="ac-btn danger-ghost sm" onClick={() => setPendingDelete(name)} disabled={saving}>
                     <Trash2 size={13} />删除
                   </button>
                 </div>
@@ -98,6 +97,22 @@ export default function AdminCategories() {
           <p className="ac-help">删除分类不会删除文章；已选该分类的文章会自动变为「未分类」。</p>
         </div>
       </section>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="删除这个分类？"
+        description={pendingDelete ? `已选「${pendingDelete}」分类的文章会自动变为「未分类」，文章本身不受影响。` : undefined}
+        busy={deleting}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (!pendingDelete) return;
+          const name = pendingDelete;
+          setDeleting(true);
+          void persist(names.filter((item) => item !== name)).then(() => {
+            setDeleting(false);
+            setPendingDelete(null);
+          });
+        }}
+      />
     </div>
   );
 }

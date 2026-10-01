@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Task } from '../types';
 import AdminPageHeader from '../components/AdminPageHeader';
+import ConfirmDialog from '../../../components/ConfirmDialog';
 import { formatDistanceToNow } from '../../../utils/formatDate';
 
 const STATUS_BADGES: Record<Task['status'], { cls: string; label: string }> = {
@@ -15,6 +16,8 @@ const STATUS_BADGES: Record<Task['status'], { cls: string; label: string }> = {
 
 export default function AdminTasks() {
   const { tasks, fetchTasks, deleteArticle } = useAppStore();
+  const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // 任务由后台异步推进,定时轮询让列表自动跟进状态
   useEffect(() => {
@@ -53,12 +56,12 @@ export default function AdminTasks() {
                       {step ? <span className="cell-sub">{step}</span> : null}
                     </td>
                     <td><span className={`ac-badge ${badge.cls}`}>{badge.label}</span></td>
-                    <td className="cell-time">{formatDistanceToNow(new Date(task.created_at))}前</td>
+                    <td className="cell-time">{formatDistanceToNow(new Date(task.created_at))}</td>
                     <td>
                       {task.status === 'completed' && task.article_id ? (
                         <div className="ac-row-actions">
                           <Link className="ac-btn secondary sm" to={`/article/${task.article_id}`}>查看文章</Link>
-                          <button className="ac-btn danger-ghost sm icon" type="button" onClick={() => void deleteArticle(task.article_id!)} aria-label="删除文章"><Trash2 size={13} /></button>
+                          <button className="ac-btn danger-ghost sm icon" type="button" onClick={() => setPendingDelete(task)} aria-label="删除文章"><Trash2 size={13} /></button>
                         </div>
                       ) : null}
                     </td>
@@ -69,6 +72,21 @@ export default function AdminTasks() {
           </table>
         </div>
       </section>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        title="删除这篇文章？"
+        description="该任务对应的文章将被永久删除，不可恢复。"
+        busy={deleting}
+        onCancel={() => setPendingDelete(null)}
+        onConfirm={() => {
+          if (!pendingDelete?.article_id) return;
+          setDeleting(true);
+          void deleteArticle(pendingDelete.article_id).then(() => {
+            setDeleting(false);
+            setPendingDelete(null);
+          });
+        }}
+      />
     </div>
   );
 }

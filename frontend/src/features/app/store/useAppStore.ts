@@ -24,7 +24,7 @@ interface AppState {
   removeToast: (toastId: string) => void;
   setConfig: (config: AppConfig) => Promise<boolean>;
   fetchConfig: () => Promise<void>;
-  fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string }) => Promise<void>;
+  fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string; source?: string; q?: string }) => Promise<void>;
   articlesHasMore: boolean;
   articlesLoading: boolean;
   articlesTotal: number;
@@ -126,11 +126,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Failed to fetch config', e);
     }
   },
-  // 渐进加载:每次拉 5 篇元信息,滚动到底继续取下一页
+  // 渐进加载:每次拉 5 篇元信息,滚动到底继续取下一页;筛选/搜索由后端完成
   fetchArticles: async (options) => {
     const reset = options?.reset ?? false;
     const fetchAll = options?.all ?? false;
     const category = options?.category;
+    const source = options?.source;
+    const keyword = options?.q?.trim() ?? '';
     const state = get();
     if (state.articlesLoading) return;
     if (!reset && !state.articlesHasMore) return;
@@ -139,9 +141,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const offset = reset ? 0 : state.articles.length;
     set({ articlesLoading: true });
     try {
-      const catParam = category === '__none' ? '__none__' : category;
+      const catParam = category === '__none__' ? '__none__' : category;
       const catQuery = catParam ? `&category=${encodeURIComponent(catParam)}` : '';
-      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}${catQuery}`);
+      const sourceQuery = source ? `&source=${encodeURIComponent(source)}` : '';
+      const qQuery = keyword ? `&q=${encodeURIComponent(keyword)}` : '';
+      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}${catQuery}${sourceQuery}${qQuery}`);
       if (!res.ok) throw new Error(`Articles API returned ${res.status}`);
       const data = await res.json();
       if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');

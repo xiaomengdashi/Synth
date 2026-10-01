@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutGrid, List } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList, { sourceLabel } from '../components/ArticleList';
@@ -19,6 +19,7 @@ const FILTERS: { value: SourceFilter | 'all'; label: string; color?: string }[] 
 
 export default function Articles() {
   const articles = useAppStore((state) => state.articles);
+  const articlesLoading = useAppStore((state) => state.articlesLoading);
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const articlesTotal = useAppStore((state) => state.articlesTotal);
   const [sourceCounts, setSourceCounts] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
@@ -36,23 +37,20 @@ export default function Articles() {
   const query = searchParams.get('q')?.trim() || '';
   const source = searchParams.get('source') || 'all';
 
-  useEffect(() => { void fetchArticles({ reset: true, all: Boolean(source !== 'all' || query) }); }, [fetchArticles, source, query]);
+  // 筛选/搜索由后端完成;参数没变不重取,加载中的变更等本轮结束自动补取(修加载竞态)
+  const lastKey = useRef('');
+  useEffect(() => {
+    if (articlesLoading) return;
+    const key = `${source}|${query}`;
+    if (lastKey.current === key) return;
+    lastKey.current = key;
+    void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined });
+  }, [fetchArticles, source, query, articlesLoading]);
 
-  const filteredArticles = useMemo(() => {
-    let list = articles;
-    if (source !== 'all') list = list.filter((article) => article.source_type === source);
-    if (query) {
-      const normalizedQuery = query.toLocaleLowerCase();
-      list = list.filter((article) => [
-        article.title,
-        article.summary,
-        article.original_url,
-        article.source_type,
-      ].some((value) => (value || '').toLocaleLowerCase().includes(normalizedQuery)));
-    }
+  const sortedArticles = useMemo(() => {
     const factor = sort === 'new' ? -1 : 1;
-    return [...list].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
-  }, [articles, source, query, sort]);
+    return [...articles].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+  }, [articles, sort]);
 
   const applySource = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -71,7 +69,7 @@ export default function Articles() {
           <h1>文章库</h1>
           <p>{query ? `正在筛选包含“${query}”的文章。` : '按时间整理的全部收藏内容。'}</p>
         </div>
-        <span className="section-count">{filtering ? `筛选出 ${filteredArticles.length} 篇` : `共 ${articlesTotal} 篇`}</span>
+        <span className="section-count">{filtering ? `筛选出 ${articlesTotal} 篇` : `共 ${articlesTotal} 篇`}</span>
       </section>
 
       <section className="filter-bar">
@@ -107,13 +105,17 @@ export default function Articles() {
 
       <section>
         <ArticleList
-          articles={filteredArticles}
+          articles={sortedArticles}
           mode={view}
           emptyMessage={query || activeFilterLabel
             ? `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}的文章，换个筛选试试。`
             : '还没有文章。粘贴一条链接，开始建立你的第一篇知识卡片。'}
         />
-        {!query && source === 'all' ? <ArticleListFooter emptyCount={filteredArticles.length} /> : null}
+        <ArticleListFooter
+          emptyCount={articles.length}
+          source={source === 'all' ? undefined : source}
+          q={query || undefined}
+        />
       </section>
     </div>
   );
