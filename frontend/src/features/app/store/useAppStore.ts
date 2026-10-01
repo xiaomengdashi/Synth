@@ -24,7 +24,7 @@ interface AppState {
   removeToast: (toastId: string) => void;
   setConfig: (config: AppConfig) => Promise<boolean>;
   fetchConfig: () => Promise<void>;
-  fetchArticles: (options?: { reset?: boolean; all?: boolean }) => Promise<void>;
+  fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string }) => Promise<void>;
   articlesHasMore: boolean;
   articlesLoading: boolean;
   fetchTasks: () => Promise<void>;
@@ -127,6 +127,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   fetchArticles: async (options) => {
     const reset = options?.reset ?? false;
     const fetchAll = options?.all ?? false;
+    const category = options?.category;
     const state = get();
     if (state.articlesLoading) return;
     if (!reset && !state.articlesHasMore) return;
@@ -135,7 +136,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     const offset = reset ? 0 : state.articles.length;
     set({ articlesLoading: true });
     try {
-      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}`);
+      const catParam = category === '__none' ? '__none__' : category;
+      const catQuery = catParam ? `&category=${encodeURIComponent(catParam)}` : '';
+      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}${catQuery}`);
       if (!res.ok) throw new Error(`Articles API returned ${res.status}`);
       const data = await res.json();
       if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');

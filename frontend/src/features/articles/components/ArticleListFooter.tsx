@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 
 /** 滚动到底自动续载下一页文章(渐进式,每次 5 篇)。 */
-export default function ArticleListFooter({ emptyCount }: { emptyCount: number }) {
+export default function ArticleListFooter({ emptyCount, category }: { emptyCount: number; category?: string }) {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const hasMore = useAppStore((state) => state.articlesHasMore);
   const loading = useAppStore((state) => state.articlesLoading);
@@ -13,11 +13,11 @@ export default function ArticleListFooter({ emptyCount }: { emptyCount: number }
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) void fetchArticles();
+      if (entries[0].isIntersecting) void fetchArticles({ category });
     }, { rootMargin: '400px' });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [fetchArticles, emptyCount]);
+  }, [fetchArticles, emptyCount, category]);
 
   if (!hasMore) {
     return emptyCount >= 5 ? (
