@@ -452,10 +452,11 @@ def fetch_tikhub_tweet(url_or_tweet_id: str, config: Any = None) -> dict:
 def fetch_wechat_article(url: str, config: Any = None) -> dict:
     """通过 TikHub 接口获取公众号文章（绕过微信安全验证）。
 
-    优先 H5 接口（普通图文返回官方正文 HTML）。H5 端正文为空时（新版沉浸式
-    页面 / 图片消息等）回落非 H5 接口：图片消息（item_show_type=8）正文是
-    长图，按微信原生输出形态构造 js_content HTML（摘要段落 +
-    data-src/data-w/data-ratio 图片），由前端复刻视图按官方 CSS 渲染。
+    优先 H5 接口（普通图文返回官方正文 HTML）。H5 端拿不到正文时（新版
+    沉浸式页面 / 图片消息等）回落非 H5 接口：图片消息（item_show_type=8）
+    正文是长图，按微信原生输出形态构造 js_content HTML（摘要段落 +
+    data-src/data-w/data-ratio 图片），由前端复刻视图按官方 CSS 渲染；
+    非 H5 只给纯文本时同样构造段落 HTML。
 
     返回 {title, author, account_name, digest, html_content, content_text,
           cover_image_url, publish_time, original_url, content_type}
@@ -468,23 +469,16 @@ def fetch_wechat_article(url: str, config: Any = None) -> dict:
         json_body={"url": article_url, "raw": False},
     )
     content = data.get("content") if isinstance(data.get("content"), dict) else {}
-    content_type = "rich_text"
-    if not str(content.get("content_noencode") or "").strip():
+    html_content, content_type = _wechat_content_html(content)
+    if not html_content:
         fallback_content, fallback_url = _fetch_wechat_article_fallback(article_url, token)
-        if fallback_content:
+        html_content, content_type = _wechat_content_html(fallback_content)
+        if html_content:
             content = fallback_content
             if fallback_url:
                 data["url"] = fallback_url
-    if not content.get("title") and not content.get("content_noencode"):
+    if not html_content:
         raise TikHubError("TikHub 未返回公众号文章内容（文章可能已被删除）。")
-
-    if str(content.get("content_noencode") or "").strip():
-        html_content = str(content.get("content_noencode"))
-        html_content = re.sub(r"data-src\s*=", "src=", html_content, flags=re.IGNORECASE)
-        html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
-    else:
-        html_content = _build_wechat_image_message_html(content)
-        content_type = "image"
 
     return {
         "title": str(content.get("title") or "").strip() or "未知文章标题",
@@ -498,6 +492,30 @@ def fetch_wechat_article(url: str, config: Any = None) -> dict:
         "original_url": str(data.get("url") or url or "").strip(),
         "content_type": content_type,
     }
+
+
+_WECHAT_HTML_HINT_RE = re.compile(r"<(p|div|img|section|span|br|blockquote|h[1-6])\b", re.IGNORECASE)
+
+
+def _wechat_content_html(content: dict) -> tuple[str, str]:
+    """把接口的 content 字典转为 (正文 HTML, 内容类型)。
+
+    content_noencode 通常是官方正文 HTML；图片消息/纯文本场景它是纯文字
+    （此时摘要即全文），配合长图列表构造微信同构 HTML。类型供调用方决定
+    摘要提取方式：image/text 直接用纯文本，rich_text 走 trafilatura。
+    """
+    if not isinstance(content, dict):
+        return "", ""
+    raw = str(content.get("content_noencode") or "").strip()
+    if _WECHAT_HTML_HINT_RE.search(raw):
+        html_content = re.sub(r"data-src\s*=", "src=", raw, flags=re.IGNORECASE)
+        html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
+        return html_content, "rich_text"
+    if content.get("picture_page_info_list"):
+        return _build_wechat_image_message_html(content), "image"
+    if raw:
+        return _build_wechat_text_message_html(raw), "text"
+    return "", ""
 
 
 def _fetch_wechat_article_fallback(url: str, token: str) -> tuple[dict, str]:
@@ -519,6 +537,26 @@ def _fetch_wechat_article_fallback(url: str, token: str) -> tuple[dict, str]:
     return content, final_url
 
 
+def _wechat_paragraphs_html(text: str) -> str:
+    """纯文本按换行拆为微信正文段落（H5 端摘要里的字面 \\x0a 一并归一）。"""
+    return "".join(
+        f"<p>{html.escape(part.strip())}</p>"
+        for part in str(text or "").replace("\\x0a", "\n").split("\n")
+        if part.strip()
+    )
+
+
+def _wrap_wechat_content(body: str) -> str:
+    return (
+        '<div class="rich_media_content js_underline_content defaultNoSetting" id="js_content">'
+        f"{body}</div>"
+    )
+
+
+def _build_wechat_text_message_html(text: str) -> str:
+    return _wrap_wechat_content(_wechat_paragraphs_html(text))
+
+
 def _build_wechat_image_message_html(content: dict) -> str:
     """按微信图片消息的原生输出形态构造正文 HTML。
 
@@ -526,12 +564,7 @@ def _build_wechat_image_message_html(content: dict) -> str:
     摘要文字为 <p> 段落，图片为 <img data-src data-w data-ratio>（高/宽比），
     与普通图文共用了前端复刻视图的懒加载转正和定宽逻辑。
     """
-    desc = str(content.get("desc") or content.get("content_text") or "")
-    paragraphs = "".join(
-        f"<p>{html.escape(part.strip())}</p>"
-        for part in desc.replace("\\x0a", "\n").split("\n")
-        if part.strip()
-    )
+    paragraphs = _wechat_paragraphs_html(content.get("desc") or content.get("content_text") or "")
     images = []
     for pic in content.get("picture_page_info_list") or []:
         if not isinstance(pic, dict):
@@ -550,11 +583,7 @@ def _build_wechat_image_message_html(content: dict) -> str:
             if height > 0:
                 attrs += f' data-ratio="{height / width:.6f}"'
         images.append(f'<img class="rich_pages wxw-img" {attrs}>')
-    body = f"{paragraphs}{''.join(images)}"
-    return (
-        '<div class="rich_media_content js_underline_content defaultNoSetting" id="js_content">'
-        f"{body}</div>"
-    )
+    return _wrap_wechat_content(f"{paragraphs}{''.join(images)}")
 
 
 # ---------------------------------------------------------------------------

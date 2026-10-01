@@ -107,8 +107,8 @@ async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
     html_content = _ensure_wechat_root(article["html_content"])
 
     # 摘要提取用规范化副本（代码块压行处理只为提取纯文本，不影响存储内容）
-    if article.get("content_type") == "image":
-        # 图片消息：正文是我们构造的摘要段落 + 长图，直接用接口给的纯文本，
+    if article.get("content_type") in ("image", "text"):
+        # 图片消息/纯文本：正文是构造的段落 + 长图，直接用接口给的纯文本，
         # 避免 trafilatura 把图片 URL 混入摘要
         extracted_md = article["content_text"]
     else:
