@@ -820,6 +820,15 @@
 .article-card-m-meta .ac-select { flex: 1; min-width: 0; max-width: 200px; margin-left: auto; }
 .article-card-m-meta .ac-select { height: 30px; min-width: 104px; padding: 0 8px; font-size: 12px; }
 .article-card-m-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 9px; border-top: 1px solid var(--ac-line); }
+
+/* ---------- 手机端处理任务卡片 ---------- */
+.task-card-m .ac-card-body { display: grid; gap: 8px; padding: 14px 15px; }
+.task-card-m-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.task-card-m-url { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--ac-ink); font-family: 'DM Mono', monospace; font-size: 11.5px; text-decoration: none; overflow: hidden; }
+.task-card-m-url span, .task-card-m-url { overflow-wrap: anywhere; }
+.task-card-m-url svg { flex: none; color: var(--ac-faint); }
+.task-card-m-step { margin: 0; color: var(--ac-muted); font-size: 11.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.task-card-m-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 9px; border-top: 1px solid var(--ac-line); }
 /* ---------- 焦点可达性 ---------- */
 a:focus-visible,
 button:focus-visible,

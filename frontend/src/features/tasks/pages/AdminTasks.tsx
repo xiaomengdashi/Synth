@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { RefreshCw, Trash2 } from 'lucide-react';
+import { ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Task } from '../types';
@@ -14,10 +14,22 @@ const STATUS_BADGES: Record<Task['status'], { cls: string; label: string }> = {
   failed: { cls: 'danger', label: '失败' },
 };
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+}
+
 export default function AdminTasks() {
   const { tasks, fetchTasks, deleteArticle } = useAppStore();
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const isMobile = useIsMobile();
 
   // 任务由后台异步推进,定时轮询让列表自动跟进状态
   useEffect(() => {
@@ -32,6 +44,36 @@ export default function AdminTasks() {
         summary={<><span>共 {tasks.length} 条任务记录</span><span>· 每 5 秒自动刷新</span></>}
         actions={<button type="button" className="ac-btn secondary sm" onClick={() => void fetchTasks()}><RefreshCw size={13} />立即刷新</button>}
       />
+      {isMobile ? (
+        <div className="ac-stack">
+          {tasks.length === 0 ? (
+            <div className="ac-empty">当前没有处理任务。回到前台提交一条链接即可开始。</div>
+          ) : tasks.map((task) => {
+            const badge = STATUS_BADGES[task.status];
+            const step = task.status === 'completed' ? '' : task.current_step;
+            return (
+              <article key={task.id} className="ac-card task-card-m">
+                <div className="ac-card-body">
+                  <div className="task-card-m-top">
+                    <span className={`ac-badge ${badge.cls}`}>{badge.label}</span>
+                    <span className="cell-time">{formatDistanceToNow(new Date(task.created_at))}</span>
+                  </div>
+                  <a className="task-card-m-url" href={task.original_url} target="_blank" rel="noopener noreferrer" title={task.original_url}>
+                    <ExternalLink size={12} />{task.original_url}
+                  </a>
+                  {step ? <p className="task-card-m-step">{step}</p> : null}
+                  {task.status === 'completed' && task.article_id ? (
+                    <div className="task-card-m-foot">
+                      <Link className="ac-btn secondary sm" to={`/article/${task.article_id}`}><ExternalLink size={13} />查看文章</Link>
+                      <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(task)} aria-label="删除文章"><Trash2 size={13} />删除</button>
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
       <section className="ac-card">
         <div className="ac-table-wrap">
           <table className="ac-table">
@@ -72,6 +114,7 @@ export default function AdminTasks() {
           </table>
         </div>
       </section>
+      )}
       <ConfirmDialog
         open={pendingDelete !== null}
         title="删除这篇文章？"
