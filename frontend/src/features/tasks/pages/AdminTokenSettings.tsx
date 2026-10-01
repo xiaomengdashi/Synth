@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { KeyRound } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
-import { requestJson } from '../../tikhub/client';
+import { adminFetch, saveAdminToken } from '../../../utils/adminAuth';
 import AdminPageHeader from '../components/AdminPageHeader';
 
 function TokenPanel() {

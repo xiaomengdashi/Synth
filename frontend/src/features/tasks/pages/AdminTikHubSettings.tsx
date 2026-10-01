@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Bird, KeyRound, RefreshCw, Wallet } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import { dateTime, money, requestJson } from '../../tikhub/client';
+import type { Account, KeyStatus } from '../../tikhub/types';
 import AdminPageHeader from '../components/AdminPageHeader';
 
 function TikHubPanel() {
