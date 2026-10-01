@@ -5,7 +5,6 @@ import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
-import ArticleListFooter from '../../articles/components/ArticleListFooter';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatDistanceToNow } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
@@ -17,12 +16,24 @@ function getSourceLabel(sourceType: Article['source_type']) {
   return '网页链接';
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const onChange = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return isMobile;
+}
+
 export default function AdminArticles() {
   const { articles, articlesTotal, articlesLoading, fetchArticles, deleteArticle, updateArticle, pushToast } = useAppStore();
   const [categories, setCategories] = useState<string[]>([]);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [src, setSrc] = useState('all');
+  const isMobile = useIsMobile();
   const [pendingDelete, setPendingDelete] = useState<Article | null>(null);
   const [deleting, setDeleting] = useState(false);
   const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
@@ -74,15 +85,64 @@ export default function AdminArticles() {
   return (
     <div>
       <AdminPageHeader
-        summary={<span>{filtering ? `筛选出 ${articlesTotal} 篇` : `共 ${articlesTotal || articles.length} 篇内容`}</span>}
+        summary={<span>{filtering ? `筛选出 ${articles.length} 篇（库内共 ${articlesTotal} 篇）` : `共 ${articlesTotal} 篇内容`}</span>}
         actions={<>
-          <label className="ac-search" style={{ width: 220 }} aria-label="搜索文章">
+          <label className="ac-search" style={{ width: isMobile ? '100%' : 220 }} aria-label="搜索文章">
             <Search size={14} />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索标题或链接" />
           </label>
+          {isMobile ? (
+            <>
+              <select className="ac-select admin-filter-select" value={src} onChange={(event) => setSrc(event.target.value)} aria-label="按来源筛选">
+                <option value="all">全部来源</option>
+                <option value="wechat">微信公众号</option>
+                <option value="x">X / Twitter</option>
+                <option value="bilibili">Bilibili</option>
+                <option value="__other">网页链接</option>
+              </select>
+              <select className="ac-select admin-filter-select" value={cat} onChange={(event) => setCat(event.target.value)} aria-label="按分类筛选">
+                <option value="all">全部分类</option>
+                <option value="__none">未分类</option>
+                {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </>
+          ) : null}
           <Link to="/articles" className="ac-btn secondary sm">打开前台文章库 <ArrowUpRight size={13} /></Link>
         </>}
       />
+
+      {isMobile ? (
+        <div className="ac-stack">
+          {articles.length === 0 ? (
+            <div className="ac-empty">{articles.length === 0 ? '还没有保存文章。' : '没有符合筛选条件的文章，换个条件试试。'}</div>
+          ) : articles.map((article) => (
+            <article key={article.id} className="ac-card article-card-m">
+              <div className="ac-card-body">
+                <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
+                <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
+                <div className="article-card-m-meta">
+                  <span className="article-card-m-source">{getSourceLabel(article.source_type)}</span>
+                  <select
+                    className="ac-select"
+                    value={article.category || ''}
+                    onChange={(event) => changeCategory(article.id, article.title, event.target.value)}
+                    aria-label={`选择「${article.title}」的分类`}
+                  >
+                    <option value="">未分类</option>
+                    {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </div>
+                <div className="article-card-m-foot">
+                  <span className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</span>
+                  <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}>
+                    <Trash2 size={13} />删除
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      ) : (
       <section className="ac-card">
         <div className="ac-table-wrap">
           <table className="ac-table">
@@ -111,7 +171,9 @@ export default function AdminArticles() {
             </thead>
             <tbody>
               {articles.length === 0 ? (
-                <tr><td colSpan={5}><div className="ac-empty">{articlesLoading ? '正在加载文章…' : filtering ? '没有符合筛选条件的文章，换个条件试试。' : '还没有保存文章。'}</div></td></tr>
+                <tr><td colSpan={5}><div className="ac-empty">还没有保存文章。</div></td></tr>
+              ) : articles.length === 0 ? (
+                <tr><td colSpan={5}><div className="ac-empty">没有符合筛选条件的文章，换个条件试试。</div></td></tr>
               ) : articles.map((article) => (
                 <tr key={article.id}>
                   <td>
@@ -141,27 +203,23 @@ export default function AdminArticles() {
             </tbody>
           </table>
         </div>
-        {articles.length > 0 && (
-          <ArticleListFooter
-            emptyCount={articles.length}
-            category={cat === 'all' ? undefined : cat}
-            source={src === 'all' ? undefined : src}
-            q={query.trim() || undefined}
-          />
-        )}
       </section>
+      )}
+
       <ConfirmDialog
-        open={pendingDelete !== null}
-        title="删除这篇文章？"
-        description={pendingDelete ? `「${pendingDelete.title}」将被永久删除，不可恢复。` : undefined}
+        open={Boolean(pendingDelete)}
+        title="删除文章"
+        description={pendingDelete ? `确定删除「${pendingDelete.title}」？删除后不可恢复。` : ''}
+        confirmText="删除"
         busy={deleting}
         onCancel={() => setPendingDelete(null)}
         onConfirm={() => {
-          if (!pendingDelete) return;
+          if (!pendingDelete || deleting) return;
           setDeleting(true);
-          void deleteArticle(pendingDelete.id).then(() => {
+          void deleteArticle(pendingDelete.id).then((ok) => {
             setDeleting(false);
             setPendingDelete(null);
+            pushToast({ title: ok ? '文章已删除' : '删除失败，请稍后重试', tone: ok ? 'success' : 'error' });
           });
         }}
       />

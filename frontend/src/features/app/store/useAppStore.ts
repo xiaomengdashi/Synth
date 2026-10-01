@@ -179,7 +179,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   deleteArticle: async (articleId: string) => {
     try {
-      const res = await fetch(`/api/v1/articles/${articleId}`, {
+      const res = await adminFetch(`/api/v1/articles/${articleId}`, {
         method: 'DELETE',
       });
       if (res.ok) {

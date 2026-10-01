@@ -810,6 +810,16 @@
 .category-add-row .ac-input { flex: 1; min-width: 0; }
 .category-manage-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border: 1px solid var(--ac-line); border-radius: 8px; background: var(--ac-surface-2); color: var(--ac-ink); font-size: 13px; }
 
+
+/* ---------- 手机端文章管理卡片 ---------- */
+.article-card-m .ac-card-body { display: grid; gap: 7px; padding: 14px 15px; }
+.article-card-m .cell-main { white-space: normal; overflow: visible; text-overflow: unset; font-size: 14px; line-height: 1.5; }
+.article-card-m .cell-sub { max-width: 100%; font-size: 11px; }
+.article-card-m-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.article-card-m-source { flex: none; color: var(--ac-muted); font-size: 12.5px; white-space: nowrap; }
+.article-card-m-meta .ac-select { flex: 1; min-width: 0; max-width: 200px; margin-left: auto; }
+.article-card-m-meta .ac-select { height: 30px; min-width: 104px; padding: 0 8px; font-size: 12px; }
+.article-card-m-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 9px; border-top: 1px solid var(--ac-line); }
 /* ---------- 焦点可达性 ---------- */
 a:focus-visible,
 button:focus-visible,
