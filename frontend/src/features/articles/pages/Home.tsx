@@ -6,7 +6,6 @@ import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
 import ArticleList from '../components/ArticleList';
-import ArticleListFooter from '../components/ArticleListFooter';
 
 type Source = 'wechat' | 'x' | 'bilibili';
 type TaskStatusResponse = {
@@ -45,7 +44,7 @@ function greeting() {
 }
 
 export default function Home() {
-  const { articles, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
+  const { articles, articlesTotal, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
   const [source, setSource] = useState<Source>('wechat');
   const [url, setUrl] = useState('');
   const [detectedSource, setDetectedSource] = useState<Source | null>(null);
@@ -280,15 +279,15 @@ export default function Home() {
         </div>
       ) : null}
 
+      {/* 首页固定展示最新 12 篇;完整列表(含渐进加载)在文章库页,由「查看全部」进入 */}
       <section id="latest-articles" className="recent-section">
         <div className="section-heading">
           <div><h2>最近收藏</h2><p>最新整理的内容会出现在最前面。</p></div>
           <div className="section-heading-side">
-            {articles.length > 4 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
+            {articlesTotal > 12 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
           </div>
         </div>
-        <ArticleList articles={articles} />
-        <ArticleListFooter emptyCount={articles.length} />
+        <ArticleList articles={articles.slice(0, 12)} />
       </section>
     </div>
   );
