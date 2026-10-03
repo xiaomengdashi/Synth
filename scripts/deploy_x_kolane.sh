@@ -171,7 +171,7 @@ if fullchain.exists() and privkey.exists():
 }}
 
 server {{
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name {domain};
 
 {common_locations}
