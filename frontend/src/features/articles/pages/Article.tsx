@@ -179,9 +179,14 @@ function extractXSections(contentMd: string, fallbackSummary: string) {
 export default function Article() {
   const { id } = useParams<{ id: string }>();
   const storeArticle = useAppStore((state) => state.articles.find((a) => a.id === id));
-  
-  const [article, setArticle] = useState<ArticleType | null>(storeArticle || null);
-  const [loading, setLoading] = useState(!storeArticle);
+  // 列表接口的数据不含正文:store 命中但无 content_md 时首帧必须走加载态,
+  // 否则第一次访问(chunk 下载慢、列表先返回)会带着元数据渲染,content_md 为 undefined 直接崩
+  const initialArticle = storeArticle?.content_md ? storeArticle : null;
+
+  const [article, setArticle] = useState<ArticleType | null>(initialArticle);
+  const [loading, setLoading] = useState(!initialArticle);
+  // 兜底:后端异常数据缺 content_md 时渲染按空正文处理,不进 ErrorBoundary
+  const contentMd = article?.content_md || '';
   const [error, setError] = useState(false);
   const [xPreview, setXPreview] = useState<XPreviewData | null>(null);
   const [tocItems, setTocItems] = useState<ArticleHeading[]>([]);
@@ -193,13 +198,13 @@ export default function Article() {
   const wechatViewRef = useRef<WechatArticleViewHandle>(null);
 
   const wechatSections = article?.source_type === 'wechat'
-    ? extractWechatSections(article.content_md, article.summary)
+    ? extractWechatSections(contentMd, article.summary)
     : null;
   const replicaHtmlContent = wechatSections?.htmlContent ?? '';
   const useWechatReplica = Boolean(wechatSections && replicaHtmlContent);
   // 必须记忆化：每次渲染返回新对象会让 XArticleView 的 srcDoc（含随机 nonce）不断变化，导致 iframe 无限重载闪烁
   const xArticleReplica = useMemo(
-    () => (article?.source_type === 'x' ? extractXArticle(article.content_md) : null),
+    () => (article?.source_type === 'x' ? extractXArticle(contentMd) : null),
     [article],
   );
 
@@ -238,25 +243,32 @@ export default function Article() {
     if (storeArticle?.content_md) {
       setArticle(storeArticle);
       setLoading(false);
-    } else {
+      return;
+    }
+    // store 更新触发本 effect 重跑时,当前文章若已完整渲染则不打回加载态
+    const haveComplete = article?.id === id && Boolean(article?.content_md);
+    if (!haveComplete) {
       setLoading(true);
     }
+    let cancelled = false;
     fetch(`/api/v1/articles/${id}`)
       .then(res => {
         if (!res.ok) throw new Error('Article not found');
         return res.json();
       })
       .then(data => {
+        if (cancelled) return;
         setArticle(data);
         setLoading(false);
       })
       .catch(err => {
         console.error(err);
-        if (!storeArticle?.content_md) {
+        if (!cancelled && !haveComplete) {
           setError(true);
           setLoading(false);
         }
       });
+    return () => { cancelled = true; };
   }, [id, storeArticle]);
 
   // 仅对 CSDN 等无内联着色的代码块做 hljs；公众号正文已自带颜色，hljs 会破坏 <br/> 换行
@@ -314,7 +326,7 @@ export default function Article() {
       return;
     }
 
-    const embeddedPayload = extractEmbeddedXPayload(article.content_md);
+    const embeddedPayload = extractEmbeddedXPayload(contentMd);
     if (embeddedPayload) {
       setXPreview(embeddedPayload);
       return;
@@ -355,7 +367,7 @@ export default function Article() {
   }
 
   const xSections = article.source_type === 'x'
-    ? extractXSections(article.content_md, article.summary)
+    ? extractXSections(contentMd, article.summary)
     : null;
 
   // 普通推文的正文就是推文文字（长文走 bodyMarkdown，payload 只作兜底）
@@ -368,14 +380,14 @@ export default function Article() {
     ? xSections.bodyMarkdown || xTweetMarkdown
     : wechatSections
     ? wechatSections.bodyMarkdown
-    : article.content_md.includes(HTML_CONTENT_START)
-      ? article.content_md.split(HTML_CONTENT_START)[0]
-      : article.content_md;
+    : contentMd.includes(HTML_CONTENT_START)
+      ? contentMd.split(HTML_CONTENT_START)[0]
+      : contentMd;
 
   const htmlContent = wechatSections
     ? replicaHtmlContent
-    : article.content_md.includes(HTML_CONTENT_START)
-      ? article.content_md.split(HTML_CONTENT_START)[1].replace(HTML_CONTENT_END, '')
+    : contentMd.includes(HTML_CONTENT_START)
+      ? contentMd.split(HTML_CONTENT_START)[1].replace(HTML_CONTENT_END, '')
       : '';
 
   const xCreatedAt = xPreview?.created_at
