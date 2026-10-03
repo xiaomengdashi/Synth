@@ -24,6 +24,12 @@ export default function Articles() {
   const articlesTotal = useAppStore((state) => state.articlesTotal);
   const [sourceCounts, setSourceCounts] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
 
+  // 空闲时预取详情页 chunk:列表页停留时间长,预取后点开文章零等待
+  useEffect(() => {
+    const prefetch = () => { void import('./Article'); };
+    (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
+  }, []);
+
   // 来源计数只在页面挂载时拉一次:滚动续载/排序不会改变来源分布,避免每翻一页都多一次请求
   useEffect(() => {
     fetch('/api/v1/articles/stats')

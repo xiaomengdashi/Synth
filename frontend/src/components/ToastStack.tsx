@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { X, CheckCircle2, AlertCircle } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { useAppStore } from '../features/app/store/useAppStore';
 
 function ToastItem({
@@ -13,27 +12,30 @@ function ToastItem({
   tone: 'success' | 'error';
 }) {
   const removeToast = useAppStore((state) => state.removeToast);
+  const [leaving, setLeaving] = useState(false);
+
+  const dismiss = () => {
+    if (leaving) return;
+    setLeaving(true);
+    window.setTimeout(() => removeToast(id), 170);
+  };
 
   useEffect(() => {
-    const timer = window.setTimeout(() => removeToast(id), 2600);
+    const timer = window.setTimeout(dismiss, 2600);
     return () => window.clearTimeout(timer);
-  }, [id, removeToast]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 14, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 10, scale: 0.98 }}
-      className="toast-item"
-    >
+    <div className={leaving ? 'toast-item toast-leaving' : 'toast-item'}>
       <span className={tone === 'success' ? 'toast-icon success' : 'toast-icon error'}>
         {tone === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
       </span>
       <span>{title}</span>
-      <button type="button" onClick={() => removeToast(id)} aria-label="关闭提示">
+      <button type="button" onClick={dismiss} aria-label="关闭提示">
         <X size={15} />
       </button>
-    </motion.div>
+    </div>
   );
 }
 
@@ -43,9 +45,7 @@ export default function ToastStack() {
 
   return (
     <div className="toast-stack">
-      <AnimatePresence>
-        {toasts.map((toast) => <ToastItem key={toast.id} {...toast} />)}
-      </AnimatePresence>
+      {toasts.map((toast) => <ToastItem key={toast.id} {...toast} />)}
     </div>
   );
 }

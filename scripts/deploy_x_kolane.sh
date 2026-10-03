@@ -84,9 +84,16 @@ common_locations = f'''    # gzip 压缩静态资源与代理响应:详情页 JS
     root {remote_web_dir};
     index index.html;
 
+    # 自托管字体:文件名固定但内容不变,与 assets 同等长缓存
+    location /fonts/ {{
+        try_files \$uri =404;
+        expires 1y;
+        add_header Cache-Control 'public, immutable';
+    }}
+
     location /assets/ {{
         try_files \$uri =404;
-        expires 7d;
+        expires 1y;
         add_header Cache-Control 'public, immutable';
     }}
 
@@ -113,6 +120,9 @@ common_locations = f'''    # gzip 压缩静态资源与代理响应:详情页 JS
         proxy_set_header X-Forwarded-Proto \$scheme;
         proxy_read_timeout 300s;
         proxy_send_timeout 300s;
+        # 抓取产物文件名唯一且内容不变:长缓存让重复访问不再回源下载图片
+        expires 30d;
+        add_header Cache-Control 'public, max-age=2592000';
     }}
 
     location = /health {{
@@ -123,8 +133,10 @@ common_locations = f'''    # gzip 压缩静态资源与代理响应:详情页 JS
         proxy_set_header X-Forwarded-Proto \$scheme;
     }}
 
+    # SPA 入口必须 no-cache:发版后旧 index.html 引用的哈希资产会被覆盖删除,no-cache 仍可用 ETag 走 304
     location / {{
         try_files \$uri \$uri/ /index.html;
+        add_header Cache-Control 'no-cache';
     }}
 '''
 

@@ -38,6 +38,13 @@ function App() {
     fetchArticles();
   }, [fetchArticles]);
 
+  useEffect(() => {
+    // 部分 webview 渲染帧不推进,CSS 动画时钟停摆会让 fill-mode 永久停在首帧(opacity 0)。
+    // 首屏 stagger 封顶 0.48s + 时长 0.3s,窗口期过后统一禁用进场动画,内容必然可见。
+    const t = window.setTimeout(() => document.documentElement.classList.add('no-anim'), 1600);
+    return () => window.clearTimeout(t);
+  }, []);
+
   return (
     <BrowserRouter>
       <ErrorBoundary>

@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check, Clipboard, Link2, Loader2, Send, Smartphone, Upload, X } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
@@ -56,6 +55,12 @@ export default function Home() {
   const [htmlText, setHtmlText] = useState('');
   const [htmlFileName, setHtmlFileName] = useState('');
   const [isHtmlImporting, setIsHtmlImporting] = useState(false);
+
+  // 空闲时预取详情页 chunk(含 markdown/highlight 依赖,约 500KB):点进文章时免等下载
+  useEffect(() => {
+    const prefetch = () => { void import('./Article'); };
+    (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
+  }, []);
 
   const pollTaskStatus = async (backendTaskId: string, localTaskId: string) => {
     let pollCount = 0;
@@ -196,11 +201,11 @@ export default function Home() {
   return (
     <div>
       <section className="public-hero">
-        <motion.p className="hero-greeting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: .5 }}>{greeting()}</motion.p>
-        <motion.h1 className="display-title" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .55 }}>把好内容，收进来。</motion.h1>
+        <p className="hero-greeting anim-enter" style={{ '--lift': '0px', animationDuration: '.5s' } as React.CSSProperties}>{greeting()}</p>
+        <h1 className="display-title anim-enter" style={{ '--lift': '14px', animationDuration: '.55s' } as React.CSSProperties}>把好内容，收进来。</h1>
       </section>
 
-      <motion.section className="collect-shell" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .12, duration: .5 }}>
+      <section className="collect-shell anim-enter" style={{ '--lift': '14px', animationDuration: '.5s', animationDelay: '.12s' } as React.CSSProperties}>
         <form className="collect-bar" onSubmit={handleSubmit}>
           <div className="source-chips" role="group" aria-label="选择来源">
             {(Object.keys(sourceMeta) as Source[]).map((value) => (
@@ -245,7 +250,7 @@ export default function Home() {
           <Link to="/admin/share"><Smartphone size={13} />iPhone 分享导入</Link>
           <button type="button" onClick={() => setHtmlImportOpen(true)}><Upload size={13} />导入网页 HTML</button>
         </div>
-      </motion.section>
+      </section>
 
       {htmlImportOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => !isHtmlImporting && setHtmlImportOpen(false)}>

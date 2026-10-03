@@ -7,7 +7,6 @@ import rehypeHighlight from 'rehype-highlight';
 // common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
-import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
@@ -21,6 +20,11 @@ const HTML_CONTENT_END = '<!-- HTML_CONTENT_END -->';
 const X_CONTENT_START = '<!-- X_CONTENT_START -->';
 const X_CONTENT_END = '<!-- X_CONTENT_END -->';
 const SUMMARY_SECTION_PATTERN = /^##\s*(?:(?:AI\s*)?摘要|内容摘要)\s*\n+([\s\S]*?)\n+\s*---\s*\n*/;
+
+// 正文长文图片多:markdown 渲染的 img 统一懒加载,避免首屏拉全部图片
+const mdComponents = {
+  img: (props: React.ImgHTMLAttributes<HTMLImageElement>) => <img {...props} loading="lazy" decoding="async" />,
+};
 
 interface XMediaItem {
   type: 'photo' | 'video' | 'gif';
@@ -380,11 +384,7 @@ export default function Article() {
   const isXArticle = article.source_type === 'x';
 
   return (
-    <motion.article
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+    <article className="reader-article anim-enter" style={{ '--lift': '20px', animationDuration: '.5s' } as React.CSSProperties}>
       <div className={`reader-outer-row ${tocItems.length > 0 ? 'with-toc' : ''}`}>
         <nav className="reader-crumbs" aria-label="位置">
           <Link to="/articles">文章库</Link>
@@ -441,7 +441,7 @@ export default function Article() {
             <section className="reader-summary" aria-label="内容导读">
               <p className="reader-summary-label"><Sparkles size={12} />内容导读</p>
               <div className="md-body">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{wechatSections.summaryMarkdown}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{wechatSections.summaryMarkdown}</ReactMarkdown>
               </div>
             </section>
           ) : null}
@@ -485,7 +485,7 @@ export default function Article() {
                     <>
                       {markdownContent.trim() ? (
                         <div className={isXArticle ? 'x-article-markdown' : 'md-body'}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>
                             {markdownContent}
                           </ReactMarkdown>
                         </div>
@@ -498,7 +498,7 @@ export default function Article() {
                     </>
                   ) : article.source_type === 'x' && xPreview && !markdownContent.trim() ? null : (
                     <div className={isXArticle ? 'x-article-markdown' : 'md-body'}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]} components={mdComponents}>
                         {markdownContent}
                       </ReactMarkdown>
                     </div>
@@ -533,6 +533,6 @@ export default function Article() {
           <span>回到顶部</span>
         </button>
       ) : null}
-    </motion.article>
+    </article>
   );
 }

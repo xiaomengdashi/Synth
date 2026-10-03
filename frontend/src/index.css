@@ -1,4 +1,20 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&display=swap');
+/* DM Mono 自托管:外链 Google Fonts 是渲染阻塞资源,国内网络下域名不通会卡到 TCP 超时才出内容 */
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/DM_Mono_400.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/DM_Mono_500.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+2000-206F;
+}
 
 @tailwind base;
 @tailwind components;
@@ -315,7 +331,15 @@
 
 /* ---------- 轻提示 ---------- */
 .toast-stack { position: fixed; right: 20px; bottom: 20px; z-index: 120; display: grid; gap: 9px; }
-.toast-item { display: flex; align-items: center; gap: 9px; min-width: 260px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); font-size: 12.5px; }
+.toast-item { display: flex; align-items: center; gap: 9px; min-width: 260px; padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: var(--shadow); color: var(--ink); font-size: 12.5px; animation: toast-in .26s cubic-bezier(.21, 1.02, .55, 1) both; }
+.toast-item.toast-leaving { animation: toast-out .16s ease-in forwards; pointer-events: none; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(10px) scale(.98); } }
+/* framer-motion 已移除:进场动画用 CSS 复刻,--lift 对应原 y 位移,stagger 延迟由内联 animationDelay 控制 */
+@keyframes fade-up { from { opacity: 0; transform: translateY(var(--lift, 14px)); } to { opacity: 1; transform: none; } }
+.anim-enter { animation: fade-up .3s ease-out both; }
+/* 动画时钟停摆宿主的兜底:窗口期后全部直接可见(App.tsx 挂载 1.6s 后) */
+.no-anim .anim-enter, .no-anim .toast-item { animation: none; }
 .toast-item > span:nth-child(2) { flex: 1; }
 .toast-item button { display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
 .toast-icon { display: grid; place-items: center; }

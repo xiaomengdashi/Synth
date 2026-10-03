@@ -1,5 +1,4 @@
 import { ArrowRight } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { Article } from '../types';
@@ -56,39 +55,33 @@ export default function ArticleList({
   if (mode === 'list') {
     return (
       <div className="article-rows">
-        <AnimatePresence initial={false}>
-          {articles.map((article, index) => (
-            <motion.div key={article.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index, 12) * .035 }}>
-              <Link to={`/article/${article.id}`} className="article-row" style={srcStyle(article.source_type)}>
-                <Cover article={article} kind="row" />
-                <span className="article-row-main">
-                  <h3>{article.title}</h3>
-                  <p>{article.summary}</p>
-                </span>
-                <span className="article-row-side">
-                  <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
-                  <time>{formatDistanceToNow(new Date(article.created_at))}</time>
-                </span>
-              </Link>
-            </motion.div>
-          ))}
-        </AnimatePresence>
+        {articles.map((article, index) => (
+          <div key={article.id} className="anim-enter" style={{ '--lift': '10px', animationDelay: `${Math.min(index, 12) * .035}s` } as CSSProperties}>
+            <Link to={`/article/${article.id}`} className="article-row" style={srcStyle(article.source_type)}>
+              <Cover article={article} kind="row" />
+              <span className="article-row-main">
+                <h3>{article.title}</h3>
+                <p>{article.summary}</p>
+              </span>
+              <span className="article-row-side">
+                <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
+                <time>{formatDistanceToNow(new Date(article.created_at))}</time>
+              </span>
+            </Link>
+          </div>
+        ))}
       </div>
     );
   }
 
   return (
     <div className="article-grid">
-      <AnimatePresence initial={false}>
-        {articles.map((article, index) => (
-          <motion.article
-            key={article.id}
-            className="article-card"
-            style={srcStyle(article.source_type)}
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: Math.min(index, 12) * .04 }}
-          >
+      {articles.map((article, index) => (
+        <article
+          key={article.id}
+          className="article-card anim-enter"
+          style={{ ...srcStyle(article.source_type), '--lift': '12px', animationDelay: `${Math.min(index, 12) * .04}s` } as CSSProperties}
+        >
             <Link to={`/article/${article.id}`} className="article-cover" tabIndex={-1} aria-hidden="true">
               {article.cover_image_url
                 ? <img src={article.cover_image_url} alt="" loading="lazy" />
@@ -102,9 +95,8 @@ export default function ArticleList({
                 <span className="read-arrow"><ArrowRight size={13} /></span>
               </div>
             </div>
-          </motion.article>
+          </article>
         ))}
-      </AnimatePresence>
-    </div>
-  );
+      </div>
+    );
 }
