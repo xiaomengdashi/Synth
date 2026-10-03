@@ -73,7 +73,14 @@ cert_dir = Path(f'/etc/letsencrypt/live/{domain}')
 fullchain = cert_dir / 'fullchain.pem'
 privkey = cert_dir / 'privkey.pem'
 
-common_locations = f'''    client_max_body_size 64m;
+common_locations = f'''    # gzip 压缩静态资源与代理响应:详情页 JS chunk 曾达 1.2MB,不压缩时公网传输是最大等待来源
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types text/css text/plain application/javascript application/json image/svg+xml;
+
+    client_max_body_size 64m;
     root {remote_web_dir};
     index index.html;
 

@@ -126,7 +126,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       console.error('Failed to fetch config', e);
     }
   },
-  // 渐进加载:每次拉 5 篇元信息,滚动到底继续取下一页;筛选/搜索由后端完成
+  // 渐进加载:元信息每条仅百余字节,单页多取一些能显著减少滚动续载的请求次数;
+  // 筛选/搜索由后端完成,滚动到底继续取下一页
   fetchArticles: async (options) => {
     const reset = options?.reset ?? false;
     const fetchAll = options?.all ?? false;
@@ -137,7 +138,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (state.articlesLoading) return;
     if (!reset && !state.articlesHasMore) return;
 
-    const pageSize = fetchAll ? 50 : 5;
+    const pageSize = fetchAll ? 50 : 20;
     const offset = reset ? 0 : state.articles.length;
     set({ articlesLoading: true });
     try {

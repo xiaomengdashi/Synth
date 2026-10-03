@@ -4,7 +4,8 @@ import type { Article as ArticleType } from '../types';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import hljs from 'highlight.js';
+// common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
+import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
 import { motion } from 'framer-motion';
 import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles } from 'lucide-react';
