@@ -1,13 +1,19 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, DateTime, String, Text
+from sqlalchemy import Column, DateTime, Index, String, Text
 
 from app.database import Base
 
 
 class Article(Base):
     __tablename__ = "articles"
+    # 列表页按 created_at 倒序分页,来源/分类是最常用的过滤维度
+    __table_args__ = (
+        Index("ix_articles_created_at", "created_at"),
+        Index("ix_articles_source_created", "source_type", "created_at"),
+        Index("ix_articles_category_created", "category", "created_at"),
+    )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     title = Column(String(255), nullable=False)

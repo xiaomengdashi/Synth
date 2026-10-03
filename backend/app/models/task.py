@@ -1,13 +1,14 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text
 
 from app.database import Base
 
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (Index("ix_tasks_created_at", "created_at"),)
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     original_url = Column(Text, nullable=False)

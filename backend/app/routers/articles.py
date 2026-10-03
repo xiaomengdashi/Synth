@@ -2,7 +2,8 @@ import asyncio
 import datetime
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import func, or_, select
@@ -50,6 +51,8 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         Article.id, Article.title, Article.summary, Article.source_type,
         Article.cover_image_url, Article.account_name, Article.publish_time,
         Article.category, Article.created_at, Article.updated_at,
+        # 窗口函数随本页数据一并给出过滤后的总数,省掉原来单独的 COUNT 查询往返
+        func.count().over().label("total"),
     )
     for condition in filters:
         query = query.where(condition)
@@ -58,16 +61,14 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         .limit(limit)
         .offset(offset)
     )
-    rows = [dict(row) for row in result.mappings().all()]
+    mappings = result.mappings().all()
+    rows = [{k: v for k, v in row.items() if k != "total"} for row in mappings]
 
     # 内存兜底仅在无任何过滤时生效;带过滤条件时必须走 DB 计数,否则搜索会静默漏结果
     if not rows and offset == 0 and not filters and ARTICLES_DB:
         return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
 
-    count_query = select(func.count()).select_from(Article)
-    for condition in filters:
-        count_query = count_query.where(condition)
-    total = (await db.execute(count_query)).scalar_one()
+    total = mappings[0]["total"] if mappings else 0
     return {"total": total, "data": rows}
 
 
@@ -163,17 +164,31 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
     return article_data
 
 @router.get("/{article_id}")
-async def get_article(article_id: str, db: AsyncSession = Depends(get_db)):
+async def get_article(
+    article_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(Article).where(Article.id == article_id))
     article = result.scalars().first()
-    
+
     if article:
-        return jsonable_encoder(article)
-        
+        # 正文不可变(仅分类等元数据可改且会更新 updated_at),ETag 命中时 304 省掉整段正文传输
+        etag = f'W/"{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}"'
+        if request.headers.get("if-none-match") == etag:
+            return Response(status_code=304, headers={
+                "ETag": etag,
+                "Cache-Control": "private, no-cache",
+            })
+        return JSONResponse(
+            content=jsonable_encoder(article),
+            headers={"ETag": etag, "Cache-Control": "private, no-cache"},
+        )
+
     # 如果数据库找不到，尝试从内存数据里找
     if article_id in ARTICLES_DB:
         return ARTICLES_DB[article_id]
-        
+
     raise HTTPException(status_code=404, detail="Article not found")
 
 class ArticleCategoryPayload(BaseModel):

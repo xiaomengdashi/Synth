@@ -38,6 +38,15 @@ async def init_db():
             except Exception:
                 pass  # 列已存在
 
+        # create_all 只对新建的表生效,已有库的索引在这里幂等补建
+        for ddl in (
+            "CREATE INDEX IF NOT EXISTS ix_articles_created_at ON articles (created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_articles_source_created ON articles (source_type, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_articles_category_created ON articles (category, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_created_at ON tasks (created_at)",
+        ):
+            await conn.execute(text(ddl))
+
 
 async def get_db():
     """FastAPI 依赖注入：获取数据库会话"""

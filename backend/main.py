@@ -5,6 +5,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
@@ -28,6 +29,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+# API 响应 gzip 压缩:文章正文动辄上百 KB,不压缩时公网传输是详情页最大等待来源
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # CORS
 app.add_middleware(
