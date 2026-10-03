@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect } from 'react';
+import { Suspense, lazy, useEffect, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Layout from './components/Layout';
@@ -7,21 +7,34 @@ import ErrorBoundary from './components/ErrorBoundary';
 import NotFound from './components/NotFound';
 import { useAppStore } from './features/app/store/useAppStore';
 
+// 高 RTT/代理链路下大 chunk 下载中途失败并不罕见,而 import() 失败后浏览器不会自动恢复:
+// 先静默重试一次,仍失败则由 ErrorBoundary 整页刷新兜底
+function lazyPage(loader: () => Promise<{ default: ComponentType<unknown> }>) {
+  return lazy(async () => {
+    try {
+      return await loader();
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      return loader();
+    }
+  });
+}
+
 // 路由级代码分割:前台/后台/重依赖页面各自分包,首屏只加载当前路由需要的代码
-const Home = lazy(() => import('./features/articles/pages/Home'));
-const Articles = lazy(() => import('./features/articles/pages/Articles'));
-const Categories = lazy(() => import('./features/articles/pages/Categories'));
-const Article = lazy(() => import('./features/articles/pages/Article'));
-const Admin = lazy(() => import('./features/tasks/pages/Admin'));
-const AdminTasks = lazy(() => import('./features/tasks/pages/AdminTasks'));
-const AdminArticles = lazy(() => import('./features/tasks/pages/AdminArticles'));
-const AdminCategories = lazy(() => import('./features/tasks/pages/AdminCategories'));
-const AdminModelSettings = lazy(() => import('./features/tasks/pages/AdminModelSettings'));
-const AdminTikHubSettings = lazy(() => import('./features/tasks/pages/AdminTikHubSettings'));
-const AdminTokenSettings = lazy(() => import('./features/tasks/pages/AdminTokenSettings'));
-const AdminTikHubQuery = lazy(() => import('./features/tikhub/AdminTikHubQuery'));
-const ShareReceive = lazy(() => import('./features/sharing/ShareReceive'));
-const ShareSetup = lazy(() => import('./features/sharing/ShareSetup'));
+const Home = lazyPage(() => import('./features/articles/pages/Home'));
+const Articles = lazyPage(() => import('./features/articles/pages/Articles'));
+const Categories = lazyPage(() => import('./features/articles/pages/Categories'));
+const Article = lazyPage(() => import('./features/articles/pages/Article'));
+const Admin = lazyPage(() => import('./features/tasks/pages/Admin'));
+const AdminTasks = lazyPage(() => import('./features/tasks/pages/AdminTasks'));
+const AdminArticles = lazyPage(() => import('./features/tasks/pages/AdminArticles'));
+const AdminCategories = lazyPage(() => import('./features/tasks/pages/AdminCategories'));
+const AdminModelSettings = lazyPage(() => import('./features/tasks/pages/AdminModelSettings'));
+const AdminTikHubSettings = lazyPage(() => import('./features/tasks/pages/AdminTikHubSettings'));
+const AdminTokenSettings = lazyPage(() => import('./features/tasks/pages/AdminTokenSettings'));
+const AdminTikHubQuery = lazyPage(() => import('./features/tikhub/AdminTikHubQuery'));
+const ShareReceive = lazyPage(() => import('./features/sharing/ShareReceive'));
+const ShareSetup = lazyPage(() => import('./features/sharing/ShareSetup'));
 
 function PageLoading() {
   return (

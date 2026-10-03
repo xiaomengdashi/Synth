@@ -48,10 +48,11 @@ ssh -o StrictHostKeyChecking=no "${REMOTE}" "mkdir -p \
   '${REMOTE_APP_DIR}/data/articles' \
   '${REMOTE_WEB_DIR}'"
 
+# 旧 chunk 保留 7 天再滚动清理:持有旧 index.html 的浏览器点进页面时,懒加载旧 chunk 不至 404
 echo "==> 上传前端产物"
 tar -C "${ROOT_DIR}/frontend/dist" -czf - . | \
   ssh -o StrictHostKeyChecking=no "${REMOTE}" \
-  "bash -lc 'rm -rf \"${REMOTE_WEB_DIR}\"/{*,.[!.]*,..?*} 2>/dev/null || true; tar -xzf - -C \"${REMOTE_WEB_DIR}\"'"
+  "bash -lc 'mkdir -p \"${REMOTE_WEB_DIR}\"; tar -xzf - -C \"${REMOTE_WEB_DIR}\"; find \"${REMOTE_WEB_DIR}/assets\" -type f -mtime +7 -delete 2>/dev/null || true'"
 
 echo "==> 上传后端代码"
 tar -C "${ROOT_DIR}/backend" -czf - app main.py requirements.txt | \

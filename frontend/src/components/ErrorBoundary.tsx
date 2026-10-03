@@ -3,6 +3,9 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 interface ErrorBoundaryProps { children: ReactNode }
 interface ErrorBoundaryState { hasError: boolean }
 
+// vite 动态 import 失败在各内核的报错形态(网络抖动/代理闪断/发版后旧 chunk 被清理)
+const CHUNK_ERROR_PATTERN = /dynamically imported module|importing a module script failed|errorLoadingDynamicUrl|failed to fetch dynamically/i;
+
 /** 全局错误边界:任一路由渲染崩溃时给出恢复入口,避免整页白屏。 */
 export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   state: ErrorBoundaryState = { hasError: false };
@@ -12,6 +15,18 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    // chunk 加载失败说明是环境性问题而非渲染逻辑错误:自动整页刷新一次。
+    // 10 秒内只刷一次,防止异常环境陷入刷新循环。
+    const message = String(error?.message ?? error);
+    if (CHUNK_ERROR_PATTERN.test(message)) {
+      const marker = 'chunkReloadAt';
+      const last = Number(sessionStorage.getItem(marker) || 0);
+      if (Date.now() - last > 10_000) {
+        sessionStorage.setItem(marker, String(Date.now()));
+        window.location.reload();
+        return;
+      }
+    }
     console.error('Unhandled render error', error, info.componentStack);
   }
 
