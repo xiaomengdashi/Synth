@@ -12,6 +12,7 @@ class AppConfigModel(BaseModel):
     apiKey: str = ""
     baseUrl: str = ""
     modelName: str = ""
+    minimaxApiKey: str = ""
 
 
 @router.get("")

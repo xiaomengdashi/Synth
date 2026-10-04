@@ -4,4 +4,6 @@ export interface AppConfig {
   apiKeyConfigured?: boolean;
   baseUrl: string;
   tikhubConfigured?: boolean;
+  minimaxApiKey?: string;
+  minimaxConfigured?: boolean;
 }

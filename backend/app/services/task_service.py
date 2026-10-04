@@ -8,12 +8,14 @@ import urllib.parse
 from app.database import AsyncSessionLocal
 from app.models import Article, Task
 from app.services.fetchers.article import fetch_article_content
+from app.services.fetchers.bilibili_audio import fetch_bilibili_transcript_via_asr
 from app.services.fetchers.social import extract_x_article_id
 from app.services.fetchers.tikhub import TikHubError, TikHubNotConfiguredError, fetch_tikhub_tweet
 from app.services.fetchers.twitter_article_rich import render_twitter_article_result
 from app.services.fetchers.x_article import fetch_x_article_replica
 from app.services.fetchers.video import fetch_video_content
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB, article_from_db_record, task_created_at, update_task
+from app.services.video_notes import generate_video_notes
 
 def _normalize_title(title: str | None) -> str:
     if title is None:
@@ -32,7 +34,13 @@ def build_local_summary(text: str | None, fallback: str) -> str:
     return value[:120].rstrip() + ("..." if len(value) > 120 else "")
 
 
-def build_video_markdown(video_payload: dict, summary: str) -> str:
+def build_video_markdown(video_payload: dict, summary: str, notes: str = "") -> str:
+    transcript = (video_payload.get("transcript_text") or "").strip()
+    description = (video_payload.get("description") or "").strip()
+    chapters = (video_payload.get("chapter_info") or "").strip()
+    if notes.strip():
+        # 笔记即最终成品，不附完整文稿
+        return notes.strip()
     sections = [
         "## 内容摘要",
         summary,
@@ -43,9 +51,6 @@ def build_video_markdown(video_payload: dict, summary: str) -> str:
         "",
         f"- 作者：{video_payload.get('uploader') or '未知作者'}",
     ]
-    description = (video_payload.get("description") or "").strip()
-    chapters = (video_payload.get("chapter_info") or "").strip()
-    transcript = (video_payload.get("transcript_text") or "").strip()
     if description:
         sections.extend(["", "## 视频简介", "", description])
     if chapters:
@@ -221,12 +226,36 @@ async def process_task(task_id: str, url: str, config):
             video_payload = await fetch_video_content(url, config, update_step)
             title = video_payload["title"]
             update_step(f"解析成功: {title}。正在整理视频信息...")
+            transcript = (video_payload.get("transcript_text") or "").strip()
+            notes = ""
+            is_bilibili = "bilibili.com" in url or "b23.tv" in url
+            if is_bilibili and not transcript:
+                # B 站 CC 字幕覆盖率极低，无字幕时下载音频走云端转写；失败不阻断保存
+                try:
+                    asr_result = await asyncio.to_thread(
+                        fetch_bilibili_transcript_via_asr,
+                        url, config, update_step,
+                        str(video_payload.get("bvid") or ""),
+                        str(video_payload.get("cid") or ""),
+                    )
+                    video_payload["transcript_text"] = asr_result["transcript_text"]
+                    video_payload["cid"] = asr_result.get("cid", "")
+                    transcript = asr_result["transcript_text"]
+                except Exception as exc:
+                    update_step(f"音频转写不可用：{exc}")
+            if transcript:
+                try:
+                    notes = await generate_video_notes(video_payload, config, update_step)
+                except Exception as exc:
+                    update_step(f"学习笔记生成失败：{exc}，回退为文稿保存。")
             summary = build_local_summary(
-                video_payload.get("transcript_text") or video_payload.get("description"),
+                notes or transcript or video_payload.get("description"),
                 "视频信息已获取。",
             )
-            generated_content = build_video_markdown(video_payload, summary)
+            generated_content = build_video_markdown(video_payload, summary, notes=notes)
             cover_image_url = video_payload["cover_image_url"]
+            account_name = video_payload.get("uploader") or ""
+            publish_time = video_payload.get("publish_time") or ""
 
         else:
             article_payload = await fetch_article_content(url, update_step, config)

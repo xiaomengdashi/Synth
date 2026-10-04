@@ -17,7 +17,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.database import AsyncSessionLocal
 from app.models import AppSetting
 
-SUPPORTED_KEYS = ("apiKey", "baseUrl", "modelName", "tikhubApiKey")
+SUPPORTED_KEYS = ("apiKey", "baseUrl", "modelName", "tikhubApiKey", "minimaxApiKey")
 
 
 async def load_settings() -> dict[str, str]:
@@ -76,12 +76,15 @@ def key_metadata(values: dict) -> dict:
 def public_settings(values: dict) -> dict:
     """给前端的配置视图：密钥仅返回掩码，不返回数据库中的原文。"""
     model_key = str(values.get("apiKey") or "").strip()
+    minimax_key = str(values.get("minimaxApiKey") or "").strip()
     return {
         "apiKey": mask_secret(model_key),
         "apiKeyConfigured": bool(model_key),
         "baseUrl": str(values.get("baseUrl") or ""),
         "modelName": str(values.get("modelName") or ""),
         "tikhubConfigured": key_metadata(values)["configured"],
+        "minimaxApiKey": mask_secret(minimax_key),
+        "minimaxConfigured": bool(minimax_key),
     }
 
 

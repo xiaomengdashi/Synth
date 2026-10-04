@@ -73,7 +73,7 @@ function ModelPanel() {
       <section className="ac-set-card">
         <div className="ac-set-side">
           <h2><Cpu size={15} /> 连接参数</h2>
-          <p>OpenAI 兼容服务的参数在模型服务商控制台获取。当前内容导入不调用模型，参数留作后续功能启用。</p>
+          <p>OpenAI 兼容服务的参数在模型服务商控制台获取。B 站视频导入会用该模型把转写稿生成为学习笔记。</p>
         </div>
         <div className="ac-set-main">
           <form onSubmit={save}>
@@ -98,6 +98,11 @@ function ModelPanel() {
                 {models.map((model) => <option key={model} value={model} />)}
               </datalist>
               <p className="ac-help">先「获取可用模型」，再从下拉中选择；也可以直接手动输入。</p>
+            </div>
+            <div className="ac-field">
+              <label htmlFor="minimax-api-key">MiniMax 转写 Key</label>
+              <input id="minimax-api-key" className="ac-input" type="password" autoComplete="new-password" value={localConfig.minimaxApiKey ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, minimaxApiKey: event.target.value })} placeholder={config.minimaxConfigured ? '已配置，输入新 Key 可更换' : 'sk-cp-...'} />
+              <p className="ac-help">MiniMax Token Plan 订阅 Key（sk-cp- 开头）。B 站视频没有 CC 字幕时，用它把音频云端转写成文稿；仅保存在后端数据库。</p>
             </div>
             {modelMessage && <p className={`tikhub-message ${modelMessage.tone}`} role="status">{modelMessage.text}</p>}
             <div className="ac-actions">

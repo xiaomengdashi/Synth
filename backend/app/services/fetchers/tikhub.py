@@ -680,10 +680,14 @@ def fetch_bilibili_video(url: str, config: Any = None) -> dict:
         except TikHubError:
             aid = ""
         if aid:
-            player_data = _tikhub_request(BILIBILI_PLAYER_PATH, token, params={"a_id": aid, "c_id": str(first_cid)})
-            player_inner = player_data.get("data") if isinstance(player_data.get("data"), dict) else {}
-            subtitles = _deep_get(player_inner, "subtitle", "subtitles") or []
-            transcript_text = _download_bilibili_subtitle(subtitles, token)
+            # 字幕是可选增强：player 接口抽风（如间歇 400）时跳过，不拖垮整个抓取任务
+            try:
+                player_data = _tikhub_request(BILIBILI_PLAYER_PATH, token, params={"a_id": aid, "c_id": str(first_cid)})
+                player_inner = player_data.get("data") if isinstance(player_data.get("data"), dict) else {}
+                subtitles = _deep_get(player_inner, "subtitle", "subtitles") or []
+                transcript_text = _download_bilibili_subtitle(subtitles, token)
+            except TikHubError:
+                transcript_text = ""
 
     title = str((parts[0] or {}).get("part") or "").strip() or bvid
     return {
@@ -693,6 +697,7 @@ def fetch_bilibili_video(url: str, config: Any = None) -> dict:
         "transcript_text": transcript_text,
         "cover_image_url": "",
         "bvid": bvid,
+        "cid": str(first_cid or ""),
         "chapter_info": "\n".join(chapter_lines),
     }
 
