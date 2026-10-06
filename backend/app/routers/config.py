@@ -13,6 +13,10 @@ class AppConfigModel(BaseModel):
     baseUrl: str = ""
     modelName: str = ""
     minimaxApiKey: str = ""
+    imapHost: str = ""
+    imapUser: str = ""
+    imapPassword: str = ""
+    imapSenderWhitelist: str = ""
 
 
 @router.get("")

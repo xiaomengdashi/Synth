@@ -17,7 +17,10 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from app.database import AsyncSessionLocal
 from app.models import AppSetting
 
-SUPPORTED_KEYS = ("apiKey", "baseUrl", "modelName", "tikhubApiKey", "minimaxApiKey")
+SUPPORTED_KEYS = (
+    "apiKey", "baseUrl", "modelName", "tikhubApiKey", "minimaxApiKey",
+    "imapHost", "imapUser", "imapPassword", "imapSenderWhitelist",
+)
 
 
 async def load_settings() -> dict[str, str]:
@@ -77,6 +80,8 @@ def public_settings(values: dict) -> dict:
     """给前端的配置视图：密钥仅返回掩码，不返回数据库中的原文。"""
     model_key = str(values.get("apiKey") or "").strip()
     minimax_key = str(values.get("minimaxApiKey") or "").strip()
+    imap_user = str(values.get("imapUser") or "").strip()
+    imap_password = str(values.get("imapPassword") or "").strip()
     return {
         "apiKey": mask_secret(model_key),
         "apiKeyConfigured": bool(model_key),
@@ -85,6 +90,11 @@ def public_settings(values: dict) -> dict:
         "tikhubConfigured": key_metadata(values)["configured"],
         "minimaxApiKey": mask_secret(minimax_key),
         "minimaxConfigured": bool(minimax_key),
+        "imapHost": str(values.get("imapHost") or ""),
+        "imapUser": imap_user,
+        "imapPassword": mask_secret(imap_password),
+        "imapSenderWhitelist": str(values.get("imapSenderWhitelist") or ""),
+        "imapConfigured": bool(imap_user and imap_password),
     }
 
 
@@ -174,3 +184,47 @@ async def verify_admin_token(token: str) -> bool:
     if not stored:
         return False  # 未初始化:由依赖层决定放行(首次设置流程)
     return hmac.compare_digest(hash_admin_token(token or ""), stored)
+
+
+EMAIL_PROCESSED_KEY = "emailProcessedMessageIds"
+EMAIL_PROCESSED_CAP = 500
+
+
+async def load_processed_message_ids() -> list[str]:
+    """已入库邮件的 Message-ID 清单(JSON 数组),用于拉取去重。"""
+    import json as _json
+
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(select(AppSetting).where(AppSetting.key == EMAIL_PROCESSED_KEY))
+        stored = row.scalar_one_or_none()
+    if not stored or not stored.value:
+        return []
+    try:
+        ids = _json.loads(stored.value)
+    except ValueError:
+        return []
+    return [str(item) for item in ids if str(item)]
+
+
+async def record_processed_message_ids(new_ids: list[str]) -> list[str]:
+    """合并新入库的 Message-ID,去重后 FIFO 保留最近 EMAIL_PROCESSED_CAP 条。"""
+    import datetime as _dt
+    import json as _json
+
+    incoming = [str(item).strip() for item in new_ids if str(item).strip()]
+    merged = [item for item in await load_processed_message_ids() if item not in set(incoming)]
+    seen: set[str] = set()
+    merged = [item for item in merged + incoming if not (item in seen or seen.add(item))]
+    kept = merged[-EMAIL_PROCESSED_CAP:]
+
+    async with AsyncSessionLocal() as session:
+        row = await session.execute(select(AppSetting).where(AppSetting.key == EMAIL_PROCESSED_KEY))
+        stored = row.scalar_one_or_none()
+        payload = _json.dumps(kept, ensure_ascii=False)
+        if stored is None:
+            session.add(AppSetting(key=EMAIL_PROCESSED_KEY, value=payload))
+        else:
+            stored.value = payload
+            stored.updated_at = _dt.datetime.now(_dt.UTC).replace(tzinfo=None)
+        await session.commit()
+    return kept
