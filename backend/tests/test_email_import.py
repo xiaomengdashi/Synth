@@ -109,3 +109,38 @@ def test_test_endpoint_reports_recent_count(tmp_path, monkeypatch):
     data = _client().post("/api/v1/email/test").json()
     assert data == {"ok": True, "recent_count": 1}
     asyncio.run(engine.dispose())
+
+
+def test_fetch_covers_real_bilibili_video(tmp_path, monkeypatch):
+    """正文带B站链接:取官方真实封面并本地化。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages",
+        lambda config: [_message("cover-1", "# 封面\n\nhttps://www.bilibili.com/video/BV17x6hYZEzJ")],
+    )
+    monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: {"pic": "https://i0.hdslb.com/bfs/x.jpg"})
+    monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
+    client = _client()
+    data = client.post("/api/v1/email/fetch").json()
+    assert data["imported"][0]["id"] in ARTICLES_DB
+    assert ARTICLES_DB[data["imported"][0]["id"]]["cover_image_url"] == "/media/bilibili/BV17x6hYZEzJ.jpg"
+    asyncio.run(engine.dispose())
+
+
+def test_fetch_cover_falls_back_to_placeholder(tmp_path, monkeypatch):
+    """无B站链接或封面获取失败:回退到与任务管线一致的占位生图,不留空。"""
+    engine, sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages", lambda config: [_message("cover-2", "# 无链接笔记")]
+    )
+    client = _client()
+    data = client.post("/api/v1/email/fetch").json()
+    article_id = data["imported"][0]["id"]
+
+    async def load():
+        async with sessions() as session:
+            return await session.get(Article, article_id)
+
+    article = asyncio.run(load())
+    assert article.cover_image_url.startswith("https://coresg-normal.trae.ai/")
+    asyncio.run(engine.dispose())

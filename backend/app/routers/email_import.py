@@ -6,6 +6,7 @@
 
 import asyncio
 import datetime
+import urllib.parse
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,8 @@ from app.services.email_client import (
     fetch_whitelisted_messages,
     title_from_markdown,
 )
+from app.services.fetchers.tikhub import _extract_bilibili_bvid, _resolve_b23_short_url
+from app.services.fetchers.video import _fetch_bilibili_official_view, _localize_bilibili_cover
 from app.services.runtime_store import ARTICLES_DB
 
 router = APIRouter()
@@ -31,6 +34,23 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
+def _resolve_cover_for_article(original_url: str, title: str) -> str:
+    """B站链接→官方真实封面并本地化;无链接或失败→任务管线同款占位生图。"""
+    if original_url:
+        try:
+            bvid = _extract_bilibili_bvid(_resolve_b23_short_url(original_url))
+            view = _fetch_bilibili_official_view(bvid)
+            pic = str(view.get("pic") or "")
+            if pic:
+                localized = _localize_bilibili_cover(pic, bvid)
+                if localized:
+                    return localized
+        except Exception:
+            pass  # 封面是增强,任何失败都回退占位图,不阻断入库
+    img_prompt = urllib.parse.quote(f"Technology AI abstract {title[:10]}")
+    return f"https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt={img_prompt}&image_size=landscape_16_9"
+
+
 async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
     """一个 md 附件一篇 Article;同一事务提交,失败则整封重试。"""
     now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
@@ -38,15 +58,17 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
     async with AsyncSessionLocal() as session:
         for attachment in message.md_attachments:
             title = title_from_markdown(attachment["content"], message.subject, attachment["filename"])
+            original_url = extract_bilibili_url(attachment["content"])
+            cover_image_url = await asyncio.to_thread(_resolve_cover_for_article, original_url, title)
             article_id = str(uuid.uuid4())
             article_data = {
                 "id": article_id,
                 "title": title,
                 "summary": "",
                 "content_md": attachment["content"],
-                "original_url": extract_bilibili_url(attachment["content"]),
+                "original_url": original_url,
                 "source_type": "bilibili",
-                "cover_image_url": "",
+                "cover_image_url": cover_image_url,
                 "account_name": message.from_addr,
                 "publish_time": message.date,
                 "created_at": now.isoformat(),
@@ -57,9 +79,9 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
                 title=title,
                 summary="",
                 content_md=attachment["content"],
-                original_url=article_data["original_url"],
+                original_url=original_url,
                 source_type="bilibili",
-                cover_image_url="",
+                cover_image_url=cover_image_url,
                 account_name=message.from_addr,
                 publish_time=message.date,
                 created_at=now,
