@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Download, Mail, PlugZap } from 'lucide-react';
+import { Download, Mail, PlugZap, Save } from 'lucide-react';
 import { adminFetch } from '../../../utils/adminAuth';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../../tasks/components/AdminPageHeader';
@@ -109,24 +109,26 @@ function EmailPanel() {
               <input id="imap-whitelist" className="ac-input" value={localConfig.imapSenderWhitelist ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, imapSenderWhitelist: event.target.value })} placeholder="friend@qq.com, other@163.com" />
               <p className="ac-help">只拉取这些发件人的邮件，多个地址用逗号分隔。</p>
             </div>
+            <div className="ac-field">
+              <label htmlFor="imap-days">拉取范围</label>
+              <select id="imap-days" className="ac-input" style={{ width: 'auto' }} value={days} onChange={(event) => setDays(Number(event.target.value))}>
+                {DAY_OPTIONS.map((option) => (
+                  <option key={option} value={option}>近 {option} 天</option>
+                ))}
+              </select>
+              <p className="ac-help">「测试连接」和「拉取邮件」按此范围拉取，已入库的不会重复。</p>
+            </div>
             {message && <p className={`tikhub-message ${message.tone}`} role="status">{message.text}</p>}
             <div className="ac-actions">
-              <div className="ac-field" style={{ margin: 0, flex: 1, maxWidth: 220 }}>
-                <label htmlFor="imap-days">拉取范围</label>
-                <select id="imap-days" className="ac-input" style={{ width: 'auto' }} value={days} onChange={(event) => setDays(Number(event.target.value))}>
-                  {DAY_OPTIONS.map((option) => (
-                    <option key={option} value={option}>近 {option} 天</option>
-                  ))}
-                </select>
-                <p className="ac-help">只影响「测试连接」和「拉取邮件」的范围，已入库的不会重复。</p>
-              </div>
               <button type="button" className="ac-btn secondary" onClick={() => void handleTest()} disabled={testing || fetching}>
                 <PlugZap size={14} />{testing ? '测试中…' : '测试连接'}
               </button>
               <button type="button" className="ac-btn primary" onClick={() => void handleFetch()} disabled={fetching || testing}>
                 <Download size={14} />{fetching ? '拉取中…' : '拉取邮件'}
               </button>
-              <button type="submit" className="ac-btn secondary" disabled={saving || testing || fetching}>{saving ? '保存中…' : '保存配置'}</button>
+              <button type="submit" className="ac-btn secondary" disabled={saving || testing || fetching}>
+                <Save size={14} />{saving ? '保存中…' : '保存配置'}
+              </button>
             </div>
           </form>
         </div>
