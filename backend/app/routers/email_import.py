@@ -9,6 +9,7 @@ import datetime
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 from app.database import AsyncSessionLocal
 from app.models import Article
@@ -27,6 +28,11 @@ from app.services.fetchers.video import _fetch_bilibili_official_view, _localize
 from app.services.runtime_store import ARTICLES_DB
 
 router = APIRouter()
+
+
+class EmailWindowPayload(BaseModel):
+    """拉取窗口:近 N 天;只影响当次拉取/测试,不持久化。"""
+    days: int = Field(default=30, ge=1, le=3650)
 
 
 def _http_error(exc: Exception) -> HTTPException:
@@ -95,20 +101,22 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
 
 
 @router.post("/test")
-async def test_email_connection(_: None = Depends(require_admin)):
+async def test_email_connection(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
+    days = payload.days if payload else 30
     try:
-        messages = await asyncio.to_thread(fetch_whitelisted_messages, config)
+        messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:
         raise _http_error(exc) from exc
     return {"ok": True, "recent_count": len(messages)}
 
 
 @router.post("/fetch")
-async def fetch_email_articles(_: None = Depends(require_admin)):
+async def fetch_email_articles(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
+    days = payload.days if payload else 30
     try:
-        messages = await asyncio.to_thread(fetch_whitelisted_messages, config)
+        messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:
         raise _http_error(exc) from exc
 

@@ -175,7 +175,7 @@ def _connect(config: dict) -> imaplib.IMAP4_SSL:
     return connection
 
 
-def fetch_whitelisted_messages(config: dict) -> list[EmailMessageData]:
+def fetch_whitelisted_messages(config: dict, days: int = FETCH_SINCE_DAYS) -> list[EmailMessageData]:
     whitelist = parse_whitelist(config.get("imapSenderWhitelist") or "")
     if not whitelist:
         raise EmailFetchError("请先配置发件人白名单，再拉取邮件。")
@@ -184,7 +184,8 @@ def fetch_whitelisted_messages(config: dict) -> list[EmailMessageData]:
         status, _ = connection.select("INBOX", readonly=True)
         if status != "OK":
             raise EmailFetchError("无法打开收件箱。")
-        since = (datetime.date.today() - datetime.timedelta(days=FETCH_SINCE_DAYS)).strftime("%d-%b-%Y")
+        window = max(1, min(int(days or FETCH_SINCE_DAYS), 3650))
+        since = (datetime.date.today() - datetime.timedelta(days=window)).strftime("%d-%b-%Y")
         status, data = connection.search(None, "SINCE", since)
         if status != "OK" or not data or not data[0]:
             return []

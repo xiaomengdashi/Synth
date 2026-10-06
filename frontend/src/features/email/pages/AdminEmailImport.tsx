@@ -13,8 +13,12 @@ type FetchResult = {
 
 type Message = { tone: 'success' | 'error'; text: string } | null;
 
-async function postJson<T>(url: string): Promise<T> {
-  const response = await adminFetch(url, { method: 'POST' });
+async function postJson<T>(url: string, body?: unknown): Promise<T> {
+  const response = await adminFetch(url, {
+    method: 'POST',
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     const detail = (data as { detail?: string } | null)?.detail;
@@ -22,6 +26,8 @@ async function postJson<T>(url: string): Promise<T> {
   }
   return data as T;
 }
+
+const DAY_OPTIONS = [7, 30, 90, 180, 365];
 
 function EmailPanel() {
   const { config, setConfig, fetchConfig } = useAppStore();
@@ -31,6 +37,7 @@ function EmailPanel() {
   const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const [result, setResult] = useState<FetchResult | null>(null);
+  const [days, setDays] = useState(30);
 
   useEffect(() => { void fetchConfig(); }, [fetchConfig]);
   useEffect(() => { setLocalConfig(config); }, [config]);
@@ -53,7 +60,7 @@ function EmailPanel() {
     setTesting(true); setMessage(null);
     if (!(await save())) { setTesting(false); return; }
     try {
-      const data = await postJson<{ ok: boolean; recent_count: number }>('/api/v1/email/test');
+      const data = await postJson<{ ok: boolean; recent_count: number }>('/api/v1/email/test', { days });
       setMessage({ tone: 'success', text: `连接成功，白名单发件人近 30 天有 ${data.recent_count} 封带 md 附件的邮件。` });
     } catch (e) {
       setMessage({ tone: 'error', text: e instanceof Error ? e.message : '连接测试失败。' });
@@ -64,7 +71,7 @@ function EmailPanel() {
     setFetching(true); setMessage(null); setResult(null);
     if (!(await save())) { setFetching(false); return; }
     try {
-      const data = await postJson<FetchResult>('/api/v1/email/fetch');
+      const data = await postJson<FetchResult>('/api/v1/email/fetch', { days });
       setResult(data);
     } catch (e) {
       setMessage({ tone: 'error', text: e instanceof Error ? e.message : '拉取失败。' });
@@ -104,6 +111,15 @@ function EmailPanel() {
             </div>
             {message && <p className={`tikhub-message ${message.tone}`} role="status">{message.text}</p>}
             <div className="ac-actions">
+              <div className="ac-field" style={{ margin: 0, flex: 1, maxWidth: 220 }}>
+                <label htmlFor="imap-days">拉取范围</label>
+                <select id="imap-days" className="ac-input" style={{ width: 'auto' }} value={days} onChange={(event) => setDays(Number(event.target.value))}>
+                  {DAY_OPTIONS.map((option) => (
+                    <option key={option} value={option}>近 {option} 天</option>
+                  ))}
+                </select>
+                <p className="ac-help">只影响「测试连接」和「拉取邮件」的范围，已入库的不会重复。</p>
+              </div>
               <button type="button" className="ac-btn secondary" onClick={() => void handleTest()} disabled={testing || fetching}>
                 <PlugZap size={14} />{testing ? '测试中…' : '测试连接'}
               </button>

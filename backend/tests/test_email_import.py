@@ -45,7 +45,7 @@ def test_fetch_imports_md_and_dedupes(tmp_path, monkeypatch):
     engine, _sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
         email_import, "fetch_whitelisted_messages",
-        lambda config: [_message("msg-1", "# 网络原理\n\nhttps://b23.tv/abc"), _message("msg-2", None)],
+        lambda config, days=30: [_message("msg-1", "# 网络原理\n\nhttps://b23.tv/abc"), _message("msg-2", None)],
     )
     client = _client()
 
@@ -68,7 +68,7 @@ def test_fetch_imports_md_and_dedupes(tmp_path, monkeypatch):
 def test_imported_article_fields(tmp_path, monkeypatch):
     engine, sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
-        email_import, "fetch_whitelisted_messages", lambda config: [_message("msg-1", "# 标题\n\n正文")]
+        email_import, "fetch_whitelisted_messages", lambda config, days=30: [_message("msg-1", "# 标题\n\n正文")]
     )
     client = _client()
     data = client.post("/api/v1/email/fetch").json()
@@ -93,7 +93,7 @@ def test_fetch_without_whitelist_returns_chinese_400(tmp_path, monkeypatch):
     engine, _sessions = _setup(tmp_path, monkeypatch)
     from app.services.email_client import EmailFetchError
 
-    def raise_no_whitelist(config):
+    def raise_no_whitelist(config, days=30):
         raise EmailFetchError("请先配置发件人白名单，再拉取邮件。")
 
     monkeypatch.setattr(email_import, "fetch_whitelisted_messages", raise_no_whitelist)
@@ -105,7 +105,7 @@ def test_fetch_without_whitelist_returns_chinese_400(tmp_path, monkeypatch):
 
 def test_test_endpoint_reports_recent_count(tmp_path, monkeypatch):
     engine, _sessions = _setup(tmp_path, monkeypatch)
-    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", lambda config: [_message("m1", "# t")])
+    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", lambda config, days=30: [_message("m1", "# t")])
     data = _client().post("/api/v1/email/test").json()
     assert data == {"ok": True, "recent_count": 1}
     asyncio.run(engine.dispose())
@@ -116,7 +116,7 @@ def test_fetch_covers_real_bilibili_video(tmp_path, monkeypatch):
     engine, _sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
         email_import, "fetch_whitelisted_messages",
-        lambda config: [_message("cover-1", "# 封面\n\nhttps://www.bilibili.com/video/BV17x6hYZEzJ")],
+        lambda config, days=30: [_message("cover-1", "# 封面\n\nhttps://www.bilibili.com/video/BV17x6hYZEzJ")],
     )
     monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: {"pic": "https://i0.hdslb.com/bfs/x.jpg"})
     monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
@@ -131,7 +131,7 @@ def test_fetch_cover_empty_without_reference(tmp_path, monkeypatch):
     """无B站引用或获取失败:封面留空走前端来源色块兜底,禁止任何占位图。"""
     engine, sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
-        email_import, "fetch_whitelisted_messages", lambda config: [_message("cover-2", "# 无链接笔记")]
+        email_import, "fetch_whitelisted_messages", lambda config, days=30: [_message("cover-2", "# 无链接笔记")]
     )
     client = _client()
     data = client.post("/api/v1/email/fetch").json()
@@ -154,7 +154,7 @@ def test_fetch_subject_bvid_resolves_url_and_cover(tmp_path, monkeypatch):
         subject="《标题》文稿 | BV191Yj6HEAn", date="2026-10-06 09:00",
         md_attachments=[{"filename": "n.md", "content": "# 标题\n\n正文没有链接"}],
     )
-    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", lambda config: [message])
+    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", lambda config, days=30: [message])
     monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: {"pic": "https://i0.hdslb.com/x.jpg"})
     monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
     data = _client().post("/api/v1/email/fetch").json()
@@ -171,7 +171,7 @@ def test_refetch_after_delete_reimports(tmp_path, monkeypatch):
 
     engine, sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
-        email_import, "fetch_whitelisted_messages", lambda config: [_message("msg-r", "# 删了重拉")]
+        email_import, "fetch_whitelisted_messages", lambda config, days=30: [_message("msg-r", "# 删了重拉")]
     )
     client = _client()
     first = client.post("/api/v1/email/fetch").json()
@@ -196,11 +196,34 @@ def test_fetch_skips_when_article_still_exists(tmp_path, monkeypatch):
     """文章还在时,去重照常生效。"""
     engine, _sessions = _setup(tmp_path, monkeypatch)
     monkeypatch.setattr(
-        email_import, "fetch_whitelisted_messages", lambda config: [_message("msg-keep", "# 保留")]
+        email_import, "fetch_whitelisted_messages", lambda config, days=30: [_message("msg-keep", "# 保留")]
     )
     client = _client()
     assert len(client.post("/api/v1/email/fetch").json()["imported"]) == 1
     second = client.post("/api/v1/email/fetch").json()
     assert second["imported"] == []
     assert second["skipped"] == [{"subject": "B站笔记", "reason": "已导入过，跳过"}]
+    asyncio.run(engine.dispose())
+
+
+def test_fetch_and_test_accept_days_parameter(tmp_path, monkeypatch):
+    """拉取/测试连接支持 days 参数,缺省 30,超界拒绝。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    captured = {}
+
+    def fake_fetch(config, days=30):
+        captured["days"] = days
+        return [_message("d1", "# t")]
+
+    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", fake_fetch)
+    client = _client()
+
+    assert len(client.post("/api/v1/email/fetch", json={"days": 90}).json()["imported"]) == 1
+    assert captured["days"] == 90
+    client.post("/api/v1/email/test", json={"days": 180})
+    assert captured["days"] == 180
+    client.post("/api/v1/email/fetch")
+    assert captured["days"] == 30
+    assert client.post("/api/v1/email/fetch", json={"days": 0}).status_code == 422
+    assert client.post("/api/v1/email/fetch", json={"days": 4000}).status_code == 422
     asyncio.run(engine.dispose())
