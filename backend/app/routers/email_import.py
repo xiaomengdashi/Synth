@@ -56,8 +56,12 @@ def _resolve_cover_for_article(reference: str) -> str:
 
 
 async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
-    """一个 md 附件一篇 Article;同一事务提交,失败则整封重试。"""
-    now = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+    """一个 md 附件一篇 Article;同一事务提交,失败则整封重试。
+    created_at 用邮件收件时间——前台列表的排序与相对时间都跟真实收件顺序一致。"""
+    try:
+        received_at = datetime.datetime.strptime(message.date, "%Y-%m-%d %H:%M")
+    except ValueError:
+        received_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     imported: list[dict] = []
     async with AsyncSessionLocal() as session:
         for attachment in message.md_attachments:
@@ -79,7 +83,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
                 "cover_image_url": cover_image_url,
                 "account_name": message.from_addr,
                 "publish_time": message.date,
-                "created_at": now.isoformat(),
+                "created_at": received_at.isoformat(),
             }
             ARTICLES_DB[article_id] = article_data
             session.add(Article(
@@ -93,7 +97,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
                 account_name=message.from_addr,
                 publish_time=message.date,
                 email_message_id=message.message_id,
-                created_at=now,
+                created_at=received_at,
             ))
             imported.append({"id": article_id, "title": title, "filename": attachment["filename"]})
         await session.commit()

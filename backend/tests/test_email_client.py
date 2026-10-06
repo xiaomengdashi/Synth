@@ -164,3 +164,15 @@ def test_extract_bilibili_reference_prefers_url_then_bare_bvid():
     # 正文无链接时,主题里的裸 BV 号也能命中(如「...文稿 | BV191Yj6HEAn」)
     assert extract_bilibili_reference("正文没有链接", "《标题》文稿 | BV191Yj6HEAn") == "BV191Yj6HEAn"
     assert extract_bilibili_reference("都没有", "也没有") == ""
+
+
+def test_parse_raw_message_converts_utc_date_to_cn():
+    """Date 头是 UTC 时,收件时间应转成东八区显示。"""
+    msg = email.message.EmailMessage(policy=email.policy.default)
+    msg["From"] = "milky@4ueo.com"; msg["To"] = "kolane321@163.com"
+    msg["Subject"] = "s"; msg["Message-ID"] = "<tz-1@x>"
+    msg["Date"] = "Mon, 05 Oct 2026 23:30:00 +0000"
+    msg.set_content("body")
+    msg.add_attachment("# 标题".encode(), maintype="text", subtype="markdown", filename="n.md")
+    parsed = parse_raw_message(msg.as_bytes(), ["milky@4ueo.com"])
+    assert parsed.date == "2026-10-06 07:30"

@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -226,4 +227,24 @@ def test_fetch_and_test_accept_days_parameter(tmp_path, monkeypatch):
     assert captured["days"] == 30
     assert client.post("/api/v1/email/fetch", json={"days": 0}).status_code == 422
     assert client.post("/api/v1/email/fetch", json={"days": 4000}).status_code == 422
+    asyncio.run(engine.dispose())
+
+
+def test_import_uses_email_date_as_created_at(tmp_path, monkeypatch):
+    """列表按 created_at 排序/显示,邮件文章的 created_at 应是收件时间而非入库时刻。"""
+    engine, sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages",
+        lambda config, days=30: [_message("msg-time", "# 时间测试")],
+    )
+    client = _client()
+    article_id = client.post("/api/v1/email/fetch").json()["imported"][0]["id"]
+
+    async def load():
+        async with sessions() as session:
+            return await session.get(Article, article_id)
+
+    article = asyncio.run(load())
+    assert article.created_at == datetime.datetime(2026, 10, 4, 10, 30)
+    assert article.publish_time == "2026-10-04 10:30"
     asyncio.run(engine.dispose())
