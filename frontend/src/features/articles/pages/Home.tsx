@@ -31,16 +31,7 @@ function detectSourceFromUrl(value: string): Source | null {
     // Keep the current selection while the user is still typing a URL.
   }
   return null;
-}
-
-function greeting() {
-  const hour = new Date().getHours();
-  if (hour >= 5 && hour < 11) return '早上好';
-  if (hour < 13) return '中午好';
-  if (hour < 18) return '下午好';
-  if (hour < 23) return '晚上好';
-  return '夜深了';
-}
+} 
 
 export default function Home() {
   const { articles, articlesTotal, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
@@ -201,7 +192,6 @@ export default function Home() {
   return (
     <div>
       <section className="public-hero">
-        <p className="hero-greeting anim-enter" style={{ '--lift': '0px', animationDuration: '.5s' } as React.CSSProperties}>{greeting()}</p>
         <h1 className="display-title anim-enter" style={{ '--lift': '14px', animationDuration: '.55s' } as React.CSSProperties}>把好内容，收进来。</h1>
       </section>
 
