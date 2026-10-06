@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import hashlib
 import re
 import tempfile
@@ -33,6 +34,13 @@ def _clean_css(css: str) -> str:
     css = re.sub(r'url\([^)]*\)', 'none', css, flags=re.I)
     # Prevent a CSS string from closing its style element in a srcdoc document.
     return css.replace('</', '<\\/')
+
+
+def _text_matches(expected: str, captured: str) -> bool:
+    # TikHub 全文会丢失正文中的示意图和表格文字（实测），逐字相等会把完整长文误判为不一致；
+    # 相似度阈值只需拦截"页面不是同一篇文章"级别的差异。
+    normalize = lambda s: re.sub(r'\s+', '', s)
+    return difflib.SequenceMatcher(None, normalize(expected), normalize(captured)).ratio() >= 0.85
 
 
 def parse_x_article_page(html: str, url: str) -> dict:
@@ -81,18 +89,23 @@ def parse_x_article_page(html: str, url: str) -> dict:
 
 
 async def _read(client, url: str, hosts: set[str], limit: int) -> tuple[bytes, str]:
-    for _ in range(4):
+    for attempt in range(4):
         if not _allowed_url(url, hosts): raise ValueError('资源地址不在允许的 X 域名范围内。')
-        async with client.stream('GET', url, follow_redirects=False) as response:
-            if response.is_redirect:
-                url = urljoin(url, response.headers.get('location', ''))
-                continue
-            response.raise_for_status()
-            data = bytearray()
-            async for chunk in response.aiter_bytes():
-                data.extend(chunk)
-                if len(data) > limit: raise ValueError('X 页面或资源超过大小限制。')
-            return bytes(data), response.headers.get('content-type', '').split(';')[0].lower()
+        try:
+            async with client.stream('GET', url, follow_redirects=False) as response:
+                if response.is_redirect:
+                    url = urljoin(url, response.headers.get('location', ''))
+                    continue
+                response.raise_for_status()
+                data = bytearray()
+                async for chunk in response.aiter_bytes():
+                    data.extend(chunk)
+                    if len(data) > limit: raise ValueError('X 页面或资源超过大小限制。')
+                return bytes(data), response.headers.get('content-type', '').split(';')[0].lower()
+        except httpx.TransportError:
+            # x.com 直连链路易闪断，传输层异常重试；HTTP 状态错误与大小超限仍立即失败。
+            if attempt == 3: raise
+            await asyncio.sleep(1 + attempt)
     raise ValueError('X 资源重定向次数过多。')
 
 
@@ -106,8 +119,8 @@ async def fetch_x_article_replica(url: str, metadata: dict, update_step, *, clie
     raw, _ = await _read(client, url, PAGE_HOSTS, 4 * 1024 * 1024)
     parsed = parse_x_article_page(raw.decode('utf-8'), url)
     expected = metadata.get('full_text', '')
-    if expected and re.sub(r'\s+', '', expected) != re.sub(r'\s+', '', parsed['text']):
-        raise ValueError('X 原页与 TikHub 正文不一致，保留 TikHub 全文并提示重新抓取。')
+    if expected and not _text_matches(expected, parsed['text']):
+        raise ValueError('X 原页与 TikHub 正文不一致，可能不是同一篇文章。')
     root = BeautifulSoup(parsed['body_html'], 'html.parser')
     urls = list(dict.fromkeys([n[a] for n in root.find_all(True) for a in ('src', 'poster') if n.get(a)] + [parsed['cover_url'], metadata.get('author_avatar_url', '')] + parsed['font_urls']))
     urls = [u for u in urls if u and _allowed_url(u, ASSET_HOSTS)]

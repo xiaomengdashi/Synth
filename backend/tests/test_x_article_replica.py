@@ -5,7 +5,7 @@ import httpx
 import pytest
 from bs4 import BeautifulSoup
 
-from app.services.fetchers.x_article import parse_x_article_page, fetch_x_article_replica
+from app.services.fetchers.x_article import _read, _text_matches, parse_x_article_page, fetch_x_article_replica
 
 URL = 'https://x.com/author/status/123'
 PAGE = '''<html><head><link rel="preload" as="font" href="https://abs.twimg.com/fonts/Chirp-Regular.woff2"></head>
@@ -83,3 +83,44 @@ def test_wrong_article_text_is_not_silently_accepted(tmp_path):
             return await fetch_x_article_replica(URL, {'full_text':'完全不同的正文'}, lambda _:None, client=client,media_dir=tmp_path)
     with pytest.raises(ValueError, match='不一致'):
         asyncio.run(run())
+
+
+def test_tikhub_text_missing_diagram_blocks_still_matches():
+    # 实测：TikHub 全文会丢失正文里的 ASCII 示意图与文末对照表文字，逐字校验会把这类长文误降级为纯文本。
+    body = '编程 Agent 向 LLM 发出的第一次请求包含初始上下文，以及用户的第一条消息。' * 20
+    captured = body + 'text请求1：[系统][工具][用户]' + 'text压缩后：[系统][工具][摘要]' + '概念主要作用上下文窗口限制模型一次能够处理的内容范围'
+    assert _text_matches(body, captured)
+
+
+def test_read_retries_transport_errors_before_giving_up():
+    calls = {'n': 0}
+
+    def handler(request):
+        calls['n'] += 1
+        if calls['n'] == 1:
+            raise httpx.ConnectError('闪断', request=request)
+        return httpx.Response(200, content=b'ok', headers={'content-type': 'text/html; charset=utf-8'})
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _read(client, URL, {'x.com'}, 1024)
+
+    data, mime = asyncio.run(run())
+    assert data == b'ok' and mime == 'text/html'
+    assert calls['n'] == 2
+
+
+def test_read_does_not_retry_http_status_errors():
+    calls = {'n': 0}
+
+    def handler(request):
+        calls['n'] += 1
+        return httpx.Response(404)
+
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            return await _read(client, URL, {'x.com'}, 1024)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        asyncio.run(run())
+    assert calls['n'] == 1
