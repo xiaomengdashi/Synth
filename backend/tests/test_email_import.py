@@ -127,10 +127,9 @@ def test_fetch_covers_real_bilibili_video(tmp_path, monkeypatch):
     asyncio.run(engine.dispose())
 
 
-def test_fetch_cover_falls_back_to_local_svg(tmp_path, monkeypatch):
-    """无B站引用或封面获取失败:本地生成 SVG 占位,不依赖外链生图。"""
+def test_fetch_cover_empty_without_reference(tmp_path, monkeypatch):
+    """无B站引用或获取失败:封面留空走前端来源色块兜底,禁止任何占位图。"""
     engine, sessions = _setup(tmp_path, monkeypatch)
-    monkeypatch.setattr(email_import.settings, "MEDIA_DIR", str(tmp_path / "media"))
     monkeypatch.setattr(
         email_import, "fetch_whitelisted_messages", lambda config: [_message("cover-2", "# 无链接笔记")]
     )
@@ -143,8 +142,7 @@ def test_fetch_cover_falls_back_to_local_svg(tmp_path, monkeypatch):
             return await session.get(Article, article_id)
 
     article = asyncio.run(load())
-    assert article.cover_image_url == f"/media/covers/{article_id}.svg"
-    assert (tmp_path / "media" / "covers" / f"{article_id}.svg").exists()
+    assert article.cover_image_url == ""
     asyncio.run(engine.dispose())
 
 

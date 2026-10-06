@@ -6,12 +6,10 @@
 
 import asyncio
 import datetime
-import os
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models import Article
 from app.routers.admin_auth import require_admin
@@ -35,39 +33,20 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
-def _placeholder_cover_svg(title: str, article_id: str) -> str:
-    """本地生成 SVG 占位封面:外链生图服务(trae.ai)国内直连不可达,封面必须本地化。"""
-    safe = (title or "笔记")[:14].replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">'
-        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
-        '<stop offset="0" stop-color="#175B41"/><stop offset="1" stop-color="#2E8B63"/></linearGradient></defs>'
-        '<rect width="640" height="360" fill="url(#g)"/>'
-        f'<text x="40" y="196" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="34" fill="#F5F1E8">{safe}</text>'
-        "</svg>"
-    )
-    target_dir = settings.MEDIA_DIR.rstrip("/") + "/covers"
-    os.makedirs(target_dir, exist_ok=True)
-    with open(f"{target_dir}/{article_id}.svg", "w", encoding="utf-8") as fh:
-        fh.write(svg)
-    return f"/media/covers/{article_id}.svg"
-
-
-def _resolve_cover_for_article(reference: str, title: str, article_id: str) -> str:
-    """B站引用→官方真实封面并本地化;无引用或失败→本地 SVG 占位(不依赖任何外链)。"""
-    if reference:
-        try:
-            url = reference if reference.startswith("http") else f"https://www.bilibili.com/video/{reference}"
-            bvid = _extract_bilibili_bvid(_resolve_b23_short_url(url))
-            view = _fetch_bilibili_official_view(bvid)
-            pic = str(view.get("pic") or "")
-            if pic:
-                localized = _localize_bilibili_cover(pic, bvid)
-                if localized:
-                    return localized
-        except Exception:
-            pass  # 封面是增强,任何失败都回退本地占位,不阻断入库
-    return _placeholder_cover_svg(title, article_id)
+def _resolve_cover_for_article(reference: str) -> str:
+    """B站引用→官方真实封面并本地化;拿不到就留空,前端走来源色块兜底(禁止占位图)。"""
+    if not reference:
+        return ""
+    try:
+        url = reference if reference.startswith("http") else f"https://www.bilibili.com/video/{reference}"
+        bvid = _extract_bilibili_bvid(_resolve_b23_short_url(url))
+        view = _fetch_bilibili_official_view(bvid)
+        pic = str(view.get("pic") or "")
+        if pic:
+            return _localize_bilibili_cover(pic, bvid)
+    except Exception:
+        pass  # 封面是增强,任何失败都留空,不阻断入库
+    return ""
 
 
 async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
@@ -83,9 +62,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
             else:
                 original_url = f"https://www.bilibili.com/video/{reference}" if reference else ""
             article_id = str(uuid.uuid4())
-            cover_image_url = await asyncio.to_thread(
-                _resolve_cover_for_article, reference, title, article_id
-            )
+            cover_image_url = await asyncio.to_thread(_resolve_cover_for_article, reference)
             article_data = {
                 "id": article_id,
                 "title": title,

@@ -3,7 +3,6 @@ import datetime
 import json
 import re
 import uuid
-import urllib.parse
 
 from app.database import AsyncSessionLocal
 from app.models import Article, Task
@@ -276,10 +275,6 @@ async def process_task(task_id: str, url: str, config):
 
         article_id = str(uuid.uuid4())
         update_task(task_id, status="completed", current_step="处理完成", article_id=article_id)
-
-        if not cover_image_url:
-            img_prompt = urllib.parse.quote(f"Technology AI abstract {title[:10]}")
-            cover_image_url = f"https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt={img_prompt}&image_size=landscape_16_9"
 
         source_type = detect_source_type(source_url)
         article_data = {
