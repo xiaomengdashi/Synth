@@ -141,6 +141,9 @@ def _connect(config: dict) -> imaplib.IMAP4_SSL:
     try:
         connection = imaplib.IMAP4_SSL(host, 993, timeout=IMAP_TIMEOUT_SECONDS)
         connection.login(user, password)
+    except imaplib.IMAP4.abort as exc:
+        # abort 是 error 的子类,先接住:登录期闪断是连接问题,不是授权码错
+        raise EmailFetchError("邮箱连接中断，请稍后重试。") from exc
     except imaplib.IMAP4.error as exc:
         raise EmailAuthError(
             "邮箱登录失败：请确认已在 163 网页版「设置 → POP3/SMTP/IMAP」开启 IMAP 服务，"
@@ -183,6 +186,8 @@ def fetch_whitelisted_messages(config: dict) -> list[EmailMessageData]:
         return messages
     except imaplib.IMAP4.abort as exc:
         raise EmailFetchError("邮箱连接中断，请稍后重试。") from exc
+    except imaplib.IMAP4.error as exc:
+        raise EmailFetchError("邮箱服务器返回错误，请稍后重试。") from exc
     finally:
         try:
             connection.logout()

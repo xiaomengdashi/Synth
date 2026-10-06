@@ -54,7 +54,7 @@ function EmailPanel() {
     if (!(await save())) { setTesting(false); return; }
     try {
       const data = await postJson<{ ok: boolean; recent_count: number }>('/api/v1/email/test');
-      setMessage({ tone: 'success', text: `连接成功，白名单发件人近 30 天有 ${data.recent_count} 封邮件。` });
+      setMessage({ tone: 'success', text: `连接成功，白名单发件人近 30 天有 ${data.recent_count} 封带 md 附件的邮件。` });
     } catch (e) {
       setMessage({ tone: 'error', text: e instanceof Error ? e.message : '连接测试失败。' });
     } finally { setTesting(false); }

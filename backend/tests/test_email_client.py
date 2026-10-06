@@ -115,3 +115,43 @@ def test_fetch_without_whitelist_fails_fast():
     with pytest.raises(EmailFetchError) as exc_info:
         fetch_whitelisted_messages({"imapUser": "a@163.com", "imapPassword": "x", "imapSenderWhitelist": ""})
     assert "白名单" in str(exc_info.value)
+
+
+def test_fetch_wraps_generic_imap_error(monkeypatch):
+    """fetch 阶段的通用 IMAP4.error 也要包成中文 EmailFetchError,不能裸抛 500。"""
+    import imaplib
+
+    from app.services import email_client
+
+    class FakeConn:
+        def select(self, *args, **kwargs):
+            raise imaplib.IMAP4.error("SELECT failed")
+
+        def logout(self):
+            pass
+
+    monkeypatch.setattr(email_client, "_connect", lambda config: FakeConn())
+    with pytest.raises(email_client.EmailFetchError) as exc_info:
+        email_client.fetch_whitelisted_messages(
+            {"imapUser": "a@163.com", "imapPassword": "x", "imapSenderWhitelist": "b@163.com"}
+        )
+    assert "稍后重试" in str(exc_info.value)
+
+
+def test_connect_abort_is_connection_error(monkeypatch):
+    """登录阶段网络闪断(abort)是连接问题,不能误报成授权码无效。"""
+    import imaplib
+
+    from app.services import email_client
+
+    class FakeIMAP:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def login(self, user, password):
+            raise imaplib.IMAP4.abort("connection dropped")
+
+    monkeypatch.setattr(email_client.imaplib, "IMAP4_SSL", FakeIMAP)
+    with pytest.raises(email_client.EmailFetchError) as exc_info:
+        email_client._connect({"imapUser": "a@163.com", "imapPassword": "x"})
+    assert "重试" in str(exc_info.value)
