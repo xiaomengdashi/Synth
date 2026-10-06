@@ -75,16 +75,17 @@ function useAdminBreadcrumbs(pathname: string) {
 }
 
 export default function AdminLayout() {
-  const { darkMode, toggleDarkMode } = useAppStore();
+  const { adminDark, toggleAdminDark } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
   const [navOpen, setNavOpen] = useState(false);
   const breadcrumbs = useAdminBreadcrumbs(location.pathname);
+  // 后台明暗独立于前台主题:进入后台按自己的记录落 dark 类
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-  }, [darkMode]);
+    document.documentElement.classList.toggle('dark', adminDark);
+  }, [adminDark]);
 
   // 路由变化时收起移动端抽屉
   useEffect(() => { setNavOpen(false); }, [location.pathname]);
@@ -180,8 +181,8 @@ export default function AdminLayout() {
               aria-label="搜索文章或链接"
             />
           </form>
-          <button type="button" className="ac-icon-btn" onClick={toggleDarkMode} aria-label="切换主题">
-            {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+          <button type="button" className="ac-icon-btn" onClick={toggleAdminDark} aria-label="切换明暗">
+            {adminDark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
         </header>
 

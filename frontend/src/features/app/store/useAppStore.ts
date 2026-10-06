@@ -3,6 +3,7 @@ import type { Article } from '../../articles/types';
 import type { AppConfig } from '../../config/types';
 import type { Task } from '../../tasks/types';
 import { adminFetch } from '../../../utils/adminAuth';
+import { applyTheme, DEFAULT_THEME, isThemeId, type ThemeId } from '../themes';
 
 export interface ToastMessage {
   id: string;
@@ -14,9 +15,11 @@ interface AppState {
   articles: Article[];
   tasks: Task[];
   toasts: ToastMessage[];
-  darkMode: boolean;
+  theme: ThemeId;
+  adminDark: boolean;
   config: AppConfig;
-  toggleDarkMode: () => void;
+  setTheme: (id: ThemeId) => void;
+  toggleAdminDark: () => void;
   addArticle: (article: Article) => void;
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -33,23 +36,33 @@ interface AppState {
   updateArticle: (articleId: string, patch: Partial<Article>) => void;
 }
 
-// 从 localStorage 获取初始主题设置
-const getInitialDarkMode = () => {
-  const savedTheme = localStorage.getItem('theme');
-  if (savedTheme !== null) {
-    return savedTheme === 'dark';
-  }
-  // 默认暗色模式
-  return true;
+// 前台主题:localStorage 存主题 id;旧值 'dark'/'light' 迁移为墨夜/纸墨
+const getInitialTheme = (): ThemeId => {
+  const saved = localStorage.getItem('theme');
+  if (saved && isThemeId(saved)) return saved;
+  return saved === 'light' ? 'zhimo' : DEFAULT_THEME;
 };
 
-// 立即应用初始主题，防止页面闪烁
-const initialDarkMode = getInitialDarkMode();
-if (initialDarkMode) {
-  document.documentElement.classList.add('dark');
-} else {
-  document.documentElement.classList.remove('dark');
+// 后台明暗独立于前台主题(后台是自己的设计系统,只有亮暗两态);
+// 初次迁移时沿用旧的全局明暗记录,落定后存独立的 admin-dark
+const getInitialAdminDark = (legacyTheme: string | null): boolean => {
+  const saved = localStorage.getItem('admin-dark');
+  if (saved !== null) return saved === 'dark';
+  return legacyTheme !== 'light';
+};
+
+const savedThemeRaw = localStorage.getItem('theme');
+const initialTheme = getInitialTheme();
+const initialAdminDark = getInitialAdminDark(savedThemeRaw);
+// 立即归一化存储:旧值/脏值换成主题 id,后台明暗落到独立键
+if (savedThemeRaw !== initialTheme) {
+  localStorage.setItem('theme', initialTheme);
 }
+if (localStorage.getItem('admin-dark') === null) {
+  localStorage.setItem('admin-dark', initialAdminDark ? 'dark' : 'light');
+}
+// 立即应用初始主题，防止页面闪烁
+applyTheme(initialTheme);
 
 export const useAppStore = create<AppState>((set, get) => ({
   articles: [],
@@ -58,7 +71,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   articlesTotal: 0,
   tasks: [],
   toasts: [],
-  darkMode: initialDarkMode,
+  theme: initialTheme,
+  adminDark: initialAdminDark,
+  setTheme: (id) => {
+    if (!isThemeId(id)) return;
+    localStorage.setItem('theme', id);
+    applyTheme(id);
+    set({ theme: id });
+  },
+  toggleAdminDark: () => set((state) => {
+    const adminDark = !state.adminDark;
+    localStorage.setItem('admin-dark', adminDark ? 'dark' : 'light');
+    return { adminDark };
+  }),
   config: {
     modelName: 'gpt-4o-mini',
     apiKey: '',
@@ -66,17 +91,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     baseUrl: 'https://api.openai.com/v1',
     tikhubConfigured: false,
   },
-  toggleDarkMode: () => set((state) => {
-    const newDarkMode = !state.darkMode;
-    if (newDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-    return { darkMode: newDarkMode };
-  }),
   addArticle: (article) => set((state) => {
     const isNew = !state.articles.some((item) => item.id === article.id);
     const nextArticles = state.articles.filter((item) => item.id !== article.id);

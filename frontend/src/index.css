@@ -62,6 +62,91 @@
   --shadow: 0 18px 50px rgba(0, 0, 0, .32);
 }
 
+/* ---------- 命名主题 ----------
+   默认亮色 = 纸墨(:root)、默认暗色 = 墨夜(.dark),其余主题按 data-theme 覆盖;
+   每块都自带全套变量,清单见 src/features/app/themes.ts,两处需同步。 */
+
+[data-theme='qingci'] {
+  color-scheme: light;
+  --ink: #1d2523;
+  --muted: #6f7d77;
+  --faint: #9daba4;
+  --line: #dbe3df;
+  --paper: #f1f4f2;
+  --surface: #fbfdfc;
+  --accent: #2b8274;
+  --accent-strong: #1f6359;
+  --accent-soft: #e0efec;
+  --accent-ink: #ffffff;
+  --danger: #bf4f42;
+  --shadow: 0 18px 50px rgba(29, 37, 35, .08);
+}
+
+[data-theme='qiushi'] {
+  color-scheme: light;
+  --ink: #262019;
+  --muted: #80765f;
+  --faint: #ab9f86;
+  --line: #e9dfc9;
+  --paper: #f7f2e6;
+  --surface: #fffdf6;
+  --accent: #bb5a17;
+  --accent-strong: #99430e;
+  --accent-soft: #f7e8dc;
+  --accent-ink: #ffffff;
+  --danger: #bf3f2e;
+  --shadow: 0 18px 50px rgba(38, 32, 25, .09);
+}
+
+/* 素白:页面底色纯白;卡片面用 #fcfcfd 微灰,保证 hover 到纯白(--paper)时仍有可见反馈 */
+[data-theme='subai'] {
+  color-scheme: light;
+  --ink: #17181a;
+  --muted: #6f7278;
+  --faint: #9da0a8;
+  --line: #e8e9ec;
+  --paper: #ffffff;
+  --surface: #fcfcfd;
+  --accent: #1f2124;
+  --accent-strong: #000000;
+  --accent-soft: #f1f2f4;
+  --accent-ink: #ffffff;
+  --danger: #c25442;
+  --shadow: 0 18px 50px rgba(20, 21, 24, .07);
+}
+
+[data-theme='dianqing'] {
+  color-scheme: dark;
+  --ink: #dce3ef;
+  --muted: #8e99b0;
+  --faint: #626d85;
+  --line: #2a3348;
+  --paper: #12161f;
+  --surface: #1a2030;
+  --accent: #82aae0;
+  --accent-strong: #a4c3ec;
+  --accent-soft: rgba(130, 170, 224, .14);
+  --accent-ink: #0e1930;
+  --danger: #e08575;
+  --shadow: 0 18px 50px rgba(0, 0, 0, .38);
+}
+
+[data-theme='daizi'] {
+  color-scheme: dark;
+  --ink: #e6e1ef;
+  --muted: #9c93b2;
+  --faint: #6c6480;
+  --line: #312c40;
+  --paper: #16131d;
+  --surface: #1f1a29;
+  --accent: #a68cd4;
+  --accent-strong: #c0aae6;
+  --accent-soft: rgba(166, 140, 212, .14);
+  --accent-ink: #190f2e;
+  --danger: #dd8290;
+  --shadow: 0 18px 50px rgba(0, 0, 0, .36);
+}
+
 @layer base {
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
@@ -99,6 +184,20 @@
 .icon-button:hover { background: var(--accent-soft); color: var(--accent); }
 .header-admin-link { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; font-weight: 700; text-decoration: none; white-space: nowrap; transition: color .15s ease; }
 .header-admin-link:hover { color: var(--accent); }
+
+/* ---------- 主题选择 ---------- */
+.theme-picker { position: relative; }
+.theme-menu { position: absolute; top: calc(100% + 10px); right: 0; z-index: 70; display: grid; gap: 2px; width: 224px; padding: 8px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); animation: fade-up .18s ease-out both; --lift: 6px; }
+.theme-menu-title { padding: 4px 10px 6px; color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .16em; }
+.theme-option { display: flex; align-items: center; gap: 9px; width: 100%; padding: 8px 10px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); text-align: left; }
+.theme-option:hover { background: var(--paper); }
+.theme-option.active { background: var(--accent-soft); }
+.theme-option.active .theme-option-name { color: var(--accent-strong); }
+.theme-swatch { display: inline-grid; width: 18px; height: 18px; flex: none; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--sw-paper); }
+.theme-swatch::after { width: 7px; height: 7px; border-radius: 50%; background: var(--sw-accent); content: ''; }
+.theme-option-name { font-size: 12.5px; font-weight: 600; }
+.theme-option-hint { margin-left: auto; color: var(--faint); font-size: 10.5px; white-space: nowrap; }
+.theme-option > svg { flex: none; color: var(--accent); }
 
 /* ---------- 页面骨架 ---------- */
 .site-main { width: min(1160px, calc(100% - 40px)); margin: 0 auto; padding: 46px 0 72px; }
@@ -339,7 +438,7 @@
 @keyframes fade-up { from { opacity: 0; transform: translateY(var(--lift, 14px)); } to { opacity: 1; transform: none; } }
 .anim-enter { animation: fade-up .3s ease-out both; }
 /* 动画时钟停摆宿主的兜底:窗口期后全部直接可见(App.tsx 挂载 1.6s 后) */
-.no-anim .anim-enter, .no-anim .toast-item { animation: none; }
+.no-anim .anim-enter, .no-anim .toast-item, .no-anim .theme-menu { animation: none; }
 .toast-item > span:nth-child(2) { flex: 1; }
 .toast-item button { display: grid; place-items: center; border: 0; background: transparent; color: var(--muted); }
 .toast-icon { display: grid; place-items: center; }

@@ -7,12 +7,23 @@
     <meta name="referrer" content="never">
     <title>SynthAI · 个人知识库</title>
     <script>
-      // 在 HTML 头部尽早执行，防止页面加载时出现白屏或暗色闪烁
-      if (localStorage.getItem('theme') === 'light' || (!('theme' in localStorage) && false)) {
-        document.documentElement.classList.remove('dark');
-      } else {
-        document.documentElement.classList.add('dark');
-      }
+      // 在 HTML 头部尽早执行，防止页面加载时出现白屏或暗色闪烁。
+      // 主题 id 清单见 src/features/app/themes.ts,两处需同步;旧值 'dark'/'light' 做迁移。
+      (function () {
+        var saved = localStorage.getItem('theme');
+        var darkIds = { moye: 1, dianqing: 1, daizi: 1 };
+        var lightIds = { zhimo: 1, qingci: 1, qiushi: 1, subai: 1 };
+        var id, dark;
+        if (saved && (lightIds[saved] || darkIds[saved])) {
+          id = saved; dark = !!darkIds[saved];
+        } else if (saved === 'light') {
+          id = 'zhimo'; dark = false;
+        } else {
+          id = 'moye'; dark = true; // 'dark'、无值、未知值:默认墨夜
+        }
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.dataset.theme = id;
+      })();
     </script>
     <script type="module">
       if (import.meta.hot?.on) {
