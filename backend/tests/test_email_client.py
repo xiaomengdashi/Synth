@@ -104,3 +104,14 @@ def test_extract_bilibili_url():
 def test_email_message_data_shape():
     data = EmailMessageData("m", "a", "s", "d", [])
     assert data.md_attachments == []
+
+
+import pytest
+
+from app.services.email_client import EmailFetchError, fetch_whitelisted_messages
+
+
+def test_fetch_without_whitelist_fails_fast():
+    with pytest.raises(EmailFetchError) as exc_info:
+        fetch_whitelisted_messages({"imapUser": "a@163.com", "imapPassword": "x", "imapSenderWhitelist": ""})
+    assert "白名单" in str(exc_info.value)

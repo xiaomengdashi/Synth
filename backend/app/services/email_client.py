@@ -13,6 +13,7 @@ import email.message
 import email.policy
 import email.utils
 import hashlib
+import imaplib
 import re
 from dataclasses import dataclass, field
 
@@ -117,3 +118,73 @@ def parse_raw_message(raw: bytes, whitelist: list[str]) -> EmailMessageData | No
         digest = hashlib.sha1(f"{from_addr}|{subject}|{date_text}".encode("utf-8")).hexdigest()
         message_id = f"sha1-{digest}"
     return EmailMessageData(message_id, from_addr, subject, date_text, attachments)
+
+
+FETCH_SINCE_DAYS = 30
+IMAP_TIMEOUT_SECONDS = 30
+
+
+class EmailAuthError(Exception):
+    pass
+
+
+class EmailFetchError(Exception):
+    pass
+
+
+def _connect(config: dict) -> imaplib.IMAP4_SSL:
+    host = (str(config.get("imapHost") or "").strip() or "imap.163.com")
+    user = str(config.get("imapUser") or "").strip()
+    password = str(config.get("imapPassword") or "").strip()
+    if not user or not password:
+        raise EmailAuthError("请先在「邮箱导入」页配置邮箱账号与客户端授权码。")
+    try:
+        connection = imaplib.IMAP4_SSL(host, 993, timeout=IMAP_TIMEOUT_SECONDS)
+        connection.login(user, password)
+    except imaplib.IMAP4.error as exc:
+        raise EmailAuthError(
+            "邮箱登录失败：请确认已在 163 网页版「设置 → POP3/SMTP/IMAP」开启 IMAP 服务，"
+            "并使用客户端授权码（不是登录密码）。"
+        ) from exc
+    except (OSError, TimeoutError) as exc:
+        raise EmailFetchError("邮箱连接失败，请检查网络后重试。") from exc
+    # 网易要求 RFC 2971 ID 命令(imaplib 未内置),缺失会被拒绝服务;失败不阻断,兼容其他邮箱
+    try:
+        imaplib.Commands["ID"] = ("AUTH",)
+        connection._simple_command("ID", '("name" "SynthAI" "version" "1.0.0")')
+    except Exception:
+        pass
+    return connection
+
+
+def fetch_whitelisted_messages(config: dict) -> list[EmailMessageData]:
+    whitelist = parse_whitelist(config.get("imapSenderWhitelist") or "")
+    if not whitelist:
+        raise EmailFetchError("请先配置发件人白名单，再拉取邮件。")
+    connection = _connect(config)
+    try:
+        status, _ = connection.select("INBOX", readonly=True)
+        if status != "OK":
+            raise EmailFetchError("无法打开收件箱。")
+        since = (datetime.date.today() - datetime.timedelta(days=FETCH_SINCE_DAYS)).strftime("%d-%b-%Y")
+        status, data = connection.search(None, "SINCE", since)
+        if status != "OK" or not data or not data[0]:
+            return []
+        messages: list[EmailMessageData] = []
+        for num in data[0].split():
+            status, fetched = connection.fetch(num, "(RFC822)")
+            if status != "OK" or not fetched:
+                continue
+            for item in fetched:
+                if isinstance(item, tuple) and len(item) >= 2 and isinstance(item[1], (bytes, bytearray)):
+                    parsed = parse_raw_message(bytes(item[1]), whitelist)
+                    if parsed is not None:
+                        messages.append(parsed)
+        return messages
+    except imaplib.IMAP4.abort as exc:
+        raise EmailFetchError("邮箱连接中断，请稍后重试。") from exc
+    finally:
+        try:
+            connection.logout()
+        except Exception:
+            pass
