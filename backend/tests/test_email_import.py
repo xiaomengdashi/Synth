@@ -224,7 +224,7 @@ def test_fetch_and_test_accept_days_parameter(tmp_path, monkeypatch):
     client.post("/api/v1/email/test", json={"days": 180})
     assert captured["days"] == 180
     client.post("/api/v1/email/fetch")
-    assert captured["days"] == 30
+    assert captured["days"] == 7
     assert client.post("/api/v1/email/fetch", json={"days": 0}).status_code == 422
     assert client.post("/api/v1/email/fetch", json={"days": 4000}).status_code == 422
     asyncio.run(engine.dispose())

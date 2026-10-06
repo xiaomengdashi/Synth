@@ -32,7 +32,7 @@ router = APIRouter()
 
 class EmailWindowPayload(BaseModel):
     """拉取窗口:近 N 天;只影响当次拉取/测试,不持久化。"""
-    days: int = Field(default=30, ge=1, le=3650)
+    days: int = Field(default=7, ge=1, le=3650)
 
 
 def _http_error(exc: Exception) -> HTTPException:
@@ -107,7 +107,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
 @router.post("/test")
 async def test_email_connection(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
-    days = payload.days if payload else 30
+    days = payload.days if payload else 7
     try:
         messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:
@@ -118,7 +118,7 @@ async def test_email_connection(payload: EmailWindowPayload | None = None, _: No
 @router.post("/fetch")
 async def fetch_email_articles(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
-    days = payload.days if payload else 30
+    days = payload.days if payload else 7
     try:
         messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:

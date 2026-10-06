@@ -37,7 +37,7 @@ function EmailPanel() {
   const [fetching, setFetching] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const [result, setResult] = useState<FetchResult | null>(null);
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState(7);
 
   useEffect(() => { void fetchConfig(); }, [fetchConfig]);
   useEffect(() => { setLocalConfig(config); }, [config]);
