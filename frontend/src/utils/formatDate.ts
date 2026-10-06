@@ -29,3 +29,9 @@ export function formatDistanceToNow(date: Date): string {
   const diffInYears = Math.floor(diffInDays / 365);
   return `${diffInYears}年前`;
 }
+
+/** 文章时间统一显示具体时间(与 publish_time 同精度),不用"6个月前"这类相对表述。 */
+export function formatAbsolute(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}

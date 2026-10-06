@@ -2,7 +2,7 @@ import { ArrowRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { Article } from '../types';
-import { formatDistanceToNow } from '../../../utils/formatDate';
+import { formatAbsolute } from '../../../utils/formatDate';
 
 export function sourceLabel(sourceType: Article['source_type']) {
   if (sourceType === 'wechat') return '微信公众号';
@@ -65,7 +65,7 @@ export default function ArticleList({
               </span>
               <span className="article-row-side">
                 <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
-                <time>{formatDistanceToNow(new Date(article.created_at))}</time>
+                <time>{formatAbsolute(new Date(article.created_at))}</time>
               </span>
             </Link>
           </div>
@@ -91,7 +91,7 @@ export default function ArticleList({
               <Link to={`/article/${article.id}`} style={{ textDecoration: 'none' }}><h3>{article.title}</h3></Link>
               <p>{article.summary}</p>
               <div className="article-meta">
-                <span className="meta-source"><i />{sourceLabel(article.source_type)} · {formatDistanceToNow(new Date(article.created_at))}</span>
+                <span className="meta-source"><i />{sourceLabel(article.source_type)} · {formatAbsolute(new Date(article.created_at))}</span>
                 <span className="read-arrow"><ArrowRight size={13} /></span>
               </div>
             </div>

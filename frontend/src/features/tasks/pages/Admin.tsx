@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, CheckCircle2, FileText, ListChecks, Newspaper, Settings2, TrendingUp, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
-import { formatDistanceToNow } from '../../../utils/formatDate';
+import { formatAbsolute } from '../../../utils/formatDate';
 import { money, requestJson } from '../../tikhub/client';
 import type { Account } from '../../tikhub/types';
 import type { Article } from '../../articles/types';
@@ -218,7 +218,7 @@ export default function Admin() {
                   <tr key={article.id}>
                     <td><Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link></td>
                     <td>{sourceLabels[article.source_type]}</td>
-                    <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</td>
+                    <td className="cell-time">{formatAbsolute(new Date(article.created_at))}</td>
                   </tr>
                 ))}
               </tbody>

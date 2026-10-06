@@ -6,7 +6,7 @@ import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { adminFetch } from '../../../utils/adminAuth';
-import { formatDistanceToNow } from '../../../utils/formatDate';
+import { formatAbsolute } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
 
 function getSourceLabel(sourceType: Article['source_type']) {
@@ -133,7 +133,7 @@ export default function AdminArticles() {
                   </select>
                 </div>
                 <div className="article-card-m-foot">
-                  <span className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</span>
+                  <span className="cell-time">{formatAbsolute(new Date(article.created_at))}</span>
                   <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}>
                     <Trash2 size={13} />删除
                   </button>
@@ -192,7 +192,7 @@ export default function AdminArticles() {
                       {categories.map((name) => <option key={name} value={name}>{name}</option>)}
                     </select>
                   </td>
-                  <td className="cell-time">{formatDistanceToNow(new Date(article.created_at))}</td>
+                  <td className="cell-time">{formatAbsolute(new Date(article.created_at))}</td>
                   <td>
                     <div className="ac-row-actions">
                       <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}><Trash2 size={13} />删除</button>
