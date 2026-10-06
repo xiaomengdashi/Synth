@@ -23,7 +23,13 @@ from app.services.email_client import (
     fetch_whitelisted_messages,
     title_from_markdown,
 )
-from app.services.fetchers.tikhub import _extract_bilibili_bvid, _resolve_b23_short_url
+from app.services.fetchers.tikhub import (
+    BILIBILI_PARTS_PATH,
+    _extract_bilibili_bvid,
+    _resolve_b23_short_url,
+    _tikhub_request,
+    resolve_tikhub_token,
+)
 from app.services.fetchers.video import _fetch_bilibili_official_view, _localize_bilibili_cover
 from app.services.runtime_store import ARTICLES_DB
 
@@ -39,23 +45,51 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
-def _resolve_cover_for_article(reference: str) -> str:
-    """B站引用→官方真实封面并本地化;拿不到就留空,前端走来源色块兜底(禁止占位图)。"""
-    if not reference:
+def _fetch_cover_via_tikhub(bvid: str, config: dict | None) -> str:
+    """封面降级源:海外服务器直连 B 站官方接口会被 412 风控,TikHub parts 的 first_frame 同为图床封面。"""
+    if not bvid:
         return ""
     try:
-        url = reference if reference.startswith("http") else f"https://www.bilibili.com/video/{reference}"
+        token = resolve_tikhub_token(config or {})
+    except Exception:
+        return ""
+    try:
+        data = _tikhub_request(BILIBILI_PARTS_PATH, token, params={"bv_id": bvid})
+        parts = data.get("data") or []
+        return str((parts[0] or {}).get("first_frame") or "") if parts else ""
+    except Exception:
+        return ""
+
+
+def _resolve_cover_for_article(reference: str, config: dict | None = None) -> str:
+    """封面三级:B站官方接口→TikHub first_frame→留空(禁止占位图)。"""
+    if not reference:
+        return ""
+    url = reference if reference.startswith("http") else f"https://www.bilibili.com/video/{reference}"
+    pic = ""
+    bvid = ""
+    try:
         bvid = _extract_bilibili_bvid(_resolve_b23_short_url(url))
         view = _fetch_bilibili_official_view(bvid)
         pic = str(view.get("pic") or "")
-        if pic:
-            return _localize_bilibili_cover(pic, bvid)
     except Exception:
-        pass  # 封面是增强,任何失败都留空,不阻断入库
-    return ""
+        pass
+    if not pic:
+        try:
+            if not bvid:
+                bvid = _extract_bilibili_bvid(_resolve_b23_short_url(url))
+            pic = _fetch_cover_via_tikhub(bvid, config)
+        except Exception:
+            pic = ""
+    if not pic or not bvid:
+        return ""
+    try:
+        return _localize_bilibili_cover(pic, bvid)
+    except Exception:
+        return ""
 
 
-async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
+async def _import_articles_for_message(message: EmailMessageData, config: dict | None = None) -> list[dict]:
     """一个 md 附件一篇 Article;同一事务提交,失败则整封重试。
     created_at 用邮件收件时间——前台列表的排序与相对时间都跟真实收件顺序一致。"""
     try:
@@ -72,7 +106,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
             else:
                 original_url = f"https://www.bilibili.com/video/{reference}" if reference else ""
             article_id = str(uuid.uuid4())
-            cover_image_url = await asyncio.to_thread(_resolve_cover_for_article, reference)
+            cover_image_url = await asyncio.to_thread(_resolve_cover_for_article, reference, config)
             article_data = {
                 "id": article_id,
                 "title": title,
@@ -146,7 +180,7 @@ async def fetch_email_articles(payload: EmailWindowPayload | None = None, _: Non
             skipped.append({"subject": message.subject, "reason": "已导入过，跳过"})
             continue
         try:
-            imported.extend(await _import_articles_for_message(message))
+            imported.extend(await _import_articles_for_message(message, config))
         except Exception:
             skipped.append({"subject": message.subject, "reason": "入库失败，下次拉取会重试"})
             continue

@@ -248,3 +248,36 @@ def test_import_uses_email_date_as_created_at(tmp_path, monkeypatch):
     assert article.created_at == datetime.datetime(2026, 10, 4, 10, 30)
     assert article.publish_time == "2026-10-04 10:30"
     asyncio.run(engine.dispose())
+
+
+def test_fetch_cover_falls_back_to_tikhub(tmp_path, monkeypatch):
+    """海外服务器官方接口 412 风控时,降级 TikHub first_frame 拿封面。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages",
+        lambda config, days=30: [_message("cover-tk", "# TikHub封面\n\nhttps://www.bilibili.com/video/BV17x6hYZEzJ")],
+    )
+
+    def raise_412(bvid):
+        raise RuntimeError("HTTP 412")
+
+    monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", raise_412)
+    monkeypatch.setattr(email_import, "_fetch_cover_via_tikhub", lambda bvid, config: "http://i1.hdslb.com/bfs/storyff/cover.jpg")
+    monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
+    data = _client().post("/api/v1/email/fetch").json()
+    article = ARTICLES_DB[data["imported"][0]["id"]]
+    assert article["cover_image_url"] == "/media/bilibili/BV17x6hYZEzJ.jpg"
+    asyncio.run(engine.dispose())
+
+
+def test_fetch_cover_empty_when_both_sources_fail(tmp_path, monkeypatch):
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages",
+        lambda config, days=30: [_message("cover-none", "# 无封面\n\nhttps://www.bilibili.com/video/BV1x")]
+    )
+    monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: (_ for _ in ()).throw(RuntimeError("412")))
+    monkeypatch.setattr(email_import, "_fetch_cover_via_tikhub", lambda bvid, config: "")
+    data = _client().post("/api/v1/email/fetch").json()
+    assert ARTICLES_DB[data["imported"][0]["id"]]["cover_image_url"] == ""
+    asyncio.run(engine.dispose())
