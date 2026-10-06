@@ -6,8 +6,10 @@
 
 import asyncio
 import datetime
+import re
 import uuid
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -45,6 +47,29 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
+MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
+
+
+def _fetch_cover_from_mobile_page(bvid: str) -> str:
+    """海外服务器直连官方 API 被 412 风控,但 m.bilibili.com 手机版页面可达,og:image 即官方封面。"""
+    if not bvid:
+        return ""
+    try:
+        response = httpx.get(
+            f"https://m.bilibili.com/video/{bvid}",
+            headers={"User-Agent": MOBILE_UA},
+            timeout=15,
+            follow_redirects=True,
+            verify=False,
+        )
+        match = re.search(r'property="og:image" content="([^"]+)"', response.text)
+        if not match:
+            return ""
+        return match.group(1).split("@")[0]  # 去掉 @1200w_630h 规格后缀,下载原图
+    except Exception:
+        return ""
+
+
 def _fetch_cover_via_tikhub(bvid: str, config: dict | None) -> str:
     """封面降级源:海外服务器直连 B 站官方接口会被 412 风控,TikHub parts 的 first_frame 同为图床封面。"""
     if not bvid:
@@ -62,7 +87,7 @@ def _fetch_cover_via_tikhub(bvid: str, config: dict | None) -> str:
 
 
 def _resolve_cover_for_article(reference: str, config: dict | None = None) -> str:
-    """封面三级:B站官方接口→TikHub first_frame→留空(禁止占位图)。"""
+    """封面四级:B站官方接口→m站页面→TikHub first_frame→留空(禁止占位图)。"""
     if not reference:
         return ""
     url = reference if reference.startswith("http") else f"https://www.bilibili.com/video/{reference}"
@@ -74,6 +99,13 @@ def _resolve_cover_for_article(reference: str, config: dict | None = None) -> st
         pic = str(view.get("pic") or "")
     except Exception:
         pass
+    if not pic:
+        try:
+            if not bvid:
+                bvid = _extract_bilibili_bvid(_resolve_b23_short_url(url))
+            pic = _fetch_cover_from_mobile_page(bvid)
+        except Exception:
+            pic = ""
     if not pic:
         try:
             if not bvid:

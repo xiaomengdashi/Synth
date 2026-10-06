@@ -281,3 +281,22 @@ def test_fetch_cover_empty_when_both_sources_fail(tmp_path, monkeypatch):
     data = _client().post("/api/v1/email/fetch").json()
     assert ARTICLES_DB[data["imported"][0]["id"]]["cover_image_url"] == ""
     asyncio.run(engine.dispose())
+
+
+def test_fetch_cover_falls_back_to_mobile_page(tmp_path, monkeypatch):
+    """海外服务器官方接口 412 时,优先走 m 站 og:image(免费),不动 TikHub。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages",
+        lambda config, days=30: [_message("cover-m", "# m站封面\n\nhttps://www.bilibili.com/video/BV17x6hYZEzJ")],
+    )
+    monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: (_ for _ in ()).throw(RuntimeError("412")))
+    called = {"tikhub": 0}
+    monkeypatch.setattr(email_import, "_fetch_cover_via_tikhub", lambda bvid, config: (called.__setitem__("tikhub", 1), "")[1])
+    monkeypatch.setattr(email_import, "_fetch_cover_from_mobile_page", lambda bvid: "https://i0.hdslb.com/bfs/archive/cover.jpg@1200w_630h")
+    monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
+    data = _client().post("/api/v1/email/fetch").json()
+    article = ARTICLES_DB[data["imported"][0]["id"]]
+    assert article["cover_image_url"] == "/media/bilibili/BV17x6hYZEzJ.jpg"
+    assert called["tikhub"] == 0  # m 站命中就不该再碰 TikHub
+    asyncio.run(engine.dispose())
