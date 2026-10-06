@@ -6,4 +6,9 @@ export interface AppConfig {
   tikhubConfigured?: boolean;
   minimaxApiKey?: string;
   minimaxConfigured?: boolean;
+  imapHost?: string;
+  imapUser?: string;
+  imapPassword?: string;
+  imapSenderWhitelist?: string;
+  imapConfigured?: boolean;
 }

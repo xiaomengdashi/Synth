@@ -6,6 +6,7 @@ import {
   Cpu,
   KeyRound,
   LayoutDashboard,
+  Mail,
   Menu,
   Moon,
   Newspaper,
@@ -37,6 +38,7 @@ const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: t
     items: [
       { path: '/admin/tikhub', label: 'TikHub 数据服务', icon: PlugZap },
       { path: '/admin/model', label: '模型服务', icon: Cpu },
+      { path: '/admin/email', label: '邮箱导入', icon: Mail },
       { path: '/admin/share', label: '手机分享导入', icon: Smartphone },
       { path: '/admin/token', label: '访问令牌', icon: KeyRound },
     ],
@@ -56,6 +58,9 @@ function useAdminBreadcrumbs(pathname: string) {
   }
   if (pathname === '/admin/model') {
     return [{ label: '后台管理', to: '/admin' }, { label: '模型服务' }];
+  }
+  if (pathname === '/admin/email') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '邮箱导入' }];
   }
   if (pathname === '/admin/share') {
     return [{ label: '后台管理', to: '/admin' }, { label: '手机分享导入' }];

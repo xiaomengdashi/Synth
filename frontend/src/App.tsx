@@ -30,6 +30,7 @@ const AdminTasks = lazyPage(() => import('./features/tasks/pages/AdminTasks'));
 const AdminArticles = lazyPage(() => import('./features/tasks/pages/AdminArticles'));
 const AdminCategories = lazyPage(() => import('./features/tasks/pages/AdminCategories'));
 const AdminModelSettings = lazyPage(() => import('./features/tasks/pages/AdminModelSettings'));
+const AdminEmailImport = lazyPage(() => import('./features/email/pages/AdminEmailImport'));
 const AdminTikHubSettings = lazyPage(() => import('./features/tasks/pages/AdminTikHubSettings'));
 const AdminTokenSettings = lazyPage(() => import('./features/tasks/pages/AdminTokenSettings'));
 const AdminTikHubQuery = lazyPage(() => import('./features/tikhub/AdminTikHubQuery'));
@@ -76,6 +77,7 @@ function App() {
             <Route path="articles" element={<Suspense fallback={<PageLoading />}><AdminArticles /></Suspense>} />
             <Route path="categories" element={<Suspense fallback={<PageLoading />}><AdminCategories /></Suspense>} />
             <Route path="model" element={<Suspense fallback={<PageLoading />}><AdminModelSettings /></Suspense>} />
+            <Route path="email" element={<Suspense fallback={<PageLoading />}><AdminEmailImport /></Suspense>} />
             <Route path="tikhub" element={<Suspense fallback={<PageLoading />}><AdminTikHubSettings /></Suspense>} />
             <Route path="share" element={<Suspense fallback={<PageLoading />}><ShareSetup /></Suspense>} />
             <Route path="token" element={<Suspense fallback={<PageLoading />}><AdminTokenSettings /></Suspense>} />

@@ -102,7 +102,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       const res = await adminFetch('/api/v1/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: config.apiKey, baseUrl: config.baseUrl, modelName: config.modelName, minimaxApiKey: config.minimaxApiKey ?? '' }),
+        body: JSON.stringify({
+          apiKey: config.apiKey, baseUrl: config.baseUrl, modelName: config.modelName,
+          minimaxApiKey: config.minimaxApiKey ?? '',
+          imapHost: config.imapHost ?? '', imapUser: config.imapUser ?? '',
+          imapPassword: config.imapPassword ?? '', imapSenderWhitelist: config.imapSenderWhitelist ?? '',
+        }),
       });
       if (!res.ok) return false;
       const saved = await res.json();
