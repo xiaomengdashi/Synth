@@ -9,7 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.database import init_db
-from app.routers import articles, tasks, config, tikhub, models, categories, admin_auth
+from app.routers import articles, tasks, config, tikhub, models, categories, admin_auth, email_import
 from app.config import settings
 
 
@@ -63,6 +63,7 @@ app.include_router(tikhub.router, prefix="/api/v1/tikhub", tags=["tikhub"])
 app.include_router(categories.router, prefix="/api/v1/categories", tags=["categories"])
 app.include_router(admin_auth.router, prefix="/api/v1/admin-auth", tags=["admin-auth"])
 app.include_router(models.router, prefix="/api/v1/models", tags=["models"])
+app.include_router(email_import.router, prefix="/api/v1/email", tags=["email"])
 
 
 @app.get("/")
