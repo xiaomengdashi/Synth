@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete as sa_delete, func, or_, select, update as sa_update
 from fastapi.encoders import jsonable_encoder
 from app.database import get_db
 from app.models import Article
@@ -162,6 +162,56 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
     await db.commit()
     ARTICLES_DB[article_id] = article_data
     return article_data
+
+class BatchIdsPayload(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+class BatchCategoryPayload(BaseModel):
+    ids: list[str] = Field(default_factory=list, max_length=200)
+    category: str | None = Field(default=None, max_length=64)
+
+
+@router.post("/batch-delete")
+async def batch_delete_articles(payload: BatchIdsPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
+    """批量删除文章并连带清理处理任务;不存在的 id 静默跳过,返回实际删除数。"""
+    from app.models import Task
+    ids = list(dict.fromkeys(payload.ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    task_result = await db.execute(sa_delete(Task).where(Task.article_id.in_(ids)))
+    article_result = await db.execute(sa_delete(Article).where(Article.id.in_(ids)))
+    await db.commit()
+    for article_id in ids:
+        ARTICLES_DB.pop(article_id, None)
+    for task_id, task_data in list(TASKS_DB.items()):
+        if task_data.get("article_id") in ids:
+            del TASKS_DB[task_id]
+    return {"status": "success", "deleted": article_result.rowcount or 0, "tasks_deleted": task_result.rowcount or 0}
+
+
+@router.patch("/batch-category")
+async def batch_update_category(payload: BatchCategoryPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
+    """批量设置分类;空串/None 归为未分类,与单篇 PATCH 行为一致。"""
+    ids = list(dict.fromkeys(payload.ids))
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    value = (payload.category or "").strip()
+    # Core update 不触发 ORM onupdate,updated_at 需显式带上(详情接口 ETag 依赖它)
+    result = await db.execute(
+        sa_update(Article)
+        .where(Article.id.in_(ids))
+        .values(
+            category=(value or None),
+            updated_at=datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+        )
+    )
+    await db.commit()
+    for article_id in ids:
+        if article_id in ARTICLES_DB:
+            ARTICLES_DB[article_id]["category"] = value or None
+    return {"status": "success", "updated": result.rowcount or 0}
+
 
 @router.get("/{article_id}")
 async def get_article(

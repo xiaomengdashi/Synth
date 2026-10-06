@@ -33,6 +33,8 @@ interface AppState {
   articlesTotal: number;
   fetchTasks: () => Promise<void>;
   deleteArticle: (articleId: string) => Promise<boolean>;
+  batchDeleteArticles: (ids: string[]) => Promise<boolean>;
+  batchSetCategory: (ids: string[], category: string) => Promise<boolean>;
   updateArticle: (articleId: string, patch: Partial<Article>) => void;
 }
 
@@ -234,6 +236,45 @@ export const useAppStore = create<AppState>((set, get) => ({
           tone: 'error',
         }]
       }));
+      return false;
+    }
+  },
+  // 批量操作:反馈(toast)由调用方统一给出,这里只改状态并返回成败
+  batchDeleteArticles: async (ids) => {
+    try {
+      const res = await adminFetch('/api/v1/articles/batch-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) return false;
+      const removing = new Set(ids);
+      set((state) => ({
+        articles: state.articles.filter((a) => !removing.has(a.id)),
+        articlesTotal: Math.max(0, state.articlesTotal - state.articles.filter((a) => removing.has(a.id)).length),
+        tasks: state.tasks.filter((t) => !t.article_id || !removing.has(t.article_id)),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to batch delete articles', error);
+      return false;
+    }
+  },
+  batchSetCategory: async (ids, category) => {
+    try {
+      const res = await adminFetch('/api/v1/articles/batch-category', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, category }),
+      });
+      if (!res.ok) return false;
+      const changing = new Set(ids);
+      set((state) => ({
+        articles: state.articles.map((a) => (changing.has(a.id) ? { ...a, category: category || null } : a)),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to batch set category', error);
       return false;
     }
   }

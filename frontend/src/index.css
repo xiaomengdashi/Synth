@@ -780,6 +780,15 @@
 .ac-row-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .ac-table .ac-empty { padding: 36px 20px; }
 
+/* ---------- 批量操作条 / 勾选框 ---------- */
+.ac-check { width: 15px; height: 15px; flex: none; margin: 0; accent-color: var(--ac-accent); cursor: pointer; }
+.ac-table .ac-check-col { width: 34px; padding-right: 4px; text-align: center; }
+.ac-batch-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-bottom: 14px; padding: 9px 14px; border: 1px solid color-mix(in srgb, var(--ac-accent) 30%, var(--ac-line)); border-radius: 10px; background: var(--ac-accent-soft); animation: ac-fade .18s ease; }
+.ac-batch-bar > strong { color: var(--ac-ink); font-size: 13px; }
+.ac-batch-count { color: var(--ac-accent); font-variant-numeric: tabular-nums; }
+.ac-batch-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: auto; }
+.ac-batch-actions .ac-select { width: auto; height: 30px; background: var(--ac-surface); }
+
 /* ---------- 表单 ---------- */
 .ac-field { display: grid; gap: 6px; min-width: 0; }
 .ac-field > label { color: var(--ac-ink); font-size: 12px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
