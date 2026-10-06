@@ -25,6 +25,8 @@ class Article(Base):
     account_name = Column(String(255), nullable=True)
     publish_time = Column(String(64), nullable=True)
     category = Column(String(64), nullable=True)
+    # 邮件导入来源的 Message-ID:文章被删后重拉凭它放行重新导入
+    email_message_id = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None))
     updated_at = Column(
         DateTime,

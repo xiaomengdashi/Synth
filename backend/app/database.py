@@ -30,7 +30,7 @@ async def init_db():
         # create_all 不会给已有表加列，轻量迁移补充新列
         from sqlalchemy import text
 
-        for column in ("account_name", "publish_time", "category"):
+        for column in ("account_name", "publish_time", "category", "email_message_id"):
             try:
                 await conn.execute(
                     text(f"ALTER TABLE articles ADD COLUMN {column} VARCHAR(255)")

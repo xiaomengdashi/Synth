@@ -84,6 +84,7 @@ async def _import_articles_for_message(message: EmailMessageData) -> list[dict]:
                 cover_image_url=cover_image_url,
                 account_name=message.from_addr,
                 publish_time=message.date,
+                email_message_id=message.message_id,
                 created_at=now,
             ))
             imported.append({"id": article_id, "title": title, "filename": attachment["filename"]})
@@ -110,6 +111,16 @@ async def fetch_email_articles(_: None = Depends(require_admin)):
         raise _http_error(exc) from exc
 
     processed = set(await settings_store.load_processed_message_ids())
+    # 去重以「文章还在不在」为准:清单命中但文章已删的,重拉放行重新导入
+    live_ids: set[str] = set()
+    if processed:
+        from sqlalchemy import select
+
+        async with AsyncSessionLocal() as session:
+            rows = await session.execute(
+                select(Article.email_message_id).where(Article.email_message_id.in_(processed))
+            )
+            live_ids = {row[0] for row in rows if row[0]}
     imported: list[dict] = []
     skipped: list[dict] = []
     newly_done: list[str] = []
@@ -117,7 +128,7 @@ async def fetch_email_articles(_: None = Depends(require_admin)):
         if not message.md_attachments:
             skipped.append({"subject": message.subject, "reason": "邮件没有 .md 附件"})
             continue
-        if message.message_id in processed:
+        if message.message_id in processed and message.message_id in live_ids:
             skipped.append({"subject": message.subject, "reason": "已导入过，跳过"})
             continue
         try:

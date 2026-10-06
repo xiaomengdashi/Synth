@@ -144,3 +144,44 @@ def test_fetch_cover_falls_back_to_placeholder(tmp_path, monkeypatch):
     article = asyncio.run(load())
     assert article.cover_image_url.startswith("https://coresg-normal.trae.ai/")
     asyncio.run(engine.dispose())
+
+
+def test_refetch_after_delete_reimports(tmp_path, monkeypatch):
+    """文章被删后重拉应重新入库,而不是被去重清单拦住。"""
+    from sqlalchemy import delete as sa_delete
+
+    engine, sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages", lambda config: [_message("msg-r", "# 删了重拉")]
+    )
+    client = _client()
+    first = client.post("/api/v1/email/fetch").json()
+    assert len(first["imported"]) == 1
+    article_id = first["imported"][0]["id"]
+
+    async def remove():
+        async with sessions() as session:
+            await session.execute(sa_delete(Article).where(Article.id == article_id))
+            await session.commit()
+
+    asyncio.run(remove())
+
+    second = client.post("/api/v1/email/fetch").json()
+    assert len(second["imported"]) == 1
+    assert second["imported"][0]["id"] != article_id
+    assert second["skipped"] == []
+    asyncio.run(engine.dispose())
+
+
+def test_fetch_skips_when_article_still_exists(tmp_path, monkeypatch):
+    """文章还在时,去重照常生效。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        email_import, "fetch_whitelisted_messages", lambda config: [_message("msg-keep", "# 保留")]
+    )
+    client = _client()
+    assert len(client.post("/api/v1/email/fetch").json()["imported"]) == 1
+    second = client.post("/api/v1/email/fetch").json()
+    assert second["imported"] == []
+    assert second["skipped"] == [{"subject": "B站笔记", "reason": "已导入过，跳过"}]
+    asyncio.run(engine.dispose())
