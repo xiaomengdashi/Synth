@@ -127,9 +127,10 @@ def test_fetch_covers_real_bilibili_video(tmp_path, monkeypatch):
     asyncio.run(engine.dispose())
 
 
-def test_fetch_cover_falls_back_to_placeholder(tmp_path, monkeypatch):
-    """无B站链接或封面获取失败:回退到与任务管线一致的占位生图,不留空。"""
+def test_fetch_cover_falls_back_to_local_svg(tmp_path, monkeypatch):
+    """无B站引用或封面获取失败:本地生成 SVG 占位,不依赖外链生图。"""
     engine, sessions = _setup(tmp_path, monkeypatch)
+    monkeypatch.setattr(email_import.settings, "MEDIA_DIR", str(tmp_path / "media"))
     monkeypatch.setattr(
         email_import, "fetch_whitelisted_messages", lambda config: [_message("cover-2", "# 无链接笔记")]
     )
@@ -142,7 +143,27 @@ def test_fetch_cover_falls_back_to_placeholder(tmp_path, monkeypatch):
             return await session.get(Article, article_id)
 
     article = asyncio.run(load())
-    assert article.cover_image_url.startswith("https://coresg-normal.trae.ai/")
+    assert article.cover_image_url == f"/media/covers/{article_id}.svg"
+    assert (tmp_path / "media" / "covers" / f"{article_id}.svg").exists()
+    asyncio.run(engine.dispose())
+
+
+def test_fetch_subject_bvid_resolves_url_and_cover(tmp_path, monkeypatch):
+    """正文无链接但邮件主题带裸 BV 号:还原 original_url 并取真实封面。"""
+    engine, _sessions = _setup(tmp_path, monkeypatch)
+    message = EmailMessageData(
+        message_id="cover-3", from_addr="milky@example.com",
+        subject="《标题》文稿 | BV191Yj6HEAn", date="2026-10-06 09:00",
+        md_attachments=[{"filename": "n.md", "content": "# 标题\n\n正文没有链接"}],
+    )
+    monkeypatch.setattr(email_import, "fetch_whitelisted_messages", lambda config: [message])
+    monkeypatch.setattr(email_import, "_fetch_bilibili_official_view", lambda bvid: {"pic": "https://i0.hdslb.com/x.jpg"})
+    monkeypatch.setattr(email_import, "_localize_bilibili_cover", lambda pic, bvid: f"/media/bilibili/{bvid}.jpg")
+    data = _client().post("/api/v1/email/fetch").json()
+    article_id = data["imported"][0]["id"]
+    article = ARTICLES_DB[article_id]
+    assert article["original_url"] == "https://www.bilibili.com/video/BV191Yj6HEAn"
+    assert article["cover_image_url"] == "/media/bilibili/BV191Yj6HEAn.jpg"
     asyncio.run(engine.dispose())
 
 

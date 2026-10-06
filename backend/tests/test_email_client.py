@@ -155,3 +155,12 @@ def test_connect_abort_is_connection_error(monkeypatch):
     with pytest.raises(email_client.EmailFetchError) as exc_info:
         email_client._connect({"imapUser": "a@163.com", "imapPassword": "x"})
     assert "重试" in str(exc_info.value)
+
+
+def test_extract_bilibili_reference_prefers_url_then_bare_bvid():
+    from app.services.email_client import extract_bilibili_reference
+    # 完整链接优先
+    assert extract_bilibili_reference("看 https://www.bilibili.com/video/BV17x6hYZEzJ 学", "无") == "https://www.bilibili.com/video/BV17x6hYZEzJ"
+    # 正文无链接时,主题里的裸 BV 号也能命中(如「...文稿 | BV191Yj6HEAn」)
+    assert extract_bilibili_reference("正文没有链接", "《标题》文稿 | BV191Yj6HEAn") == "BV191Yj6HEAn"
+    assert extract_bilibili_reference("都没有", "也没有") == ""

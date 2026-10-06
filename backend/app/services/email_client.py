@@ -22,6 +22,7 @@ BILIBILI_URL_RE = re.compile(
 )
 _REPLY_PREFIX_RE = re.compile(r"^\s*(?:re|fwd|回复|转发)\s*[:：]\s*", re.IGNORECASE)
 _TITLE_LINE_RE = re.compile(r"^#\s+(\S.*)$")
+_BVID_RE = re.compile(r"BV[0-9A-Za-z]{10}")
 
 
 @dataclass
@@ -97,6 +98,20 @@ def title_from_markdown(content: str, subject: str, filename: str) -> str:
 def extract_bilibili_url(content: str) -> str:
     match = BILIBILI_URL_RE.search(content or "")
     return match.group(0) if match else ""
+
+
+def extract_bilibili_reference(*texts: str) -> str:
+    """从给定文本提取 B 站视频引用:完整链接优先,其次裸 BV 号(邮件主题常带「| BVxxx」)。
+    返回 http(s) 链接、BV 号或空串。"""
+    for text in texts:
+        match = BILIBILI_URL_RE.search(text or "")
+        if match:
+            return match.group(0)
+    for text in texts:
+        match = _BVID_RE.search(text or "")
+        if match:
+            return match.group(0)
+    return ""
 
 
 def parse_raw_message(raw: bytes, whitelist: list[str]) -> EmailMessageData | None:
