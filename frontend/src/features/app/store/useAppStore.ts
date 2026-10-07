@@ -31,6 +31,10 @@ interface AppState {
   articlesHasMore: boolean;
   articlesLoading: boolean;
   articlesTotal: number;
+  /** 最近一次成功加载列表的参数组合:页面据此判断当前筛选是否已加载,被续载吞掉的 reset 能自动补发 */
+  articlesLoadedKey: string;
+  /** 收藏等改变 stats 分布的操作 +1,列表页据此重拉计数 */
+  statsVersion: number;
   fetchTasks: () => Promise<void>;
   deleteArticle: (articleId: string) => Promise<boolean>;
   batchDeleteArticles: (ids: string[]) => Promise<boolean>;
@@ -73,6 +77,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   articlesHasMore: true,
   articlesLoading: false,
   articlesTotal: 0,
+  articlesLoadedKey: '',
+  statsVersion: 0,
   tasks: [],
   toasts: [],
   theme: initialTheme,
@@ -181,6 +187,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       const data = await res.json();
       if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');
       const page = data.data as Article[];
+      // 记录本次成功加载的参数组合:页面用它判断筛选是否已加载,被并发续载吞掉的
+      // reset 请求会在下一轮渲染自动补发,而不是被本地 key 短路永久丢失
+      const loadedKey = `${category ?? ''}|${source ?? ''}|${keyword}|${starred ? '1' : ''}`;
       set((current) => {
         const merged = reset
           ? page
@@ -189,6 +198,9 @@ export const useAppStore = create<AppState>((set, get) => ({
           articles: merged,
           articlesHasMore: offset + page.length < data.total,
           articlesTotal: data.total,
+          // 只有 reset 才登记参数组合:续载是既有筛选的延伸,若在此记录,被吞掉的
+          // reset 会被误认为已加载而永不补发
+          articlesLoadedKey: reset ? loadedKey : current.articlesLoadedKey,
           articlesLoading: false,
         };
       });
@@ -298,6 +310,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (!res.ok) return false;
       set((state) => ({
         articles: state.articles.map((a) => (a.id === articleId ? { ...a, is_starred: starred } : a)),
+        // 收藏分布变了,列表页的「只看收藏 N」徽标需要重拉 stats
+        statsVersion: state.statsVersion + 1,
       }));
       return true;
     } catch (error) {

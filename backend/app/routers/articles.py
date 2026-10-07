@@ -80,6 +80,13 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
 
     total = mappings[0]["total"] if mappings else 0
+    if not mappings and offset > 0:
+        # 窗口 COUNT 随数据行返回,offset 越界的空页拿不到 total——回退独立 COUNT,
+        # 保证筛选切换竞态下前端收到的仍是过滤后全集数而不是 0
+        count_query = select(func.count()).select_from(Article)
+        for condition in filters:
+            count_query = count_query.where(condition)
+        total = (await db.execute(count_query)).scalar() or 0
     return {"total": total, "data": rows}
 
 

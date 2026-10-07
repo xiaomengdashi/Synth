@@ -141,3 +141,20 @@ def test_detail_etag_changes_with_reading_state(reading_client):
     etag_after_progress = progressed.headers["ETag"]
     client.put("/api/v1/articles/a1/progress", json={"progress": 0.3})
     assert client.get("/api/v1/articles/a1", headers={"If-None-Match": etag_after_progress}).status_code == 304
+
+
+def test_starred_total_survives_beyond_end_offset(reading_client):
+    """窗口 COUNT 随数据行返回,offset 越界的空页必须回退独立 COUNT:
+    筛选切换竞态下前端续载 offset=20&starred=1 时拿到的 total 仍是全集数而非 0。"""
+    client, sessions = reading_client
+    seed_article(sessions, "a1")
+    client.patch("/api/v1/articles/a1/star", json={"starred": True})
+
+    # 基线:首页 total=1
+    first = client.get("/api/v1/articles", params={"limit": 20, "offset": 0, "starred": True}).json()
+    assert first["total"] == 1 and len(first["data"]) == 1
+
+    # offset 越界:本页空但 total 仍必须是过滤后的全集数
+    beyond = client.get("/api/v1/articles", params={"limit": 20, "offset": 20, "starred": True}).json()
+    assert beyond["data"] == []
+    assert beyond["total"] == 1

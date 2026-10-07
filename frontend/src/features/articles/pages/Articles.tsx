@@ -31,7 +31,9 @@ export default function Articles() {
     (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
   }, []);
 
-  // 来源/收藏计数只在页面挂载时拉一次:滚动续载/排序不会改变分布,避免每翻一页都多一次请求
+  // 来源/收藏计数在挂载与 statsVersion 变化时拉取:滚动续载/排序不改变分布,
+  // 但收藏翻转会——store 里 +1 版本号驱动这里重拉,让「只看收藏 N」即时准确
+  const statsVersion = useAppStore((state) => state.statsVersion);
   useEffect(() => {
     fetch('/api/v1/articles/stats')
       .then((res) => (res.ok ? res.json() : null))
@@ -43,7 +45,7 @@ export default function Articles() {
         setSourceCounts(null);
         setStarredCount(null);
       });
-  }, []);
+  }, [statsVersion]);
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>('list');
   const [sort, setSort] = useState<SortOrder>('new');
@@ -52,15 +54,16 @@ export default function Articles() {
   const source = searchParams.get('source') || 'all';
   const starredOnly = searchParams.get('starred') === '1';
 
-  // 筛选/搜索由后端完成;参数没变不重取,加载中的变更等本轮结束自动补取(修加载竞态)
-  const lastKey = useRef('');
+  // 筛选/搜索由后端完成;与 store 记录的已加载参数组合对比,不一致就(重)取——
+  // 即使某次 reset 请求被进行中的续载吞掉,续载结束后本 effect 也会自动补发
+  const articlesLoadedKey = useAppStore((state) => state.articlesLoadedKey);
   useEffect(() => {
     if (articlesLoading) return;
-    const key = `${source}|${query}|${starredOnly}`;
-    if (lastKey.current === key) return;
-    lastKey.current = key;
+    // 与 fetchArticles 成功时记录的 loadedKey 同构:category 恒空段|source|q|starred
+    const key = `|${source === 'all' ? '' : source}|${query}|${starredOnly ? '1' : ''}`;
+    if (articlesLoadedKey === key) return;
     void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined, starred: starredOnly || undefined });
-  }, [fetchArticles, source, query, starredOnly, articlesLoading]);
+  }, [fetchArticles, source, query, starredOnly, articlesLoading, articlesLoadedKey]);
 
   const sortedArticles = useMemo(() => {
     const factor = sort === 'new' ? -1 : 1;

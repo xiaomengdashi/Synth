@@ -290,17 +290,16 @@ export default function Article() {
   }, [id, article]);
 
   // 恢复上次阅读位置:读到一半(0.05<p<0.95)才恢复,未读/读完重进都回顶;
-  // rAF 一帧等首帧布局就绪;图片后到导致的高度偏移接受近似,不做二次追补
+  // effect 执行时正文 DOM 已 commit,高度可直接量——不用 rAF(后台标签页会冻结导致恢复永不执行)
+  // 也不用默认 smooth(首屏后续布局变化会打断动画),instant 瞬移;图片后到导致的高度偏移接受近似
   useEffect(() => {
     if (!id || !article || article.id !== id) return;
     if (restoredRef.current === id) return;
     restoredRef.current = id;
     const ratio = clampProgress(article.read_progress ?? 0);
     if (!shouldRestore(ratio)) return;
-    requestAnimationFrame(() => {
-      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
-      if (maxScroll > 0) window.scrollTo(0, Math.round(ratio * maxScroll));
-    });
+    const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+    if (maxScroll > 0) window.scrollTo({ top: Math.round(ratio * maxScroll), behavior: 'instant' });
   }, [id, article]);
 
   // 滚动进度上报:节流(≥2s 或跨 0.25 里程碑)后 PUT-only 写后端,绝不 patch store 列表——
