@@ -44,13 +44,14 @@ export default function AdminNotes() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AdminNoteRow | null>(null);
   const [deleting, setDeleting] = useState(false);
-  // 筛选参数没变不重取(循 AdminArticles lastKey 惯例)
-  const lastKey = useRef('');
+  // 正在加载的筛选(供续载落地时对比防串页)。不能用「参数没变就跳过」的 lastKey 守卫:
+  // StrictMode 双调用会先清理首次请求(cancelled)再重跑,守卫在 ref 里看到参数相同而跳过,
+  // 两次都没人落地结果,页面永久停在加载态(文章库页同病,e25915b 已修)
+  const activeFilterRef = useRef('all');
 
   useEffect(() => {
-    if (lastKey.current === articleFilter) return;
-    lastKey.current = articleFilter;
     let cancelled = false;
+    activeFilterRef.current = articleFilter;
     setLoading(true);
     adminFetch(fetchUrl(articleFilter, 0))
       .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
@@ -71,20 +72,20 @@ export default function AdminNotes() {
     if (loadingMore) return;
     // 续载期间筛选可能已切换(筛选 effect 会整表重取):记录发起时的筛选,落地时不匹配即丢弃,
     // 否则旧筛选的行会 append 进新筛选列表并覆盖 total
-    const filterAtStart = lastKey.current;
+    const filterAtStart = activeFilterRef.current;
     setLoadingMore(true);
     try {
       const res = await adminFetch(fetchUrl(filterAtStart, rows.length));
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload: NotesPayload = await res.json();
-      if (lastKey.current !== filterAtStart) return;
+      if (activeFilterRef.current !== filterAtStart) return;
       setRows((prev) => {
         const seen = new Set(prev.map((row) => row.id));
         return [...prev, ...payload.data.filter((row) => !seen.has(row.id))];
       });
       setTotal(payload.total || 0);
     } catch {
-      if (lastKey.current === filterAtStart) {
+      if (activeFilterRef.current === filterAtStart) {
         pushToast({ title: '加载更多失败，请稍后重试', tone: 'error' });
       }
     } finally {
