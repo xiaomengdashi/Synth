@@ -29,11 +29,11 @@ class HtmlImportPayload(BaseModel):
     html: str = Field(min_length=1)
     title: str | None = None
 
-async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, category: str = '', source: str = '', q: str = '') -> dict:
+async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, category: str = '', source: str = '', q: str = '', starred: bool = False) -> dict:
     """列表分页返回元信息列:正文 content_md 仅在详情接口返回。
 
     limit 上限 50;按 created_at 倒序,offset 渐进翻页。
-    category/source/q 为可选过滤,搜索匹配标题、摘要与原文链接。
+    category/source/q/starred 为可选过滤,搜索匹配标题、摘要与原文链接。
     """
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
@@ -44,6 +44,8 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         filters.append(func.trim(Article.category) == category)
     if source:
         filters.append(Article.source_type == source)
+    if starred:
+        filters.append(Article.is_starred == True)  # noqa: E712 — SQLAlchemy 布尔过滤惯用写法
     if q:
         keyword = f"%{q.strip()}%"
         filters.append(or_(
@@ -55,6 +57,7 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         Article.id, Article.title, Article.summary, Article.source_type,
         Article.cover_image_url, Article.account_name, Article.publish_time,
         Article.category, Article.created_at, Article.updated_at,
+        Article.is_starred, Article.read_progress,
         # 窗口函数随本页数据一并给出过滤后的总数,省掉原来单独的 COUNT 查询往返
         func.count().over().label("total"),
     )
@@ -84,8 +87,9 @@ async def get_articles_slash(
     category: str = Query(default="", description="按分类过滤,__none__ 为未分类"),
     source: str = Query(default="", description="按来源过滤:wechat/x/bilibili"),
     q: str = Query(default="", description="搜索标题、摘要与原文链接"),
+    starred: bool = Query(default=False, description="只看收藏"),
 ):
-    return await _list_article_summaries(db, limit, offset, category, source, q)
+    return await _list_article_summaries(db, limit, offset, category, source, q, starred)
 
 @router.get("")
 async def get_articles(
@@ -95,12 +99,13 @@ async def get_articles(
     category: str = Query(default="", description="按分类过滤,__none__ 为未分类"),
     source: str = Query(default="", description="按来源过滤:wechat/x/bilibili"),
     q: str = Query(default="", description="搜索标题、摘要与原文链接"),
+    starred: bool = Query(default=False, description="只看收藏"),
 ):
-    return await _list_article_summaries(db, limit, offset, category, source, q)
+    return await _list_article_summaries(db, limit, offset, category, source, q, starred)
 
 @router.get("/stats")
 async def get_articles_stats(db: AsyncSession = Depends(get_db)):
-    """来源聚合计数(供筛选签精确计数,与渐进加载解耦)。"""
+    """来源聚合计数(供筛选签精确计数,与渐进加载解耦);starred 为收藏计数。"""
     rows = (await db.execute(
         select(Article.source_type, func.count()).group_by(Article.source_type)
     )).all()
@@ -110,7 +115,10 @@ async def get_articles_stats(db: AsyncSession = Depends(get_db)):
         key = source_type if source_type in sources else "other"
         sources[key] += count
         total += count
-    return {"sources": sources, "total": total}
+    starred = (await db.execute(
+        select(func.count()).select_from(Article).where(Article.is_starred == True)  # noqa: E712
+    )).scalar_one()
+    return {"sources": sources, "total": total, "starred": starred}
 
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
@@ -243,6 +251,47 @@ async def batch_update_category(payload: BatchCategoryPayload, db: AsyncSession 
     return {"status": "success", "updated": result.rowcount or 0}
 
 
+class ArticleStarPayload(BaseModel):
+    starred: bool
+
+
+@router.patch("/{article_id}/star")
+async def toggle_article_star(article_id: str, payload: ArticleStarPayload, db: AsyncSession = Depends(get_db)):
+    """收藏/取消收藏。读者级写接口(只翻转标记,不改内容不删数据),同 import-html 惯例不加鉴权。"""
+    result = await db.execute(sa_update(Article).where(Article.id == article_id).values(is_starred=payload.starred))
+    if not result.rowcount:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    await db.commit()
+    # 阅读态是展示元数据而非内容,updated_at 不动;详情 ETag 已单独纳入 is_starred
+    if article_id in ARTICLES_DB:
+        ARTICLES_DB[article_id]["is_starred"] = payload.starred
+    return {"starred": payload.starred}
+
+
+class ArticleProgressPayload(BaseModel):
+    progress: float
+
+
+@router.put("/{article_id}/progress")
+async def update_article_progress(article_id: str, payload: ArticleProgressPayload, db: AsyncSession = Depends(get_db)):
+    """上报阅读进度:clamp 到 0~1 后与现值取 max 单调存储(回滚不回退进度)。"""
+    row = (await db.execute(
+        select(Article.read_progress).where(Article.id == article_id)
+    )).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    current = float(row.read_progress or 0.0)
+    next_progress = max(current, min(1.0, max(0.0, payload.progress)))
+    if next_progress != current:
+        await db.execute(
+            sa_update(Article).where(Article.id == article_id).values(read_progress=next_progress)
+        )
+        await db.commit()
+    if article_id in ARTICLES_DB:
+        ARTICLES_DB[article_id]["read_progress"] = next_progress
+    return {"progress": next_progress}
+
+
 @router.get("/{article_id}")
 async def get_article(
     article_id: str,
@@ -253,8 +302,12 @@ async def get_article(
     article = result.scalars().first()
 
     if article:
-        # 正文不可变(仅分类等元数据可改且会更新 updated_at),ETag 命中时 304 省掉整段正文传输
-        etag = f'W/"{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}"'
+        # 正文不可变(仅分类等元数据可改且会更新 updated_at),ETag 命中时 304 省掉整段正文传输;
+        # 收藏/进度只翻标记不动 updated_at,必须一并纳入 ETag,否则翻转后重验证命中 304 会把旧阅读态还回去
+        etag = (
+            f'W/"{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}'
+            f'-{int(article.is_starred)}-{article.read_progress}"'
+        )
         if request.headers.get("if-none-match") == etag:
             return Response(status_code=304, headers={
                 "ETag": etag,

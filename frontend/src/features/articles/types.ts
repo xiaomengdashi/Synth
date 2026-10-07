@@ -10,4 +10,8 @@ export interface Article {
   publish_time?: string;
   category?: string | null;
   created_at: string;
+  /** 收藏/稍后读标记,后端新列;老数据与内存兜底路径可能缺省 */
+  is_starred?: boolean;
+  /** 阅读进度 0~1,已读由 isRead() 派生,后端不存派生布尔 */
+  read_progress?: number;
 }

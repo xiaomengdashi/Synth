@@ -27,7 +27,7 @@ interface AppState {
   removeToast: (toastId: string) => void;
   setConfig: (config: AppConfig) => Promise<boolean>;
   fetchConfig: () => Promise<void>;
-  fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string; source?: string; q?: string }) => Promise<void>;
+  fetchArticles: (options?: { reset?: boolean; all?: boolean; category?: string; source?: string; q?: string; starred?: boolean }) => Promise<void>;
   articlesHasMore: boolean;
   articlesLoading: boolean;
   articlesTotal: number;
@@ -36,6 +36,8 @@ interface AppState {
   batchDeleteArticles: (ids: string[]) => Promise<boolean>;
   batchSetCategory: (ids: string[], category: string) => Promise<boolean>;
   updateArticle: (articleId: string, patch: Partial<Article>) => void;
+  toggleStar: (articleId: string, starred: boolean) => Promise<boolean>;
+  saveProgress: (articleId: string, progress: number) => Promise<void>;
 }
 
 // 前台主题:localStorage 存主题 id;旧值 'dark'/'light' 迁移为墨夜/纸墨
@@ -160,6 +162,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const category = options?.category;
     const source = options?.source;
     const keyword = options?.q?.trim() ?? '';
+    const starred = options?.starred ?? false;
     const state = get();
     if (state.articlesLoading) return;
     if (!reset && !state.articlesHasMore) return;
@@ -172,7 +175,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       const catQuery = catParam ? `&category=${encodeURIComponent(catParam)}` : '';
       const sourceQuery = source ? `&source=${encodeURIComponent(source)}` : '';
       const qQuery = keyword ? `&q=${encodeURIComponent(keyword)}` : '';
-      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}${catQuery}${sourceQuery}${qQuery}`);
+      const starredQuery = starred ? '&starred=1' : '';
+      const res = await fetch(`/api/v1/articles?limit=${pageSize}&offset=${offset}${catQuery}${sourceQuery}${qQuery}${starredQuery}`);
       if (!res.ok) throw new Error(`Articles API returned ${res.status}`);
       const data = await res.json();
       if (!data.data || !Array.isArray(data.data)) throw new Error('Articles API returned an invalid payload');
@@ -279,8 +283,40 @@ export const useAppStore = create<AppState>((set, get) => ({
       }));
       return true;
     } catch (error) {
-      console.error('Failed to batch set category', error);
+      console.error('Failed to batch set categories', error);
       return false;
+    }
+  },
+  // 收藏/取消收藏:成功后 patch 列表副本;引用变化会触发详情页按新 ETag 重取一次,是详情正确性所需且单次发生
+  toggleStar: async (articleId, starred) => {
+    try {
+      const res = await fetch(`/api/v1/articles/${articleId}/star`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starred }),
+      });
+      if (!res.ok) return false;
+      set((state) => ({
+        articles: state.articles.map((a) => (a.id === articleId ? { ...a, is_starred: starred } : a)),
+      }));
+      return true;
+    } catch (error) {
+      console.error('Failed to toggle star', error);
+      return false;
+    }
+  },
+  // 进度上报纪律:只发 PUT、绝不 patch articles 数组——updateArticle 生成新对象会让详情页
+  // [id, storeArticle] effect 重跑,高频上报(≥2s 节流)会变成数百次全量正文重拉+重渲染。
+  // 阅读中的进度本就在本地,无需回读 store;唯一例外是首次读完(跨 0.95)由页面做一次性 patch
+  saveProgress: async (articleId, progress) => {
+    try {
+      await fetch(`/api/v1/articles/${articleId}/progress`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress }),
+      });
+    } catch (error) {
+      console.error('Failed to save reading progress', error);
     }
   }
 }));

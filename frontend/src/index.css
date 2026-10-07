@@ -277,6 +277,19 @@
 .article-row-side { display: grid; gap: 6px; justify-items: end; }
 .article-row-side time { color: var(--faint); font-family: var(--mono); font-size: 10.5px; }
 
+/* ---------- 收藏/阅读态(星标钮 · 已读徽 · 只看收藏) ---------- */
+.star-toggle { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--faint); cursor: pointer; transition: color .15s ease, background .15s ease; }
+.star-toggle:hover { color: var(--accent); background: var(--accent-soft); }
+.star-toggle.starred { color: var(--accent); }
+.meta-side { display: inline-flex; align-items: center; gap: 4px; }
+.article-row-flags { display: inline-flex; align-items: center; gap: 4px; }
+.article-row-flags .star-toggle { width: 24px; height: 24px; }
+.read-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); font-size: 10px; font-weight: 600; letter-spacing: .05em; }
+.view-tools .filter-chip { height: 36px; box-sizing: border-box; }
+.view-tools .filter-chip svg { flex: none; }
+.reader-tool.star-tool.starred { color: var(--accent); }
+.reader-tool.star-tool.starred:hover { color: var(--accent-strong); }
+
 /* ---------- 文章库:页头 + 筛选 ---------- */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 20px; }
 .page-head h1 { margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.04em; }

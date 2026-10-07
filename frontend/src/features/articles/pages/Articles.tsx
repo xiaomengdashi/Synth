@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutGrid, List } from 'lucide-react';
+import { LayoutGrid, List, Star } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList, { sourceLabel } from '../components/ArticleList';
 import ArticleListFooter from '../components/ArticleListFooter';
@@ -23,6 +23,7 @@ export default function Articles() {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
   const articlesTotal = useAppStore((state) => state.articlesTotal);
   const [sourceCounts, setSourceCounts] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
+  const [starredCount, setStarredCount] = useState<number | null>(null);
 
   // 空闲时预取详情页 chunk:列表页停留时间长,预取后点开文章零等待
   useEffect(() => {
@@ -30,12 +31,18 @@ export default function Articles() {
     (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
   }, []);
 
-  // 来源计数只在页面挂载时拉一次:滚动续载/排序不会改变来源分布,避免每翻一页都多一次请求
+  // 来源/收藏计数只在页面挂载时拉一次:滚动续载/排序不会改变分布,避免每翻一页都多一次请求
   useEffect(() => {
     fetch('/api/v1/articles/stats')
       .then((res) => (res.ok ? res.json() : null))
-      .then((data) => setSourceCounts(data?.sources ?? null))
-      .catch(() => setSourceCounts(null));
+      .then((data) => {
+        setSourceCounts(data?.sources ?? null);
+        setStarredCount(typeof data?.starred === 'number' ? data.starred : null);
+      })
+      .catch(() => {
+        setSourceCounts(null);
+        setStarredCount(null);
+      });
   }, []);
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<ViewMode>('list');
@@ -43,21 +50,24 @@ export default function Articles() {
 
   const query = searchParams.get('q')?.trim() || '';
   const source = searchParams.get('source') || 'all';
+  const starredOnly = searchParams.get('starred') === '1';
 
   // 筛选/搜索由后端完成;参数没变不重取,加载中的变更等本轮结束自动补取(修加载竞态)
   const lastKey = useRef('');
   useEffect(() => {
     if (articlesLoading) return;
-    const key = `${source}|${query}`;
+    const key = `${source}|${query}|${starredOnly}`;
     if (lastKey.current === key) return;
     lastKey.current = key;
-    void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined });
-  }, [fetchArticles, source, query, articlesLoading]);
+    void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined, starred: starredOnly || undefined });
+  }, [fetchArticles, source, query, starredOnly, articlesLoading]);
 
   const sortedArticles = useMemo(() => {
     const factor = sort === 'new' ? -1 : 1;
-    return [...articles].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
-  }, [articles, sort]);
+    // 展示层兜底:收藏视图下过滤掉 store 里已被取消收藏的行(toggleStar 只 patch 不过滤数组)
+    const visible = starredOnly ? articles.filter((a) => a.is_starred !== false) : articles;
+    return [...visible].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
+  }, [articles, sort, starredOnly]);
 
   const applySource = (next: string) => {
     const params = new URLSearchParams(searchParams);
@@ -66,8 +76,15 @@ export default function Articles() {
     setSearchParams(params, { replace: true });
   };
 
+  const applyStarred = (next: boolean) => {
+    const params = new URLSearchParams(searchParams);
+    if (next) params.set('starred', '1');
+    else params.delete('starred');
+    setSearchParams(params, { replace: true });
+  };
+
   const activeFilterLabel = source === 'all' ? null : sourceLabel(source as Article['source_type']);
-  const filtering = Boolean(query) || source !== 'all';
+  const filtering = Boolean(query) || source !== 'all' || starredOnly;
 
   return (
     <div>
@@ -99,6 +116,14 @@ export default function Articles() {
           ))}
         </div>
         <div className="view-tools">
+          <button
+            type="button"
+            className={`filter-chip star-filter ${starredOnly ? 'active' : ''}`}
+            aria-pressed={starredOnly}
+            onClick={() => applyStarred(!starredOnly)}
+          >
+            <Star size={13} />只看收藏<em>{starredCount ?? 0}</em>
+          </button>
           <div className="seg" role="group" aria-label="切换视图">
             <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} title="列表视图"><List size={14} /></button>
             <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} title="卡片视图"><LayoutGrid size={14} /></button>
@@ -114,14 +139,17 @@ export default function Articles() {
         <ArticleList
           articles={sortedArticles}
           mode={view}
-          emptyMessage={query || activeFilterLabel
-            ? `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}的文章，换个筛选试试。`
+          emptyMessage={query || activeFilterLabel || starredOnly
+            ? starredOnly && !query && !activeFilterLabel
+              ? '还没有收藏的文章。点亮列表或文章页的星标，稍后来这里接着读。'
+              : `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}${starredOnly && (query || activeFilterLabel) ? '且收藏' : ''}的文章，换个筛选试试。`
             : '还没有文章。粘贴一条链接，开始建立你的第一篇知识卡片。'}
         />
         <ArticleListFooter
           emptyCount={articles.length}
           source={source === 'all' ? undefined : source}
           q={query || undefined}
+          starred={starredOnly || undefined}
         />
       </section>
     </div>

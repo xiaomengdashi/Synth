@@ -28,12 +28,20 @@ async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         # create_all 不会给已有表加列，轻量迁移补充新列
+        # 新列带类型与 NOT NULL DEFAULT,与模型 nullable=False 声明对齐
         from sqlalchemy import text
 
-        for column in ("account_name", "publish_time", "category", "email_message_id"):
+        for column, ddl_type in (
+            ("account_name", "VARCHAR(255)"),
+            ("publish_time", "VARCHAR(255)"),
+            ("category", "VARCHAR(255)"),
+            ("email_message_id", "VARCHAR(255)"),
+            ("is_starred", "BOOLEAN NOT NULL DEFAULT 0"),
+            ("read_progress", "REAL NOT NULL DEFAULT 0"),
+        ):
             try:
                 await conn.execute(
-                    text(f"ALTER TABLE articles ADD COLUMN {column} VARCHAR(255)")
+                    text(f"ALTER TABLE articles ADD COLUMN {column} {ddl_type}")
                 )
             except Exception:
                 pass  # 列已存在
@@ -43,6 +51,7 @@ async def init_db():
             "CREATE INDEX IF NOT EXISTS ix_articles_created_at ON articles (created_at)",
             "CREATE INDEX IF NOT EXISTS ix_articles_source_created ON articles (source_type, created_at)",
             "CREATE INDEX IF NOT EXISTS ix_articles_category_created ON articles (category, created_at)",
+            "CREATE INDEX IF NOT EXISTS ix_articles_starred_created ON articles (is_starred, created_at)",
             "CREATE INDEX IF NOT EXISTS ix_tasks_created_at ON tasks (created_at)",
         ):
             await conn.execute(text(ddl))

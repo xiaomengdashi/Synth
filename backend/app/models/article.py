@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, DateTime, Index, String, Text
+from sqlalchemy import Boolean, Column, DateTime, Float, Index, String, Text, text
 
 from app.database import Base
 
@@ -13,6 +13,7 @@ class Article(Base):
         Index("ix_articles_created_at", "created_at"),
         Index("ix_articles_source_created", "source_type", "created_at"),
         Index("ix_articles_category_created", "category", "created_at"),
+        Index("ix_articles_starred_created", "is_starred", "created_at"),
     )
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -27,6 +28,9 @@ class Article(Base):
     category = Column(String(64), nullable=True)
     # 邮件导入来源的 Message-ID:文章被删后重拉凭它放行重新导入
     email_message_id = Column(String(255), nullable=True)
+    # 收藏/稍后读标记;已读不加列,由 read_progress >= 0.95 前端派生,避免双状态漂移
+    is_starred = Column(Boolean, nullable=False, default=False, server_default=text("0"))
+    read_progress = Column(Float, nullable=False, default=0.0, server_default=text("0"))
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.UTC).replace(tzinfo=None))
     updated_at = Column(
         DateTime,

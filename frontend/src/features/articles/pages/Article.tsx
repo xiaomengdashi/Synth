@@ -7,12 +7,13 @@ import rehypeHighlight from 'rehype-highlight';
 // common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
-import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
 import XArticleView from '../components/XArticleView';
 import { extractXArticle } from '../lib/xArticle';
+import { clampProgress, shouldMarkRead, shouldReport, shouldRestore } from '../lib/readingState';
 import { sourceColor, sourceLabel } from '../components/ArticleList';
 
 const HTML_CONTENT_START = '<!-- HTML_CONTENT_START -->';
@@ -179,6 +180,10 @@ function extractXSections(contentMd: string, fallbackSummary: string) {
 export default function Article() {
   const { id } = useParams<{ id: string }>();
   const storeArticle = useAppStore((state) => state.articles.find((a) => a.id === id));
+  const toggleStar = useAppStore((state) => state.toggleStar);
+  const saveProgress = useAppStore((state) => state.saveProgress);
+  const updateArticle = useAppStore((state) => state.updateArticle);
+  const pushToast = useAppStore((state) => state.pushToast);
   // 列表接口的数据不含正文:store 命中但无 content_md 时首帧必须走加载态,
   // 否则第一次访问(chunk 下载慢、列表先返回)会带着元数据渲染,content_md 为 undefined 直接崩
   const initialArticle = storeArticle?.content_md ? storeArticle : null;
@@ -196,6 +201,10 @@ export default function Article() {
   const htmlContainerRef = useRef<HTMLDivElement>(null);
   const articleBodyRef = useRef<HTMLDivElement>(null);
   const wechatViewRef = useRef<WechatArticleViewHandle>(null);
+  // 阅读位置恢复每篇文章只做一次(详情重取/收藏翻转都会重跑 effect,不能反复把用户拽回旧位置)
+  const restoredRef = useRef('');
+  // 会话内进度基线:单调推进,兼作节流与已读判定依据
+  const readingRef = useRef({ id: '', progress: 0, lastReportAt: 0 });
 
   const wechatSections = article?.source_type === 'wechat'
     ? extractWechatSections(contentMd, article.summary)
@@ -270,6 +279,75 @@ export default function Article() {
       });
     return () => { cancelled = true; };
   }, [id, storeArticle]);
+
+  // 阅读态基线:详情返回最新 read_progress 后初始化会话(跨设备续读从上次位置单调推进)
+  useEffect(() => {
+    if (!id || !article || article.id !== id) return;
+    if (readingRef.current.id !== id) {
+      readingRef.current = { id, progress: clampProgress(article.read_progress ?? 0), lastReportAt: Date.now() };
+    }
+  }, [id, article]);
+
+  // 恢复上次阅读位置:读到一半(0.05<p<0.95)才恢复,未读/读完重进都回顶;
+  // rAF 一帧等首帧布局就绪;图片后到导致的高度偏移接受近似,不做二次追补
+  useEffect(() => {
+    if (!id || !article || article.id !== id) return;
+    if (restoredRef.current === id) return;
+    restoredRef.current = id;
+    const ratio = clampProgress(article.read_progress ?? 0);
+    if (!shouldRestore(ratio)) return;
+    requestAnimationFrame(() => {
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      if (maxScroll > 0) window.scrollTo(0, Math.round(ratio * maxScroll));
+    });
+  }, [id, article]);
+
+  // 滚动进度上报:节流(≥2s 或跨 0.25 里程碑)后 PUT-only 写后端,绝不 patch store 列表——
+  // 高频 patch 会让 [id, storeArticle] effect 重跑成数百次全量正文重拉+重渲染
+  useEffect(() => {
+    if (!id) return;
+    const handleReadingScroll = () => {
+      const reading = readingRef.current;
+      if (reading.id !== id) return;
+      const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
+      const next = maxScroll <= 0 ? 1 : clampProgress(window.scrollY / maxScroll);
+      if (!shouldReport(reading.progress, next, Date.now() - reading.lastReportAt)) return;
+      const crossedDone = shouldMarkRead(reading.progress, next);
+      reading.progress = next;
+      reading.lastReportAt = Date.now();
+      void saveProgress(id, next);
+      if (crossedDone) {
+        // 首次读完的唯一例外:一次性 patch 列表副本,让列表「已读」徽即时可见(单次/篇)
+        updateArticle(id, { read_progress: 1.0 });
+      }
+    };
+    window.addEventListener('scroll', handleReadingScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleReadingScroll);
+  }, [id, saveProgress, updateArticle]);
+
+  // 离开页面/切后台/路由卸载时冲刷最后一截进度:keepalive 允许请求在页面卸载后继续送达
+  useEffect(() => {
+    const flushProgress = () => {
+      const reading = readingRef.current;
+      if (!reading.id || reading.progress <= 0) return;
+      void fetch(`/api/v1/articles/${reading.id}/progress`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ progress: reading.progress }),
+        keepalive: true,
+      }).catch(() => { /* 页面正在离开,失败静默 */ });
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushProgress();
+    };
+    window.addEventListener('pagehide', flushProgress);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      flushProgress();
+      window.removeEventListener('pagehide', flushProgress);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
 
   // 仅对 CSDN 等无内联着色的代码块做 hljs；公众号正文已自带颜色，hljs 会破坏 <br/> 换行
   useEffect(() => {
@@ -395,6 +473,19 @@ export default function Article() {
     : '';
   const isXArticle = article.source_type === 'x';
 
+  // 收藏/取消收藏:成功后本地立即翻转按钮,store patch 触发的详情重取会带回服务器权威值
+  const handleToggleStar = async () => {
+    if (!id || !article) return;
+    const next = article.is_starred !== true;
+    const ok = await toggleStar(id, next);
+    if (!ok) {
+      pushToast({ title: '收藏操作失败，请稍后重试', tone: 'error' });
+      return;
+    }
+    setArticle((prev) => (prev && prev.id === id ? { ...prev, is_starred: next } : prev));
+    pushToast({ title: next ? '已加入收藏' : '已取消收藏', tone: 'success' });
+  };
+
   return (
     <article className="reader-article anim-enter" style={{ '--lift': '20px', animationDuration: '.5s' } as React.CSSProperties}>
       <div className={`reader-outer-row ${tocItems.length > 0 ? 'with-toc' : ''}`}>
@@ -404,6 +495,15 @@ export default function Article() {
           <span aria-current="page">{sourceLabel(article.source_type)}</span>
         </nav>
         <div className="reader-tools">
+          <button
+            type="button"
+            className={`reader-tool star-tool ${article.is_starred ? 'starred' : ''}`}
+            aria-pressed={article.is_starred === true}
+            onClick={() => void handleToggleStar()}
+          >
+            <Star size={13} fill={article.is_starred ? 'currentColor' : 'none'} />
+            {article.is_starred ? '已收藏' : '收藏'}
+          </button>
           <a
             className="reader-tool"
             href={article.original_url}

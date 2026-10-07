@@ -1,8 +1,10 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CSSProperties } from 'react';
 import type { Article } from '../types';
 import { formatAbsolute } from '../../../utils/formatDate';
+import { isRead } from '../lib/readingState';
+import { useAppStore } from '../../app/store/useAppStore';
 
 export function sourceLabel(sourceType: Article['source_type']) {
   if (sourceType === 'wechat') return '微信公众号';
@@ -39,6 +41,39 @@ function Cover({ article, kind }: { article: Article; kind: 'card' | 'row' }) {
   );
 }
 
+/** 收藏/取消收藏:嵌在行/卡可点区内,先拦下链接跳转只翻转标记;Toast 反馈成败。 */
+function StarButton({ article }: { article: Article }) {
+  const toggleStar = useAppStore((state) => state.toggleStar);
+  const pushToast = useAppStore((state) => state.pushToast);
+  const starred = article.is_starred === true;
+
+  const handle = async (event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const next = !starred;
+    const ok = await toggleStar(article.id, next);
+    pushToast({ title: ok ? (next ? '已加入收藏' : '已取消收藏') : '收藏操作失败，请稍后重试', tone: ok ? 'success' : 'error' });
+  };
+
+  return (
+    <button
+      type="button"
+      className={`star-toggle ${starred ? 'starred' : ''}`}
+      aria-pressed={starred}
+      aria-label={starred ? '取消收藏' : '收藏'}
+      title={starred ? '取消收藏' : '收藏'}
+      onClick={handle}
+    >
+      <Star size={14} fill={starred ? 'currentColor' : 'none'} />
+    </button>
+  );
+}
+
+/** 已读徽:进度 ≥ 0.95 前端派生,不占后端列。 */
+function ReadBadge() {
+  return <span className="read-badge">已读</span>;
+}
+
 export default function ArticleList({
   articles,
   mode = 'grid',
@@ -64,6 +99,10 @@ export default function ArticleList({
                 <p>{article.summary}</p>
               </span>
               <span className="article-row-side">
+                <span className="article-row-flags">
+                  {isRead(article.read_progress) ? <ReadBadge /> : null}
+                  <StarButton article={article} />
+                </span>
                 <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
                 <time>{formatAbsolute(new Date(article.created_at))}</time>
               </span>
@@ -92,7 +131,11 @@ export default function ArticleList({
               <p>{article.summary}</p>
               <div className="article-meta">
                 <span className="meta-source"><i />{sourceLabel(article.source_type)} · {formatAbsolute(new Date(article.created_at))}</span>
-                <span className="read-arrow"><ArrowRight size={13} /></span>
+                <span className="meta-side">
+                  {isRead(article.read_progress) ? <ReadBadge /> : null}
+                  <StarButton article={article} />
+                  <span className="read-arrow"><ArrowRight size={13} /></span>
+                </span>
               </div>
             </div>
           </article>
