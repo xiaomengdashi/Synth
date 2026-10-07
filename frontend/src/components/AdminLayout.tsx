@@ -4,6 +4,7 @@ import {
   BookOpenText,
   ChevronRight,
   Cpu,
+  Highlighter,
   KeyRound,
   LayoutDashboard,
   Mail,
@@ -28,6 +29,7 @@ const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: t
     label: '内容',
     items: [
       { path: '/admin/articles', label: '文章管理', icon: Newspaper },
+      { path: '/admin/notes', label: '划线笔记', icon: Highlighter },
       { path: '/admin/categories', label: '文章分类', icon: Tags },
       { path: '/admin/tasks', label: '处理任务', icon: Activity },
     ],
@@ -51,6 +53,9 @@ function useAdminBreadcrumbs(pathname: string) {
   }
   if (pathname === '/admin/articles') {
     return [{ label: '后台管理', to: '/admin' }, { label: '文章管理' }];
+  }
+  if (pathname === '/admin/notes') {
+    return [{ label: '后台管理', to: '/admin' }, { label: '划线笔记' }];
   }
   if (pathname === '/admin/categories') {
     return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];

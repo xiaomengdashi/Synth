@@ -8,10 +8,11 @@ import rehypeHighlight from 'rehype-highlight';
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
 import { ArrowLeft, ArrowUp, Download, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
 import XArticleView from '../components/XArticleView';
+import ArticleNotes from '../components/ArticleNotes';
 import { extractXArticle } from '../lib/xArticle';
 import { clampProgress, shouldMarkRead, shouldReport, shouldRestore } from '../lib/readingState';
 import { sourceColor, sourceLabel } from '../components/ArticleList';
@@ -202,6 +203,8 @@ export default function Article() {
   const htmlContainerRef = useRef<HTMLDivElement>(null);
   const articleBodyRef = useRef<HTMLDivElement>(null);
   const wechatViewRef = useRef<WechatArticleViewHandle>(null);
+  // 微信 shadow 正文整体重写的信号:递增触发 ArticleNotes 重画划线高亮
+  const [wxContentVer, setWxContentVer] = useState(0);
   // 阅读位置恢复每篇文章只做一次(详情重取/收藏翻转都会重跑 effect,不能反复把用户拽回旧位置)
   const restoredRef = useRef('');
   // 会话内进度基线:单调推进,兼作节流与已读判定依据
@@ -216,6 +219,12 @@ export default function Article() {
   const xArticleReplica = useMemo(
     () => (article?.source_type === 'x' ? extractXArticle(contentMd) : null),
     [article],
+  );
+  // 划线笔记的作用域:微信路径取 shadow 根,其余路径统一 articleBodyRef
+  // (该 div 包裹全部三条渲染路径的正文,天然把标题/目录/工具条排除在划线区外)
+  const resolveNotesRoot = useCallback(
+    () => (useWechatReplica ? wechatViewRef.current?.getShadowRoot() ?? null : articleBodyRef.current),
+    [useWechatReplica],
   );
 
   useEffect(() => {
@@ -573,6 +582,7 @@ export default function Article() {
                   publishTime={article.publish_time}
                   createdAt={article.created_at}
                   onTocItems={setTocItems}
+                  onContentReset={() => setWxContentVer((v) => v + 1)}
                 />
               ) : xArticleReplica ? (
                 <XArticleView article={xArticleReplica} />
@@ -638,6 +648,12 @@ export default function Article() {
         />
       ) : null}
       </div>
+      <ArticleNotes
+        articleId={article.id}
+        contentRoot={resolveNotesRoot}
+        contentVersion={wxContentVer}
+        hasToc={tocItems.length > 0}
+      />
       <RelatedArticles articleId={article.id} hasToc={tocItems.length > 0} />
       {showBackToTop ? (
         <button

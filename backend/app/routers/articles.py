@@ -288,12 +288,13 @@ class BatchCategoryPayload(BaseModel):
 
 @router.post("/batch-delete")
 async def batch_delete_articles(payload: BatchIdsPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
-    """批量删除文章并连带清理处理任务;不存在的 id 静默跳过,返回实际删除数。"""
-    from app.models import Task
+    """批量删除文章并连带清理处理任务与划线笔记;不存在的 id 静默跳过,返回实际删除数。"""
+    from app.models import Note, Task
     ids = list(dict.fromkeys(payload.ids))
     if not ids:
         raise HTTPException(status_code=400, detail="ids 不能为空")
     task_result = await db.execute(sa_delete(Task).where(Task.article_id.in_(ids)))
+    note_result = await db.execute(sa_delete(Note).where(Note.article_id.in_(ids)))
     article_result = await db.execute(sa_delete(Article).where(Article.id.in_(ids)))
     await db.commit()
     for article_id in ids:
@@ -301,7 +302,12 @@ async def batch_delete_articles(payload: BatchIdsPayload, db: AsyncSession = Dep
     for task_id, task_data in list(TASKS_DB.items()):
         if task_data.get("article_id") in ids:
             del TASKS_DB[task_id]
-    return {"status": "success", "deleted": article_result.rowcount or 0, "tasks_deleted": task_result.rowcount or 0}
+    return {
+        "status": "success",
+        "deleted": article_result.rowcount or 0,
+        "tasks_deleted": task_result.rowcount or 0,
+        "notes_deleted": note_result.rowcount or 0,
+    }
 
 
 @router.patch("/batch-category")
@@ -421,12 +427,15 @@ async def update_article_category(article_id: str, payload: ArticleCategoryPaylo
 @router.delete("/{article_id}")
 async def delete_article(article_id: str, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
     # 先找到关联的任务并删除（或者置空）
-    from app.models import Task
+    from app.models import Note, Task
     result = await db.execute(select(Task).where(Task.article_id == article_id))
     tasks = result.scalars().all()
     for task in tasks:
         await db.delete(task)
-        
+
+    # 划线笔记无外键级联(SQLite 未开 PRAGMA),删文章前显式清理
+    await db.execute(sa_delete(Note).where(Note.article_id == article_id))
+
     article = await db.get(Article, article_id)
     if article:
         await db.delete(article)

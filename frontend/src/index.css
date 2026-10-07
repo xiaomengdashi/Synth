@@ -1066,3 +1066,53 @@ summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; b
 
 /* ---------- 列表渐进加载 ---------- */
 .list-loading-note, .list-end-note { display: flex; align-items: center; justify-content: center; gap: 7px; padding: 22px 0 4px; color: var(--faint); font-size: 12px; }
+
+/* ---------- 划线笔记(选中正文→添加划线→重进恢复高亮) ---------- */
+/* 主文档路径用 CSS Custom Highlight API 上色:零 DOM 改写——React 管理的文本节点不能包
+   span(切文章重渲染时 split text node 会触发 removeChild 崩溃);微信 shadow 路径相反,
+   必须包 span(CSS.highlights 不穿入 shadow 树),机制见 lib/noteHighlight.ts。
+   马克笔语义固定黄:跨全部主题与明暗均可用,且 ::highlight 仅支持有限属性 */
+::highlight(article-note) { background-color: rgba(255, 212, 0, .38); }
+::highlight(article-note-flash) { background-color: rgba(255, 212, 0, .62); }
+
+/* 选区浮动工具条(fixed,实底面+阴影,贴合现有圆角/字重体系) */
+.note-select-bar { position: fixed; z-index: 70; transform: translateX(-50%); display: inline-flex; align-items: center; height: 32px; padding: 0 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 10px 28px rgba(27, 29, 27, .16); }
+.note-select-bar button { display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border: 0; background: transparent; color: var(--accent); font-size: 11.5px; font-weight: 600; cursor: pointer; }
+.note-select-bar button:hover { color: var(--accent-strong); }
+
+/* 添加划线的小输入卡(mousedown preventDefault 保选区,保存中锁按钮) */
+.note-composer { position: fixed; z-index: 70; transform: translateX(-50%); display: grid; gap: 8px; width: min(340px, calc(100vw - 32px)); padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 16px 40px rgba(27, 29, 27, .18); }
+.note-composer-quote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.note-composer textarea { width: 100%; min-height: 76px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); color: var(--ink); font-size: 13px; line-height: 1.7; resize: vertical; outline: 0; }
+.note-composer textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.note-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.note-composer-actions .primary-button, .note-composer-actions .secondary-button { min-width: 0; height: 32px; padding: 0 14px; font-size: 12px; }
+
+/* 点高亮看笔记的只读气泡(前台只展示边界,删除入口在后台) */
+.note-popover { position: fixed; z-index: 70; display: grid; gap: 6px; width: min(340px, calc(100vw - 32px)); padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); box-shadow: 0 16px 40px rgba(27, 29, 27, .18); }
+.note-popover-quote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
+.note-popover-note { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-popover-time { color: var(--faint); font-family: var(--mono); font-size: 10px; }
+
+/* 正文下方「划线笔记」列表:复刻 related-block 宽度与 has-toc 让位规则 */
+.notes-block { width: min(700px, 100%); margin: 18px auto 0; }
+.notes-block.has-toc { width: min(1144px, 100%); }
+.notes-block.has-toc .notes-inner { display: flex; flex-direction: column; align-items: center; width: calc(100% - 244px); margin-right: 244px; }
+.notes-block.has-toc .notes-title, .notes-block.has-toc .notes-rows { width: min(700px, 100%); }
+.notes-title { margin: 0 0 10px; color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .18em; }
+.notes-rows { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.note-row { position: relative; display: grid; gap: 6px; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
+.note-row:last-child { border-bottom: 0; }
+.note-row::before { position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); content: ''; }
+.note-row-quote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.note-row-note { margin: 0; color: var(--ink); font-size: 13px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note-row-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.note-row-meta time { color: var(--faint); font-family: var(--mono); font-size: 10px; }
+.note-locate { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; transition: color .15s ease, background .15s ease; }
+.note-locate:hover { background: var(--accent-soft); color: var(--accent); }
+
+@media (max-width: 1279px) {
+  /* 目录上置后无横向槽,划线笔记回到普通 700px 居中,与阅读卡同宽对齐 */
+  .notes-block.has-toc { width: min(700px, 100%); }
+  .notes-block.has-toc .notes-inner { display: block; width: auto; margin-left: 0; margin-right: 0; }
+}

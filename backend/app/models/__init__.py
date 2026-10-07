@@ -1,5 +1,6 @@
 from app.models.article import Article
 from app.models.task import Task
+from app.models.note import Note
 from app.models.setting import AppSetting
 
-__all__ = ["Article", "Task", "AppSetting"]
+__all__ = ["Article", "Task", "Note", "AppSetting"]

@@ -21,6 +21,8 @@ export interface WechatTocItem {
 
 export interface WechatArticleViewHandle {
   scrollToTocItem: (id: string) => void;
+  /** 划线笔记等内容侧功能取 shadow 根(open mode,正文在树内) */
+  getShadowRoot: () => ShadowRoot | null;
 }
 
 interface WechatArticleViewProps {
@@ -30,6 +32,8 @@ interface WechatArticleViewProps {
   publishTime?: string;
   createdAt?: string;
   onTocItems?: (items: WechatTocItem[]) => void;
+  /** shadow 正文被整体重写后通知父层(父层据此重画划线高亮) */
+  onContentReset?: () => void;
 }
 
 /** 提取自 mp.weixin.qq.com 线上官方 CSS 的文章页核心规则（浅色模式）。 */
@@ -202,12 +206,14 @@ ${htmlContent}
 
 const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewProps>(
   (
-    { title, htmlContent, accountName, publishTime, createdAt, onTocItems },
+    { title, htmlContent, accountName, publishTime, createdAt, onTocItems, onContentReset },
     ref,
   ) => {
     const hostRef = useRef<HTMLDivElement>(null);
     const onTocItemsRef = useRef(onTocItems);
     onTocItemsRef.current = onTocItems;
+    const onContentResetRef = useRef(onContentReset);
+    onContentResetRef.current = onContentReset;
 
     useEffect(() => {
       const host = hostRef.current;
@@ -221,6 +227,8 @@ const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewP
       );
 
       const cleanup = applyWechatRuntime(root, (items) => onTocItemsRef.current?.(items));
+      // 正文重写完成后通知父层:重画划线高亮(此前包的 span 已随 innerHTML 重写消失)
+      onContentResetRef.current?.();
       return () => {
         if (cleanup) window.removeEventListener('resize', cleanup);
       };
@@ -234,6 +242,7 @@ const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewP
         const top = el.getBoundingClientRect().top + window.scrollY - 76;
         window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
       },
+      getShadowRoot: () => hostRef.current?.shadowRoot || null,
     }));
 
     return <div ref={hostRef} className="wechat-replica-scope" role="article" aria-label={title || '微信公众号文章原文'} />;
