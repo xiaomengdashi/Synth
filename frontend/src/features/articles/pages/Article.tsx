@@ -15,6 +15,7 @@ import XArticleView from '../components/XArticleView';
 import { extractXArticle } from '../lib/xArticle';
 import { clampProgress, shouldMarkRead, shouldReport, shouldRestore } from '../lib/readingState';
 import { sourceColor, sourceLabel } from '../components/ArticleList';
+import RelatedArticles from '../components/RelatedArticles';
 
 const HTML_CONTENT_START = '<!-- HTML_CONTENT_START -->';
 const HTML_CONTENT_END = '<!-- HTML_CONTENT_END -->';
@@ -638,6 +639,7 @@ export default function Article() {
         />
       ) : null}
       </div>
+      <RelatedArticles articleId={article.id} hasToc={tocItems.length > 0} />
       {showBackToTop ? (
         <button
           type="button"

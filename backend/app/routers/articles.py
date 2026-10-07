@@ -18,7 +18,9 @@ from app.services.article_summary import generate_article_summary
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.settings_store import numeric_setting
 from app.services.task_service import build_local_summary, detect_source_type
+from app.services.related_articles import fetch_related
 from app.services.note_export import article_field, build_export_zip, build_note_markdown, safe_filename
+
 from app.services import wechat_summary_regen
 from app.routers.config import get_runtime_config
 from app.routers.admin_auth import require_admin
@@ -176,6 +178,15 @@ async def export_article_note(article_id: str, db: AsyncSession = Depends(get_db
             f'attachment; filename="{article_id}.md"; filename*=UTF-8\'\'{quote(filename)}'
         )},
     )
+
+
+@router.get("/{article_id}/related")
+async def get_related_articles(article_id: str, db: AsyncSession = Depends(get_db)):
+    """相关阅读:同分类候选+字符重合度打分的只读推荐;读者级不鉴权,与详情接口同暴露面。"""
+    rows = await fetch_related(db, article_id)
+    if rows is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    return {"data": rows}
 
 
 @router.get("/x-preview")

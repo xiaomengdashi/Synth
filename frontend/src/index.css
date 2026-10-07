@@ -383,6 +383,26 @@
 .back-to-top { position: fixed; right: 24px; bottom: 24px; z-index: 30; display: inline-flex; align-items: center; gap: 7px; padding: 10px 13px; border: 1px solid var(--line); border-radius: 999px; background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow); color: var(--ink); font-size: 11px; font-weight: 700; backdrop-filter: blur(10px); transition: transform .2s ease, border-color .2s ease; }
 .back-to-top:hover, .back-to-top:focus-visible { border-color: var(--accent); outline: 0; transform: translateY(-2px); }
 
+/* ---------- 相关阅读(详情页正文后的紧凑推荐行,article-row 缩小版) ---------- */
+.related-block { width: min(700px, 100%); margin: 18px auto 0; }
+/* 带目录(≥1280px 横排)时与 .reader-layout.has-toc 同宽;DOM 序为 [正文卡, 目录],目录列在右侧,
+   inner 让出右侧目录区(200+44)得左侧正文槽,内容在槽内 700px 居中——与 .article-reader 对齐 */
+.related-block.has-toc { width: min(1144px, 100%); }
+.related-block.has-toc .related-inner { display: flex; flex-direction: column; align-items: center; width: calc(100% - 244px); margin-right: 244px; }
+.related-block.has-toc .related-title, .related-block.has-toc .related-rows { width: min(700px, 100%); }
+.related-title { margin: 0 0 10px; color: var(--faint); font-size: 10.5px; font-weight: 700; letter-spacing: .18em; }
+.related-rows { overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.related-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px 10px 20px; border-bottom: 1px solid var(--line); text-decoration: none; transition: background .14s ease; }
+.related-row:last-child { border-bottom: 0; }
+.related-row:hover { background: var(--paper); }
+.related-row::before { position: absolute; top: 10px; bottom: 10px; left: 0; width: 3px; border-radius: 0 3px 3px 0; background: var(--src, var(--accent)); content: ''; }
+.related-row-main { min-width: 0; }
+.related-row-main strong { display: block; overflow: hidden; color: var(--ink); font-size: 13px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
+.related-row:hover .related-row-main strong { color: var(--accent-strong); }
+.related-row-main p { display: block; overflow: hidden; margin: 3px 0 0; color: var(--muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.related-row-meta { display: grid; gap: 4px; justify-items: end; }
+.related-row-meta time { color: var(--faint); font-family: var(--mono); font-size: 10px; }
+
 /* ---------- X 长文阅读视图 ---------- */
 .x-article-header { padding: clamp(28px, 5vw, 54px) clamp(22px, 7vw, 76px) 0; }
 .x-article-kicker { display: flex; align-items: center; justify-content: space-between; color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; }
@@ -519,6 +539,9 @@
 @media (max-width: 1279px) {
   .article-grid { grid-template-columns: repeat(3, 1fr); }
   .reader-layout.has-toc { display: flex; flex-direction: column-reverse; max-width: 700px; }
+  /* 目录上置后无横向槽,相关阅读回到普通 700px 居中,与阅读卡同宽对齐 */
+  .related-block.has-toc { width: min(700px, 100%); }
+  .related-block.has-toc .related-inner { display: block; width: auto; margin-left: 0; margin-right: 0; }
   .reader-outer-row.with-toc { width: min(700px, 100%); }
   .reader-layout.has-toc { gap: 26px; }
   .article-toc { position: relative; top: auto; width: auto; padding: 2px 0 0; }
