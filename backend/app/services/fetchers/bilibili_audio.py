@@ -28,7 +28,7 @@ from app.services.fetchers.tikhub import (
 
 BILIBILI_PLAYURL_PATH = "/api/v1/bilibili/web/fetch_video_playurl"
 MINIMAX_STT_PATH = "/v1/speech_to_text"
-MINIMAX_BASES = ("https://api.minimax.cn", "https://api-bj.minimaxi.com")
+DEFAULT_MINIMAX_BASES = ("https://api.minimax.cn", "https://api-bj.minimaxi.com")
 CHUNK_SECONDS = 480  # MiniMax 单次上限 500s，切片留余量避免边界 400
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
 REFERER = "https://www.bilibili.com/"
@@ -47,6 +47,32 @@ def resolve_minimax_key(config: Any = None) -> str:
     if not token:
         raise TranscribeError("未配置 MiniMax 转写 Key，请在管理后台「模型设置」页填写。")
     return token
+
+
+def _resolve_minimax_bases(config: Any = None) -> tuple[str, ...]:
+    """MiniMax 端点：后台填一个自定义地址（自建中转/代理场景）；
+    留空用官方双域名依次尝试容灾。误填逗号分隔时取第一个。"""
+    raw = ""
+    if isinstance(config, dict):
+        raw = str(config.get("minimaxApiBase") or "").strip()
+    elif config is not None:
+        raw = str(getattr(config, "minimaxApiBase", "") or "").strip()
+    first = raw.split(",")[0].strip().rstrip("/")
+    return (first,) if first.startswith("http") else DEFAULT_MINIMAX_BASES
+
+
+def _resolve_bilibili_proxies(config: Any = None) -> list[str | None]:
+    """音频下载代理：后台配置优先，BILIBILI_PROXY 环境变量兜底；直连始终首先尝试。"""
+    proxies: list[str | None] = [None]
+    configured = ""
+    if isinstance(config, dict):
+        configured = str(config.get("bilibiliProxy") or "").strip()
+    elif config is not None:
+        configured = str(getattr(config, "bilibiliProxy", "") or "").strip()
+    for candidate in (configured, os.environ.get("BILIBILI_PROXY", "").strip()):
+        if candidate and candidate not in proxies:
+            proxies.append(candidate)
+    return proxies
 
 
 def _fetch_audio_candidates(bvid: str, cid: str, token: str) -> list[str]:
@@ -96,11 +122,9 @@ def _download_one(url: str, dest: Path, proxy: str | None = None) -> bool:
     return False
 
 
-def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], None]) -> None:
-    proxies: list[str | None] = [None]
-    env_proxy = os.environ.get("BILIBILI_PROXY", "").strip()
-    if env_proxy:
-        proxies.append(env_proxy)
+def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], None], proxies: list[str | None] | None = None) -> None:
+    if proxies is None:
+        proxies = [None]
     total = len(urls)
     for proxy in proxies:
         label = "代理" if proxy else "直连"
@@ -108,7 +132,9 @@ def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], No
             update_step(f"正在下载音频（{label}镜像 {index}/{total}）...")
             if _download_one(url, dest, proxy) and dest.stat().st_size > 1024:
                 return
-    raise TranscribeError("所有音频直链下载失败。可在部署环境设置 BILIBILI_PROXY（如 http://127.0.0.1:7890）后重试。")
+    raise TranscribeError(
+        "所有音频直链下载失败。可在管理后台「TikHub 数据服务 → 接口与网络」配置 B 站下载代理（如 http://127.0.0.1:7890）后重试。"
+    )
 
 
 def _require_ffmpeg() -> None:
@@ -132,9 +158,9 @@ def _audio_to_chunks(source: Path, workdir: Path) -> list[Path]:
     return sorted(workdir.glob("chunk_*.mp3"))
 
 
-def _minimax_stt(mp3: Path, api_key: str) -> str:
+def _minimax_stt(mp3: Path, api_key: str, bases: tuple[str, ...] = DEFAULT_MINIMAX_BASES) -> str:
     last_error = ""
-    for base in MINIMAX_BASES:
+    for base in bases:
         try:
             response = httpx.post(
                 base + MINIMAX_STT_PATH,
@@ -200,14 +226,15 @@ def fetch_bilibili_transcript_via_asr(
     workdir = Path(tempfile.mkdtemp(prefix="bilibili_asr_"))
     try:
         raw = workdir / "audio.m4s"
-        _download_audio(urls, raw, step)
+        _download_audio(urls, raw, step, _resolve_bilibili_proxies(config))
         size_mb = raw.stat().st_size / 1024 / 1024
         step(f"音频下载完成（{size_mb:.1f}MB），正在切片...")
         chunks = _audio_to_chunks(raw, workdir)
+        bases = _resolve_minimax_bases(config)
         texts: list[str] = []
         for index, chunk in enumerate(chunks, 1):
             step(f"MiniMax 云端转写中（第 {index}/{len(chunks)} 片）...")
-            texts.append(_minimax_stt(chunk, api_key))
+            texts.append(_minimax_stt(chunk, api_key, bases))
         transcript = "\n".join(part for part in texts if part).strip()
         if not transcript:
             raise TranscribeError("转写结果为空（音频可能没有有效人声）。")

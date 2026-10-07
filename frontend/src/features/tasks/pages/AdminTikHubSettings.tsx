@@ -1,10 +1,57 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Bird, KeyRound, RefreshCw, Wallet } from 'lucide-react';
+import { ArrowRight, Bird, KeyRound, RefreshCw, Globe, Wallet } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import { dateTime, money, requestJson } from '../../tikhub/client';
 import type { Account, KeyStatus } from '../../tikhub/types';
 import AdminPageHeader from '../components/AdminPageHeader';
+
+function NetworkPanel() {
+  const { config, setConfig, fetchConfig } = useAppStore();
+  const [localConfig, setLocalConfig] = useState(config);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+
+  useEffect(() => { void fetchConfig(); }, [fetchConfig]);
+  useEffect(() => { setLocalConfig(config); }, [config]);
+
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSaving(true); setMessage(null);
+    const ok = await setConfig(localConfig);
+    setMessage(ok
+      ? { tone: 'success', text: '接口与网络配置已保存。' }
+      : { tone: 'error', text: '保存失败，请确认后端服务正在运行，然后重试。' });
+    setSaving(false);
+  };
+
+  return (
+    <section className="ac-set-card">
+      <div className="ac-set-side">
+        <h2><Globe size={15} /> 接口与网络</h2>
+        <p>内容抓取的出站端点与网络路径。默认直连官方地址；音频下载被掐时配置代理即可，无需登服务器改环境变量。</p>
+      </div>
+      <div className="ac-set-main">
+        <form onSubmit={save}>
+          <div className="ac-field">
+            <label htmlFor="tikhub-api-base">TikHub API 端点</label>
+            <input id="tikhub-api-base" className="ac-input" value={localConfig.tikhubApiBase ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, tikhubApiBase: event.target.value })} placeholder="https://api.tikhub.io" />
+            <p className="ac-help">三平台数据统一入口，留空用官方地址。更换端点后重新保存一次 Key 完成验证。</p>
+          </div>
+          <div className="ac-field">
+            <label htmlFor="bilibili-proxy">B 站下载代理</label>
+            <input id="bilibili-proxy" className="ac-input" value={localConfig.bilibiliProxy ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, bilibiliProxy: event.target.value })} placeholder="http://127.0.0.1:7890" />
+            <p className="ac-help">下载 B 站音频直连全部失败时改走该代理（音频转写用）；留空始终直连。仅对直连失败生效，不影响其他抓取。</p>
+          </div>
+          {message && <p className={`tikhub-message ${message.tone}`} role="status">{message.text}</p>}
+          <div className="ac-actions">
+            <button type="submit" className="ac-btn primary" disabled={saving}>{saving ? '保存中…' : '保存接口配置'}</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
 
 function TikHubPanel() {
   const fetchConfig = useAppStore(state => state.fetchConfig);
@@ -166,6 +213,7 @@ export default function AdminTikHubSettings() {
       <AdminPageHeader summary={<span>TikHub 数据服务：密钥、账户与用量</span>} />
       <div className="ac-settings-page"><div className="ac-settings-content">
         <TikHubPanel />
+        <NetworkPanel />
       </div></div>
     </div>
   );

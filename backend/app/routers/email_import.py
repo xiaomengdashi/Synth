@@ -47,6 +47,11 @@ def _http_error(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
+def _default_fetch_days(config: dict) -> int:
+    """拉取窗口缺省值：后台「邮箱导入」页配置的默认天数，非法回 7。"""
+    return int(settings_store.numeric_setting(config, "emailFetchDays", 7, lo=1, hi=3650, integer=True))
+
+
 MOBILE_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Safari/604.1"
 
 
@@ -173,7 +178,7 @@ async def _import_articles_for_message(message: EmailMessageData, config: dict |
 @router.post("/test")
 async def test_email_connection(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
-    days = payload.days if payload else 7
+    days = payload.days if payload else _default_fetch_days(config)
     try:
         messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:
@@ -184,7 +189,7 @@ async def test_email_connection(payload: EmailWindowPayload | None = None, _: No
 @router.post("/fetch")
 async def fetch_email_articles(payload: EmailWindowPayload | None = None, _: None = Depends(require_admin)):
     config = await settings_store.load_settings()
-    days = payload.days if payload else 7
+    days = payload.days if payload else _default_fetch_days(config)
     try:
         messages = await asyncio.to_thread(fetch_whitelisted_messages, config, days)
     except (EmailAuthError, EmailFetchError) as exc:

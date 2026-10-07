@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from app.services.settings_store import numeric_setting
+
 
 class _RetryableStreamError(RuntimeError):
     """可重试：断流、空响应、404（换候选地址）。"""
@@ -20,6 +22,17 @@ class _RetryableStreamError(RuntimeError):
 
 class _FatalStreamError(RuntimeError):
     """不可重试：鉴权失败、明确的模型服务错误。"""
+
+
+def strip_code_fence(text: str) -> str:
+    """去掉模型输出偶然裹的 ``` 围栏（生成类调用的通用后处理）。"""
+    text = text.strip()
+    if text.startswith("```"):
+        newline = text.find("\n")
+        text = text[newline + 1:] if newline != -1 else text
+        if text.rstrip().endswith("```"):
+            text = text.rstrip()[:-3]
+    return text.strip()
 
 
 def _candidate_bases(base: str) -> list[str]:
@@ -73,16 +86,24 @@ async def chat_completion(
     messages: list[dict],
     config: Any = None,
     *,
-    temperature: float = 0.3,
-    # MiniMax-M3 官方目录最大输出 512K；若更换模型需同步调整为其上限
-    max_tokens: int = 512_000,
-    timeout: float = 300.0,
+    temperature: float | None = None,
+    # 显式传参优先；缺省时读后台「模型设置 → 生成参数」（非法/留空回落内置默认）
+    max_tokens: int | None = None,
+    timeout: float | None = None,
 ) -> str:
     base = str((config or {}).get("baseUrl") or "").strip()
     api_key = str((config or {}).get("apiKey") or "").strip()
     model = str((config or {}).get("modelName") or "").strip()
     if not (base and api_key and model):
         raise RuntimeError("模型服务未配置完整（Base URL / API Key / 模型名称），请在管理后台「模型设置」填写。")
+
+    if temperature is None:
+        temperature = numeric_setting(config or {}, "llmTemperature", 0.3, lo=0.0, hi=2.0)
+    if max_tokens is None:
+        # 默认对齐 MiniMax-M3 官方目录上限 512K；更换模型时可在后台调整为其上限
+        max_tokens = numeric_setting(config or {}, "llmMaxTokens", 512_000, lo=1, hi=2_000_000, integer=True)
+    if timeout is None:
+        timeout = numeric_setting(config or {}, "llmTimeoutSeconds", 300.0, lo=30, hi=1200)
 
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     body = {

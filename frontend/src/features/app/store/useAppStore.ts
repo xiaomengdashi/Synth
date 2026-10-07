@@ -123,6 +123,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           minimaxApiKey: config.minimaxApiKey ?? '',
           imapHost: config.imapHost ?? '', imapUser: config.imapUser ?? '',
           imapPassword: config.imapPassword ?? '', imapSenderWhitelist: config.imapSenderWhitelist ?? '',
+          tikhubApiBase: config.tikhubApiBase ?? '', bilibiliProxy: config.bilibiliProxy ?? '',
+          minimaxApiBase: config.minimaxApiBase ?? '',
+          llmTemperature: config.llmTemperature ?? '', llmMaxTokens: config.llmMaxTokens ?? '',
+          llmTimeoutSeconds: config.llmTimeoutSeconds ?? '', summaryLength: config.summaryLength ?? '',
+          notesPrompt: config.notesPrompt ?? '', emailFetchDays: config.emailFetchDays ?? '',
         }),
       });
       if (!res.ok) return false;

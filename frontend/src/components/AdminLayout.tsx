@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Activity,
   BookOpenText,
@@ -11,13 +11,12 @@ import {
   Moon,
   Newspaper,
   PlugZap,
-  Search,
   Smartphone,
   Sun,
   Tags,
   X,
 } from 'lucide-react';
-import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '../features/app/store/useAppStore';
 import { BrandMark } from './Layout';
 import ToastStack from './ToastStack';
@@ -77,9 +76,6 @@ function useAdminBreadcrumbs(pathname: string) {
 export default function AdminLayout() {
   const { adminDark, toggleAdminDark } = useAppStore();
   const location = useLocation();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [searchValue, setSearchValue] = useState(searchParams.get('q') || '');
   const [navOpen, setNavOpen] = useState(false);
   const breadcrumbs = useAdminBreadcrumbs(location.pathname);
   // 后台明暗独立于前台主题:进入后台按自己的记录落 dark 类
@@ -96,16 +92,6 @@ export default function AdminLayout() {
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [navOpen]);
-
-  useEffect(() => {
-    setSearchValue(searchParams.get('q') || '');
-  }, [searchParams]);
-
-  const handleSearch = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const query = searchValue.trim();
-    navigate(query ? `/articles?q=${encodeURIComponent(query)}` : '/articles');
-  };
 
   const isNavActive = (path: string) => {
     if (path === '/admin') return location.pathname === '/admin';
@@ -172,15 +158,6 @@ export default function AdminLayout() {
             ))}
           </nav>
           <div className="ac-topbar-spacer" />
-          <form className="ac-search" onSubmit={handleSearch}>
-            <Search size={15} />
-            <input
-              value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
-              placeholder="搜索文章或链接"
-              aria-label="搜索文章或链接"
-            />
-          </form>
           <button type="button" className="ac-icon-btn" onClick={toggleAdminDark} aria-label="切换明暗">
             {adminDark ? <Sun size={17} /> : <Moon size={17} />}
           </button>

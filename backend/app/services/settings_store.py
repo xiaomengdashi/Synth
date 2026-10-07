@@ -20,15 +20,59 @@ from app.models import AppSetting
 SUPPORTED_KEYS = (
     "apiKey", "baseUrl", "modelName", "tikhubApiKey", "minimaxApiKey",
     "imapHost", "imapUser", "imapPassword", "imapSenderWhitelist",
+    "tikhubApiBase", "bilibiliProxy", "minimaxApiBase",
+    "llmTemperature", "llmMaxTokens", "llmTimeoutSeconds",
+    "summaryLength", "notesPrompt", "emailFetchDays",
 )
+
+# 可调参数的出厂默认：库中未存或存空时按此回填，后台留空即恢复默认行为。
+# minimaxApiBase / bilibiliProxy 刻意不设默认（同 imapHost 模式）：
+# 留空即"用官方地址/直连"，仅自定义时才填写。
+SETTING_DEFAULTS = {
+    "tikhubApiBase": "https://api.tikhub.io",
+    "llmTemperature": "0.3",
+    "llmMaxTokens": "512000",
+    "llmTimeoutSeconds": "300",
+    "summaryLength": "120",
+    "notesPrompt": "",
+    "emailFetchDays": "7",
+}
 
 
 async def load_settings() -> dict[str, str]:
-    """读取全部支持的配置项（缺省为空字符串）。"""
+    """读取全部支持的配置项（凭据类缺省为空字符串，可调参数缺省回填默认值）。"""
     async with AsyncSessionLocal() as session:
         rows = await session.execute(select(AppSetting).where(AppSetting.key.in_(SUPPORTED_KEYS)))
         stored = {row.key: row.value for row in rows.scalars()}
-    return {key: stored.get(key, "") for key in SUPPORTED_KEYS}
+    values = {key: stored.get(key, "") for key in SUPPORTED_KEYS}
+    for key, default in SETTING_DEFAULTS.items():
+        if not values.get(key, "").strip():
+            values[key] = default
+    return values
+
+
+def numeric_setting(
+    values: dict,
+    key: str,
+    default: float,
+    *,
+    lo: float | None = None,
+    hi: float | None = None,
+    integer: bool = False,
+) -> float | int:
+    """解析数值型配置：空值/非法值回默认，并夹到 [lo, hi] 区间。"""
+    raw = str((values or {}).get(key) or "").strip()
+    try:
+        number: float = float(raw)
+    except ValueError:
+        number = default
+    if integer:
+        number = float(int(number))
+    if lo is not None:
+        number = max(lo, number)
+    if hi is not None:
+        number = min(hi, number)
+    return int(number) if integer else number
 
 
 async def save_settings(values: dict) -> dict[str, str]:
@@ -95,6 +139,16 @@ def public_settings(values: dict) -> dict:
         "imapPassword": mask_secret(imap_password),
         "imapSenderWhitelist": str(values.get("imapSenderWhitelist") or ""),
         "imapConfigured": bool(imap_user and imap_password),
+        # 可调参数非敏感，明文回显（load_settings 已回填默认值）
+        "tikhubApiBase": str(values.get("tikhubApiBase") or ""),
+        "bilibiliProxy": str(values.get("bilibiliProxy") or ""),
+        "minimaxApiBase": str(values.get("minimaxApiBase") or ""),
+        "llmTemperature": str(values.get("llmTemperature") or ""),
+        "llmMaxTokens": str(values.get("llmMaxTokens") or ""),
+        "llmTimeoutSeconds": str(values.get("llmTimeoutSeconds") or ""),
+        "summaryLength": str(values.get("summaryLength") or ""),
+        "notesPrompt": str(values.get("notesPrompt") or ""),
+        "emailFetchDays": str(values.get("emailFetchDays") or ""),
     }
 
 

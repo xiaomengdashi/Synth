@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ExternalLink, RefreshCw, Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Task } from '../types';
@@ -42,7 +42,6 @@ export default function AdminTasks() {
     <div>
       <AdminPageHeader
         summary={<><span>共 {tasks.length} 条任务记录</span><span>· 每 5 秒自动刷新</span></>}
-        actions={<button type="button" className="ac-btn secondary sm" onClick={() => void fetchTasks()}><RefreshCw size={13} />立即刷新</button>}
       />
       {isMobile ? (
         <div className="ac-stack">

@@ -17,6 +17,16 @@ class AppConfigModel(BaseModel):
     imapUser: str = ""
     imapPassword: str = ""
     imapSenderWhitelist: str = ""
+    # 可调参数：留空即恢复默认（默认值见 settings_store.SETTING_DEFAULTS）
+    tikhubApiBase: str = ""
+    bilibiliProxy: str = ""
+    minimaxApiBase: str = ""
+    llmTemperature: str = ""
+    llmMaxTokens: str = ""
+    llmTimeoutSeconds: str = ""
+    summaryLength: str = ""
+    notesPrompt: str = ""
+    emailFetchDays: str = ""
 
 
 @router.get("")

@@ -21,7 +21,9 @@ import httpx
 from app.services.fetchers.social import URL_PATTERN, _normalize_external_url, extract_x_tweet_id
 from app.services.fetchers.twitter_article_rich import _deep_get, _find_image_url
 
-TIKHUB_API_BASE = "https://api.tikhub.io"
+TIKHUB_API_BASE = "https://api.tikhub.io"  # 出厂默认端点，可在后台「TikHub 数据服务」页覆盖
+_api_base = TIKHUB_API_BASE  # 进程内当前生效端点；resolve token 时由配置刷新
+
 TWEET_DETAIL_PATH = "/api/v1/twitter/web/fetch_tweet_detail"
 WECHAT_ARTICLE_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail_h5"
 WECHAT_ARTICLE_DETAIL_PATH = "/api/v1/wechat_mp/v2/fetch_article_detail"
@@ -48,8 +50,25 @@ class TikHubNotConfiguredError(TikHubError):
     """未配置 TikHub API Token，调用方应直接回退其他数据源。"""
 
 
+def resolve_tikhub_base(config: Any = None) -> str:
+    """从配置对象刷新并返回 API 端点（留空回官方地址）。
+
+    进程内单端点策略：所有 TikHub 调用共享 _api_base，
+    resolve_tikhub_token 顺带刷新，任务链路无需逐层传端点。
+    """
+    global _api_base
+    base = ""
+    if isinstance(config, dict):
+        base = str(config.get("tikhubApiBase") or "").strip()
+    elif config is not None:
+        base = str(getattr(config, "tikhubApiBase", "") or "").strip()
+    _api_base = base.rstrip("/") or TIKHUB_API_BASE
+    return _api_base
+
+
 def resolve_tikhub_token(config: Any = None) -> str:
     """从配置对象读取 TikHub API Token（配置来自 SQLite app_settings 表）。"""
+    resolve_tikhub_base(config)
     token = ""
     if isinstance(config, dict):
         token = str(config.get("tikhubApiKey") or "").strip()
@@ -62,7 +81,7 @@ def resolve_tikhub_token(config: Any = None) -> str:
 
 def _tikhub_request(path: str, token: str, params: dict | None = None, json_body: Any = None, unwrap_data: bool = True, method: str | None = None) -> dict:
     """调用 TikHub 接口；unwrap_data=False 用于无 data 包装的接口（如用户信息）。"""
-    request_url = f"{TIKHUB_API_BASE}{path}"
+    request_url = f"{_api_base}{path}"
     try:
         response = httpx.request(
             method or ("POST" if json_body is not None else "GET"),

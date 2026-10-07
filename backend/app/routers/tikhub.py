@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from app.services import settings_store
 from app.services.fetchers.tikhub import (
     TikHubError, TikHubNotConfiguredError, fetch_tikhub_account,
-    resolve_tikhub_token, verify_tikhub_token,
+    resolve_tikhub_base, resolve_tikhub_token, verify_tikhub_token,
 )
 from app.services.tikhub_queries import query_catalog, run_query, safe_response
 
@@ -41,6 +41,8 @@ async def set_tikhub_key(data: TikHubKeyPayload):
     token = data.apiKey.strip()
     if not token or any(c.isspace() or ord(c) < 32 or ord(c) > 126 for c in token):
         raise HTTPException(status_code=400, detail='API Token 不能为空，也不能包含空格或非 ASCII 字符。')
+    # 验证走已保存的 API 端点；先保存端点再粘贴 Key
+    resolve_tikhub_base(await settings_store.load_settings())
     try:
         summary = await asyncio.to_thread(verify_tikhub_token, token)
     except TikHubError as exc:
@@ -64,7 +66,9 @@ async def get_tikhub_account():
         return {'configured': False}
     token = await _token()
     try:
-        account = await asyncio.to_thread(fetch_tikhub_account, {'tikhubApiKey': token})
+        # 传完整配置：fetch_tikhub_account 内部按配置端点刷新后再取账户
+        account = await asyncio.to_thread(
+            fetch_tikhub_account, {**await settings_store.load_settings(), 'tikhubApiKey': token})
     except TikHubError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     return {**metadata, **safe_response(account, token), 'updated_at': datetime.now(timezone.utc).isoformat()}

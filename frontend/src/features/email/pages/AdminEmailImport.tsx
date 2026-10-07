@@ -41,10 +41,16 @@ function EmailPanel() {
 
   useEffect(() => { void fetchConfig(); }, [fetchConfig]);
   useEffect(() => { setLocalConfig(config); }, [config]);
+  // 已保存的默认拉取范围（后台「保存配置」记住的值）作为下拉初始选中
+  useEffect(() => {
+    const configured = Number(config.emailFetchDays);
+    if (Number.isInteger(configured) && configured >= 1 && configured <= 3650) setDays(configured);
+  }, [config.emailFetchDays]);
 
   const save = async (): Promise<boolean> => {
     setSaving(true);
-    const ok = await setConfig(localConfig);
+    // 拉取范围随配置一起保存：当前选中值即之后的默认范围
+    const ok = await setConfig({ ...localConfig, emailFetchDays: String(days) });
     setSaving(false);
     if (!ok) setMessage({ tone: 'error', text: '保存失败，请确认后端服务正在运行，然后重试。' });
     return ok;
@@ -112,11 +118,11 @@ function EmailPanel() {
             <div className="ac-field">
               <label htmlFor="imap-days">拉取范围</label>
               <select id="imap-days" className="ac-input" style={{ width: 'auto' }} value={days} onChange={(event) => setDays(Number(event.target.value))}>
-                {DAY_OPTIONS.map((option) => (
+                {(DAY_OPTIONS.includes(days) ? DAY_OPTIONS : [...DAY_OPTIONS, days].sort((a, b) => a - b)).map((option) => (
                   <option key={option} value={option}>近 {option} 天</option>
                 ))}
               </select>
-              <p className="ac-help">「测试连接」和「拉取邮件」按此范围拉取，已入库的不会重复。</p>
+              <p className="ac-help">「测试连接」和「拉取邮件」按此范围拉取，已入库的不会重复；「保存配置」会把当前范围记为默认。</p>
             </div>
             {message && <p className={`tikhub-message ${message.tone}`} role="status">{message.text}</p>}
             <div className="ac-actions">
