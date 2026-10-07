@@ -1,5 +1,5 @@
-import { Suspense, lazy, useEffect, type ComponentType } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Suspense, lazy, useEffect, useLayoutEffect, useRef, type ComponentType } from 'react';
+import { BrowserRouter, Routes, Route, useLocation, useNavigationType } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
@@ -46,6 +46,38 @@ function PageLoading() {
   );
 }
 
+/** 路由滚动管理:点进新页面回顶;浏览器后退回到离开时的位置。
+ * 不做这层,SPA 切页会继承上一页的滚动深度(分类页落在文章库滚到一半的位置),
+ * 从列表点进文章再返回又要从头滚起。 */
+const PROGRAMMATIC_SCROLL_SUPPRESS_MS = 80;
+
+function ScrollManager() {
+  const location = useLocation();
+  const action = useNavigationType();
+  // scrollTo 是程序性滚动,触发的 scroll 事件可能赶在旧路由的保存监听卸载之前
+  // 到达,把 0 写进旧页面的保存记录(后退恢复失效);窗口期内一律不保存
+  const suppressSaveUntilRef = useRef(0);
+
+  useLayoutEffect(() => {
+    const key = location.key || 'root';
+    const saved = action === 'POP' ? sessionStorage.getItem(`synthai-scroll:${key}`) : null;
+    suppressSaveUntilRef.current = Date.now() + PROGRAMMATIC_SCROLL_SUPPRESS_MS;
+    window.scrollTo({ top: saved ? Number(saved) || 0 : 0, behavior: 'instant' });
+  }, [location.key, action]);
+
+  useEffect(() => {
+    const key = location.key || 'root';
+    const onScroll = () => {
+      if (Date.now() < suppressSaveUntilRef.current) return;
+      sessionStorage.setItem(`synthai-scroll:${key}`, String(Math.round(window.scrollY)));
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [location.key]);
+
+  return null;
+}
+
 function App() {
   const fetchArticles = useAppStore((state) => state.fetchArticles);
 
@@ -62,6 +94,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <ScrollManager />
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Layout />}>

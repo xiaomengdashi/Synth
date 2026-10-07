@@ -66,6 +66,14 @@ export default function Layout() {
     navigate(query ? `/articles?q=${encodeURIComponent(query)}` : '/articles');
   };
 
+  const handleSearchInputChange = (value: string) => {
+    setSearchValue(value);
+    // 输入框已清空而列表还筛着旧词,看起来像「搜索失效」:清空即恢复未筛选列表
+    if (!value.trim() && location.pathname === '/articles' && searchParams.get('q')) {
+      navigate('/articles', { replace: true });
+    }
+  };
+
   const currentTheme = getTheme(theme);
 
   return (
@@ -85,7 +93,15 @@ export default function Layout() {
             <form className="header-search" onSubmit={handleSearch} role="search">
               <input
                 value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
+                onChange={(event) => handleSearchInputChange(event.target.value)}
+                onKeyDown={(event) => {
+                  // Enter 默认的隐式提交在部分内嵌 webview 不生效:显式补一次,常规浏览器
+                  // 走 preventDefault 后 requestSubmit 同样只触发一次 submit,不会重复导航
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    event.currentTarget.form?.requestSubmit();
+                  }
+                }}
                 placeholder="搜索文章"
                 aria-label="搜索文章"
               />

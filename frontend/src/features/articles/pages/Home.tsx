@@ -21,9 +21,16 @@ const sourceMeta: Record<Source, { label: string; short: string; placeholder: st
   bilibili: { label: 'Bilibili', short: 'B 站', placeholder: '粘贴 bilibili.com 视频链接', color: 'var(--bili)' },
 };
 
+// 用户从部分 App 分享出来的链接常不带 scheme,按能解析出主机名的宽松口径识别
+function withHttpsScheme(value: string): string {
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value) ? value : `https://${value}`;
+}
+
 function detectSourceFromUrl(value: string): Source | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
   try {
-    const hostname = new URL(value.trim()).hostname.toLowerCase();
+    const hostname = new URL(withHttpsScheme(trimmed)).hostname.toLowerCase();
     if (hostname === 'mp.weixin.qq.com' || hostname.endsWith('.weixin.qq.com')) return 'wechat';
     if (hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com')) return 'x';
     if (hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com') || hostname === 'b23.tv') return 'bilibili';
@@ -31,7 +38,21 @@ function detectSourceFromUrl(value: string): Source | null {
     // Keep the current selection while the user is still typing a URL.
   }
   return null;
-} 
+}
+
+/** 提交前规范化:补 scheme、要求合法主机名。解析失败返回 null(原生 type=url 校验在
+ * 部分 webview 不弹提示,提交会被静默拦下,必须换成显式校验+错误反馈)。 */
+function normalizeContentUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = new URL(withHttpsScheme(trimmed));
+    if (!parsed.hostname.includes('.')) return null;
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
 
 export default function Home() {
   const { articles, articlesTotal, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
@@ -90,8 +111,13 @@ export default function Home() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!url.trim()) return;
+    const normalizedUrl = normalizeContentUrl(url);
+    if (!normalizedUrl) {
+      pushToast({ title: '链接格式看不懂，请检查后重新粘贴', tone: 'error' });
+      return;
+    }
     setIsSubmitting(true);
-    const originalUrl = url.trim();
+    const originalUrl = normalizedUrl;
     const localTaskId = Math.random().toString(36).slice(2, 11);
     addTask({
       id: localTaskId,
@@ -220,8 +246,10 @@ export default function Home() {
                 setClipboardMessage('');
               }}
               placeholder={sourceMeta[source].placeholder}
-              type="url"
-              required
+              type="text"
+              inputMode="url"
+              autoComplete="off"
+              spellCheck={false}
               aria-label="粘贴内容链接"
             />
           </label>

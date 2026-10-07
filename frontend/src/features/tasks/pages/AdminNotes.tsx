@@ -155,7 +155,6 @@ export default function AdminNotes() {
                 <tr key={row.id}>
                   <td>
                     <Link className="cell-main" to={`/article/${row.article_id}`}>{row.article_title || '未命名文章'}</Link>
-                    <span className="cell-sub">{row.article_id}</span>
                   </td>
                   <td>
                     <span className="cell-main" title={row.quote}>{row.quote}</span>

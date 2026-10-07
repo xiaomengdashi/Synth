@@ -207,6 +207,23 @@ export default function Article() {
   const [wxContentVer, setWxContentVer] = useState(0);
   // 阅读位置恢复每篇文章只做一次(详情重取/收藏翻转都会重跑 effect,不能反复把用户拽回旧位置)
   const restoredRef = useRef('');
+  // 用户一旦手动接管页面(滚动/点按/按键),任何后续自动恢复都必须放弃:
+  // 收藏翻转会触发详情重取,重放恢复逻辑会把用户从当前位置猛拽走
+  const userActedRef = useRef(false);
+  useEffect(() => {
+    const markActed = () => { userActedRef.current = true; };
+    const passiveOnce = { passive: true, once: true } as AddEventListenerOptions;
+    window.addEventListener('wheel', markActed, passiveOnce);
+    window.addEventListener('touchmove', markActed, passiveOnce);
+    window.addEventListener('pointerdown', markActed, passiveOnce);
+    window.addEventListener('keydown', markActed);
+    return () => {
+      window.removeEventListener('wheel', markActed);
+      window.removeEventListener('touchmove', markActed);
+      window.removeEventListener('pointerdown', markActed);
+      window.removeEventListener('keydown', markActed);
+    };
+  }, []);
   // 会话内进度基线:单调推进,兼作节流与已读判定依据
   const readingRef = useRef({ id: '', progress: 0, lastReportAt: 0 });
 
@@ -305,6 +322,8 @@ export default function Article() {
     if (!id || !article || article.id !== id) return;
     if (restoredRef.current === id) return;
     restoredRef.current = id;
+    // 用户已开始交互就视为接管了位置,不再自动跳(防详情重取后误拽)
+    if (userActedRef.current) return;
     const ratio = clampProgress(article.read_progress ?? 0);
     if (!shouldRestore(ratio)) return;
     const maxScroll = document.documentElement.scrollHeight - window.innerHeight;
