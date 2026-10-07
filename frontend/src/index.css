@@ -867,6 +867,10 @@
 .trend-line { fill: none; stroke: var(--ac-accent); stroke-linecap: round; stroke-linejoin: round; stroke-width: 2.5; }
 .trend-point { fill: var(--ac-surface); stroke: var(--ac-accent); stroke-width: 2; }
 .chart-axis-label { fill: var(--ac-faint); font-family: 'DM Mono', monospace; font-size: 10px; }
+.trend-hit { fill: transparent; pointer-events: all; }
+.chart-tooltip { pointer-events: none; }
+.chart-tooltip-box { fill: var(--ac-ink, #1f2937); }
+.chart-tooltip-text { fill: #fff; font-family: 'DM Mono', monospace; font-size: 11px; }
 .source-bar { display: flex; height: 8px; overflow: hidden; margin: 4px 0 18px; border-radius: 999px; background: var(--ac-surface-2); }
 .source-bar span { min-width: 0; transition: width .45s ease; }
 .source-bar-wechat { background: #16a34a; }

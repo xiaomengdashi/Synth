@@ -42,6 +42,7 @@ function countArticlesByDay(articles: Article[]) {
 
 function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; articlesTotal: number }) {
   const { days, counts } = countArticlesByDay(articles);
+  const [hovered, setHovered] = useState<number | null>(null);
   const chartWidth = 680;
   const chartHeight = 220;
   const padding = { top: 18, right: 18, bottom: 32, left: 28 };
@@ -50,6 +51,10 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
   const yScale = (chartHeight - padding.top - padding.bottom) / maxCount;
   const points = counts.map((count, index) => `${padding.left + index * xStep},${chartHeight - padding.bottom - count * yScale}`).join(' ');
   const areaPoints = `${padding.left},${chartHeight - padding.bottom} ${points} ${chartWidth - padding.right},${chartHeight - padding.bottom}`;
+  // 悬停提示框:SVG 原生 rect+text 随 viewBox 缩放;顶点上方放不下时翻到点下方
+  const tipLabel = hovered === null ? '' : `${days[hovered].getMonth() + 1}/${days[hovered].getDate()} 新增 ${counts[hovered]} 篇`;
+  const tipWidth = 118;
+  const tipHeight = 24;
 
   return (
     <div className="ac-card ac-span-2">
@@ -70,6 +75,34 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
             const x = padding.left + index * xStep;
             const y = chartHeight - padding.bottom - count * yScale;
             return <g key={getDayKey(days[index])}><circle cx={x} cy={y} r="4" className="trend-point" /><text x={x} y={chartHeight - 9} textAnchor="middle" className="chart-axis-label">{`${days[index].getMonth() + 1}/${days[index].getDate()}`}</text></g>;
+          })}
+          {hovered !== null ? (() => {
+            const x = padding.left + hovered * xStep;
+            const y = chartHeight - padding.bottom - counts[hovered] * yScale;
+            const above = y - 12 - tipHeight >= 0;
+            const boxY = above ? y - 12 - tipHeight : y + 12;
+            const boxX = Math.min(Math.max(x - tipWidth / 2, padding.left), chartWidth - padding.right - tipWidth);
+            return (
+              <g className="chart-tooltip">
+                <rect x={boxX} y={boxY} width={tipWidth} height={tipHeight} rx="6" className="chart-tooltip-box" />
+                <text x={boxX + tipWidth / 2} y={boxY + 16} textAnchor="middle" className="chart-tooltip-text">{tipLabel}</text>
+              </g>
+            );
+          })() : null}
+          {counts.map((count, index) => {
+            const x = padding.left + index * xStep;
+            const y = chartHeight - padding.bottom - count * yScale;
+            return (
+              <circle
+                key={`hit-${getDayKey(days[index])}`}
+                cx={x}
+                cy={y}
+                r="16"
+                className="trend-hit"
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered((prev) => (prev === index ? null : prev))}
+              />
+            );
           })}
         </svg>
       </div>
