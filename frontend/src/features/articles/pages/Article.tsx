@@ -7,7 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 // common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
-import { ArrowLeft, ArrowUp, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, ArrowUp, Download, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
 import { useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
@@ -511,6 +511,11 @@ export default function Article() {
             rel="noopener noreferrer"
           >
             <ExternalLink size={13} /> 查看原文
+          </a>
+          {/* attachment 响应头触发浏览器下载,无需 JS;download 属性兜底文章被并发删除时
+              404 JSON 也只落成文件下载,不会整页跳走丢阅读上下文 */}
+          <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
+            <Download size={13} /> 导出笔记
           </a>
         </div>
       </div>
