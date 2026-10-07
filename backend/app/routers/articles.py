@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import threading
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -12,8 +13,11 @@ from app.database import get_db
 from app.models import Article
 from app.services.fetchers.article import parse_article_html
 from app.services.fetchers.tikhub import fetch_tikhub_tweet
+from app.services.article_summary import generate_article_summary
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
+from app.services.settings_store import numeric_setting
 from app.services.task_service import build_local_summary, detect_source_type
+from app.services import wechat_summary_regen
 from app.routers.config import get_runtime_config
 from app.routers.admin_auth import require_admin
 
@@ -125,7 +129,15 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     title = (data.title or parsed["title"] or "未知标题").strip()
-    summary = build_local_summary(parsed["extracted_md"], "原文正文已导入。")
+    # 微信文章摘要走大模型浓缩；其他来源/模型不可用回退本地截取
+    config = await get_runtime_config()
+    summary_limit = int(numeric_setting(config, "summaryLength", 120, lo=20, hi=2000, integer=True))
+    summary = build_local_summary(parsed["extracted_md"], "原文正文已导入。", summary_limit)
+    if "mp.weixin.qq.com" in data.original_url:
+        try:
+            summary = await generate_article_summary(title, parsed["extracted_md"], config, limit=summary_limit)
+        except Exception:
+            pass  # 保持本地截取兜底，导入不失败
     content_md = (
         f"## 内容摘要\n\n{summary}\n\n---\n\n"
         f"<!-- HTML_CONTENT_START -->\n{parsed['html_content']}\n<!-- HTML_CONTENT_END -->"
@@ -165,6 +177,24 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
 
 class BatchIdsPayload(BaseModel):
     ids: list[str] = Field(default_factory=list, max_length=200)
+
+
+@router.post("/wechat-summaries/regenerate")
+async def regenerate_wechat_summaries(_: None = Depends(require_admin)):
+    """存量微信文章摘要批量重生成：逐篇走大模型，后台线程跑批，进度走 progress 接口。"""
+    if wechat_summary_regen.progress_snapshot()["running"]:
+        return {"status": "already-running", **wechat_summary_regen.progress_snapshot()}
+    threading.Thread(
+        target=lambda: asyncio.run(wechat_summary_regen.regenerate_wechat_summaries()),
+        daemon=True,
+        name="wechat-summary-regen",
+    ).start()
+    return {"status": "started", **wechat_summary_regen.progress_snapshot()}
+
+
+@router.get("/wechat-summaries/progress")
+async def wechat_summaries_progress(_: None = Depends(require_admin)):
+    return wechat_summary_regen.progress_snapshot()
 
 
 class BatchCategoryPayload(BaseModel):

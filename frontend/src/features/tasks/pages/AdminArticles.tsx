@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
-import { ArrowUpRight, Trash2 } from 'lucide-react';
+import { Search, Sparkles, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
@@ -8,6 +7,11 @@ import ConfirmDialog from '../../../components/ConfirmDialog';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatAbsolute } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
+
+type RegenProgress = {
+  running: boolean; total: number; done: number; ok: number;
+  skipped: number; failed: number; current: string;
+};
 
 function getSourceLabel(sourceType: Article['source_type']) {
   if (sourceType === 'wechat') return '微信公众号';
@@ -40,6 +44,42 @@ export default function AdminArticles() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
+  // 存量微信摘要重生成：后台线程跑批，这里轮询进度
+  const [regen, setRegen] = useState<RegenProgress | null>(null);
+  const regenTimer = useRef<number | null>(null);
+  const stopRegenPolling = () => {
+    if (regenTimer.current !== null) { window.clearInterval(regenTimer.current); regenTimer.current = null; }
+  };
+  useEffect(() => stopRegenPolling, []);
+  const pollRegen = () => {
+    stopRegenPolling();
+    regenTimer.current = window.setInterval(() => {
+      void adminFetch('/api/v1/articles/wechat-summaries/progress')
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: RegenProgress | null) => {
+          if (!data) return;
+          setRegen(data);
+          if (!data.running) {
+            stopRegenPolling();
+            pushToast({ title: `微信摘要重生成完成：重生成 ${data.ok} 篇，跳过 ${data.skipped} 篇，失败 ${data.failed} 篇`, tone: data.failed > 0 ? 'error' : 'success' });
+            void fetchArticles({ reset: true, all: true });
+          }
+        })
+        .catch(() => { /* 网络抖动继续下一轮 */ });
+    }, 3000);
+  };
+  const startRegen = async () => {
+    try {
+      const res = await adminFetch('/api/v1/articles/wechat-summaries/regenerate', { method: 'POST' });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error((data as { detail?: string } | null)?.detail || `HTTP ${res.status}`);
+      setRegen(data as RegenProgress);
+      pushToast({ title: '已开始重生成存量微信摘要，进度显示在按钮上。', tone: 'success' });
+      pollRegen();
+    } catch (e) {
+      pushToast({ title: `启动失败：${e instanceof Error ? e.message : '未知错误'}`, tone: 'error' });
+    }
+  };
   const filtering = query.trim() !== '' || cat !== 'all' || src !== 'all';
 
   const someSelected = selected.size > 0;
@@ -148,7 +188,9 @@ export default function AdminArticles() {
               </select>
             </>
           ) : null}
-          <Link to="/articles" className="ac-btn secondary sm">打开前台文章库 <ArrowUpRight size={13} /></Link>
+          <button type="button" className="ac-btn secondary sm" onClick={() => void startRegen()} disabled={regen?.running}>
+            <Sparkles size={13} />{regen?.running ? `重生成中 ${regen.done}/${regen.total}` : '重生成微信摘要'}
+          </button>
         </>}
       />
 

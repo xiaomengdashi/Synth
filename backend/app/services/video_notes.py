@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.services.llm_client import chat_completion
+from app.services.llm_client import chat_completion, strip_code_fence
 
 NOTES_PROMPT = """你是专业的技术视频编辑。下面是一段 B 站视频的完整转写稿，请把它**重构**成一份可独立阅读的学习笔记——读者没看过视频，也能仅凭这份笔记学会视频讲的内容。
 
@@ -44,14 +44,29 @@ NOTES_PROMPT = """你是专业的技术视频编辑。下面是一段 B 站视�
 """
 
 
-def _strip_code_fence(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        newline = text.find("\n")
-        text = text[newline + 1:] if newline != -1 else text
-        if text.rstrip().endswith("```"):
-            text = text.rstrip()[:-3]
-    return text.strip()
+PROMPT_FIELDS = ("title", "uploader", "chapters", "description", "transcript")
+
+
+def build_notes_prompt(video_payload: dict, config: Any = None) -> str:
+    """笔记提示词：后台「生成参数」自定义模板优先，留空用内置模板。
+
+    占位符与内置模板一致：{title} {uploader} {chapters} {description} {transcript}。
+    """
+    fields = {
+        "title": str(video_payload.get("title") or "未知").strip(),
+        "uploader": str(video_payload.get("uploader") or "").strip() or "未提供",
+        "chapters": str(video_payload.get("chapter_info") or "").strip() or "（未提供）",
+        "description": str(video_payload.get("description") or "").strip() or "（未提供）",
+        "transcript": str(video_payload.get("transcript_text") or "").strip(),
+    }
+    template = str((config or {}).get("notesPrompt") or "").strip() or NOTES_PROMPT
+    try:
+        return template.format(**fields)
+    except (KeyError, IndexError, ValueError) as exc:
+        raise RuntimeError(
+            "自定义笔记提示词包含无法解析的占位符，请仅使用 "
+            + "、".join(f"{{{name}}}" for name in PROMPT_FIELDS) + "，花括号字面量需写作 {{ }}。"
+        ) from exc
 
 
 async def generate_video_notes(
@@ -65,13 +80,7 @@ async def generate_video_notes(
     step = update_step or (lambda message: None)
     step(f"文稿 {len(transcript)} 字，正在生成学习笔记...")
 
-    prompt = NOTES_PROMPT.format(
-        title=str(video_payload.get("title") or "未知").strip(),
-        uploader=str(video_payload.get("uploader") or "").strip() or "未提供",
-        chapters=str(video_payload.get("chapter_info") or "").strip() or "（未提供）",
-        description=str(video_payload.get("description") or "").strip() or "（未提供）",
-        transcript=transcript,
-    )
+    prompt = build_notes_prompt(video_payload, config)
     raw = await chat_completion(
         [
             {"role": "system", "content": "你是一名严谨的中文技术视频编辑，擅长把口播转写稿重构为结构清晰、可独立阅读的学习笔记。"},
@@ -79,7 +88,7 @@ async def generate_video_notes(
         ],
         config,
     )
-    notes = _strip_code_fence(raw)
+    notes = strip_code_fence(raw)
     if not notes:
         raise RuntimeError("模型返回了空笔记。")
     return notes

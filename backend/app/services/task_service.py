@@ -14,6 +14,8 @@ from app.services.fetchers.twitter_article_rich import render_twitter_article_re
 from app.services.fetchers.x_article import fetch_x_article_replica
 from app.services.fetchers.video import fetch_video_content
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB, article_from_db_record, task_created_at, update_task
+from app.services.article_summary import generate_article_summary
+from app.services.settings_store import numeric_setting
 from app.services.video_notes import generate_video_notes
 
 def _normalize_title(title: str | None) -> str:
@@ -23,14 +25,15 @@ def _normalize_title(title: str | None) -> str:
     return text or "未知标题"
 
 
-def build_local_summary(text: str | None, fallback: str) -> str:
+def build_local_summary(text: str | None, fallback: str, limit: int = 120) -> str:
     """Create a short local excerpt without sending content to an LLM."""
     value = re.sub(r"!\[[^\]]*\]\([^)]*\)", " ", text or "")
     value = re.sub(r"[`#>*_~-]", " ", value)
     value = re.sub(r"\s+", " ", value).strip()
     if not value:
         return fallback
-    return value[:120].rstrip() + ("..." if len(value) > 120 else "")
+    limit = max(1, int(limit))
+    return value[:limit].rstrip() + ("..." if len(value) > limit else "")
 
 
 def build_video_markdown(video_payload: dict, summary: str, notes: str = "") -> str:
@@ -71,6 +74,25 @@ def detect_source_type(url: str) -> str:
     )
 
 
+async def resolve_article_summary(
+    url: str, article_payload: dict, config, summary_limit: int, update_step,
+) -> str:
+    """微信文章摘要用大模型浓缩全文，其他来源维持本地截取。
+
+    LLM 未配置/调用失败/正文过短时回退本地截取，绝不阻断导入。
+    """
+    body = article_payload["extracted_md"]
+    if "mp.weixin.qq.com" in url:
+        try:
+            update_step("正在通过大模型浓缩全文生成摘要...")
+            return await generate_article_summary(
+                article_payload["title"], body, config, limit=summary_limit,
+            )
+        except Exception as exc:
+            update_step(f"大模型摘要不可用：{exc}，回退为本地截取。")
+    return build_local_summary(body, "原文正文已获取。", summary_limit)
+
+
 async def set_processing_status(task_id: str, current_step: str):
     update_task(task_id, status="processing", current_step=current_step)
     async with AsyncSessionLocal() as session:
@@ -102,6 +124,7 @@ async def process_task(task_id: str, url: str, config):
         def update_step(step: str):
             update_task(task_id, current_step=step)
 
+        summary_limit = numeric_setting(config or {}, "summaryLength", 120, lo=20, hi=2000, integer=True)
         title = "未知标题"
         summary = ""
         generated_content = ""
@@ -139,7 +162,7 @@ async def process_task(task_id: str, url: str, config):
                     update_step("检测到推文引用了外部文章，正在抓取原网页...")
                     article_payload = await fetch_article_content(external_source_url, update_step, config)
                     title = article_payload["title"] or title
-                    summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。")
+                    summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。", summary_limit)
                     if article_payload["html_content"]:
                         generated_content = (
                             f"## 内容摘要\n\n{summary}\n\n---\n\n"
@@ -198,7 +221,7 @@ async def process_task(task_id: str, url: str, config):
                 cover_image_url = replica.get("cover_url") or ""
                 account_name = replica.get("author_name") or ""
                 publish_time = replica.get("created_at") or ""
-                summary = build_local_summary(replica["text"], "X 长文正文已获取。")
+                summary = build_local_summary(replica["text"], "X 长文正文已获取。", summary_limit)
                 generated_content = (
                     f"## 内容摘要\n\n{summary}\n\n---\n\n"
                     f"<!-- X_ARTICLE_START -->\n"
@@ -211,7 +234,7 @@ async def process_task(task_id: str, url: str, config):
                 raw_text = tweet_payload["tweet_text"]
                 if not raw_text and tweet_payload.get("article_preview"):
                     raw_text = tweet_payload["article_preview"].get("preview_text", "")
-                summary = build_local_summary(raw_text, "推文正文已获取。")
+                summary = build_local_summary(raw_text, "推文正文已获取。", summary_limit)
                 generated_content = (
                     f"## 内容摘要\n\n{summary}\n\n---\n\n"
                     f"<!-- X_CONTENT_START -->\n"
@@ -250,6 +273,7 @@ async def process_task(task_id: str, url: str, config):
             summary = build_local_summary(
                 notes or transcript or video_payload.get("description"),
                 "视频信息已获取。",
+                summary_limit,
             )
             generated_content = build_video_markdown(video_payload, summary, notes=notes)
             cover_image_url = video_payload["cover_image_url"]
@@ -259,7 +283,7 @@ async def process_task(task_id: str, url: str, config):
         else:
             article_payload = await fetch_article_content(url, update_step, config)
             title = article_payload["title"]
-            summary = build_local_summary(article_payload["extracted_md"], "原文正文已获取。")
+            summary = await resolve_article_summary(url, article_payload, config, summary_limit, update_step)
             if article_payload["html_content"]:
                 generated_content = (
                     f"## 内容摘要\n\n{summary}\n\n---\n\n"
