@@ -1,8 +1,6 @@
 import asyncio
 import datetime
-import io
 import json
-import zipfile
 from urllib.parse import quote
 
 import pytest
@@ -15,7 +13,6 @@ from app.models import Article
 from app.routers import articles
 from app.services import runtime_store, settings_store
 from app.services.note_export import (
-    build_export_zip,
     build_note_markdown,
     safe_filename,
     yaml_safe,
@@ -291,74 +288,3 @@ def test_export_endpoint_returns_markdown_attachment(export_client):
 def test_export_endpoint_404_for_unknown_id(export_client):
     client, _ = export_client
     assert client.get("/api/v1/articles/nope/export").status_code == 404
-
-
-# ---------- 批量端点 ----------
-
-def test_export_batch_allows_without_token_when_uninitialized(export_client):
-    """token 未初始化时 require_admin 放行(admin_auth 惯例),返回 zip。"""
-    client, sessions = export_client
-    seed(sessions, "a1", title="科技文章一", category="科技")
-    seed(sessions, "a2", title="科技文章二", category="科技")
-    seed(sessions, "b1", title="生活文章", category="生活")
-    response = client.get("/api/v1/articles/export-batch?category=科技")
-    # 200 本身即验证路由顺序:export-batch 声明在 /{article_id} 之前,未被单段路径吃掉
-    assert response.status_code == 200
-    assert response.headers["content-type"] == "application/zip"
-    assert response.headers["content-disposition"].startswith("attachment;")
-    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        names = archive.namelist()
-        members = [archive.read(name).decode("utf-8") for name in names]
-    # 成员数=分类文章数,跨分类不混入
-    assert len(names) == 2
-    assert all(name.endswith(".md") for name in names)
-    assert any("科技文章一" in member for member in members)
-    assert any("科技文章二" in member for member in members)
-    assert all("生活文章" not in member for member in members)
-
-
-def test_export_batch_requires_token_after_initialized(export_client):
-    client, sessions = export_client
-    seed(sessions, "a1", title="科技文章一", category="科技")
-    asyncio.run(settings_store.set_admin_token_hash(settings_store.hash_admin_token("secret")))
-    assert client.get("/api/v1/articles/export-batch?category=科技").status_code == 401
-
-
-def test_export_batch_404_when_category_has_no_articles(export_client):
-    client, sessions = export_client
-    seed(sessions, "b1", title="生活文章", category="生活")
-    response = client.get("/api/v1/articles/export-batch?category=科技")
-    assert response.status_code == 404
-    assert response.json()["detail"] == "该分类下没有文章"
-
-
-def test_export_batch_supports_uncategorized_marker(export_client):
-    client, sessions = export_client
-    seed(sessions, "u1", title="未分类文章", category=None)
-    seed(sessions, "c1", title="已分类文章", category="科技")
-    response = client.get("/api/v1/articles/export-batch?category=__none__")
-    assert response.status_code == 200
-    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        names = archive.namelist()
-        members = [archive.read(name).decode("utf-8") for name in names]
-    assert len(names) == 1
-    assert "未分类文章" in members[0]
-
-
-# ---------- build_export_zip 纯函数 ----------
-
-def test_build_export_zip_dedupes_duplicate_member_names():
-    same_day = {"publish_time": "2026-09-28 08:00", "created_at": "2026-09-28T08:00:00"}
-    articles = [
-        {"title": "同名标题", "content_md": "正文一", "original_url": "https://e.com/1",
-         "source_type": "other", **same_day},
-        {"title": "同名标题", "content_md": "正文二", "original_url": "https://e.com/2",
-         "source_type": "other", **same_day},
-    ]
-    with zipfile.ZipFile(io.BytesIO(build_export_zip(articles))) as archive:
-        names = archive.namelist()
-        members = {name: archive.read(name).decode("utf-8") for name in names}
-    # 同日同名:第二个成员加 -2 后缀
-    assert sorted(names) == ["20260928-同名标题-2.md", "20260928-同名标题.md"]
-    assert "正文一" in members["20260928-同名标题.md"]
-    assert "正文二" in members["20260928-同名标题-2.md"]

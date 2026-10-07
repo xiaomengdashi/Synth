@@ -19,7 +19,7 @@ from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.settings_store import numeric_setting
 from app.services.task_service import build_local_summary, detect_source_type
 from app.services.related_articles import fetch_related
-from app.services.note_export import article_field, build_export_zip, build_note_markdown, safe_filename
+from app.services.note_export import article_field, build_note_markdown, safe_filename
 
 from app.services import wechat_summary_regen
 from app.routers.config import get_runtime_config
@@ -130,40 +130,6 @@ async def get_articles_stats(db: AsyncSession = Depends(get_db)):
         select(func.count()).select_from(Article).where(Article.is_starred == True)  # noqa: E712
     )).scalar_one()
     return {"sources": sources, "total": total, "starred": starred}
-
-
-@router.get("/export-batch")
-async def export_batch_notes(
-    category: str = Query(..., description="按分类导出,__none__ 为未分类"),
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_admin),
-):
-    """分类批量导出笔记 zip:偏重动作(内存/IO)收进后台。必须声明在 /{article_id} 之前,
-    否则单段路径被它吃掉返回 404。stdlib zipfile 全内存打包,个人库规模安全。"""
-    value = (category or "").strip()
-    uncategorized = value in ("__none__", "__none")
-    condition = (
-        or_(Article.category.is_(None), Article.category == "")
-        if uncategorized
-        else func.trim(Article.category) == value
-    )
-    articles = (await db.execute(
-        select(Article).where(condition).order_by(Article.created_at.desc())
-    )).scalars().all()
-    if not articles:
-        raise HTTPException(status_code=404, detail="该分类下没有文章")
-    zip_bytes = await asyncio.to_thread(build_export_zip, articles)
-    label = "未分类" if uncategorized else value
-    today = datetime.datetime.now().strftime("%Y%m%d")
-    zip_name = safe_filename(f"notes-{label}-{today}") + ".zip"
-    return Response(
-        content=zip_bytes,
-        media_type="application/zip",
-        # 分类名含中文:ascii 兜底名 + RFC 5987 filename* 双段,漏 filename* 会乱码
-        headers={"Content-Disposition": (
-            f'attachment; filename="notes-{today}.zip"; filename*=UTF-8\'\'{quote(zip_name)}'
-        )},
-    )
 
 
 @router.get("/{article_id}/export")

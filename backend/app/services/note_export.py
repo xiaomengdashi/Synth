@@ -1,4 +1,4 @@
-"""笔记导出:文章 → Obsidian 兼容 Markdown 笔记 + 分类批量 zip。
+"""笔记导出:文章 → Obsidian 兼容 Markdown 笔记。
 
 纯读 + 文件生成,不动表结构。正文提取按入库形态分路:
 微信复刻/X 长文的 HTML 不做 HTML→md,只提纯文字(BeautifulSoup 先例
@@ -7,10 +7,8 @@ wechat_summary_regen);X 推文/长文从 marker 块的 JSON 取正文;其余来�
 """
 
 import datetime
-import io
 import json
 import re
-import zipfile
 
 from bs4 import BeautifulSoup
 
@@ -176,27 +174,3 @@ def build_note_markdown(article) -> str:
     if original_url:
         lines.append(f"> 原文：{original_url}")
     return "\n".join(lines).rstrip() + "\n"
-
-
-def build_export_zip(articles) -> bytes:
-    """分类文章打包(stdlib zipfile 全内存):成员名 {文章日期YYYYMMDD}-{safe_filename}.md,重名加 -2 后缀。
-
-    成员名日期与 frontmatter date 同源(publish_time 优先),Obsidian 按文件名即得时间序。
-    """
-    buffer = io.BytesIO()
-    used: set[str] = set()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for article in articles:
-            stamp = note_date(
-                article_field(article, "publish_time"), article_field(article, "created_at"),
-            ).replace("-", "")
-            if not stamp:
-                stamp = datetime.datetime.now().strftime("%Y%m%d")
-            base = f"{stamp}-{safe_filename(article_field(article, 'title'))}"
-            name, suffix = base, 2
-            while name in used:
-                name = f"{base}-{suffix}"
-                suffix += 1
-            used.add(name)
-            archive.writestr(f"{name}.md", build_note_markdown(article).encode("utf-8"))
-    return buffer.getvalue()

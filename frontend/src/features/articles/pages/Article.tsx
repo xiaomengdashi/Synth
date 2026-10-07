@@ -524,7 +524,7 @@ export default function Article() {
           {/* attachment 响应头触发浏览器下载,无需 JS;download 属性兜底文章被并发删除时
               404 JSON 也只落成文件下载,不会整页跳走丢阅读上下文 */}
           <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
-            <Download size={13} /> 导出笔记
+            <Download size={13} /> 导出本文
           </a>
         </div>
       </div>
