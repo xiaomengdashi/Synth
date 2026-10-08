@@ -216,13 +216,13 @@
 @media (min-width: 720px) { .hero-break { display: inline; } }
 .collect-shell { display: grid; justify-items: center; padding: 4px 0 58px; }
 .collect-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; width: min(820px, 100%); padding: 9px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); box-shadow: var(--shadow); }
-.source-chips { display: flex; flex: none; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: color-mix(in srgb, var(--paper) 70%, transparent); }
-.source-chip { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; transition: background .15s ease, color .15s ease, border-color .15s ease; }
+.source-chips { display: flex; flex: none; gap: 4px; }
+.source-chip { display: inline-flex; align-items: center; gap: 7px; height: 42px; padding: 0 12px; border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--muted); font-size: 12.5px; font-weight: 600; transition: background .15s ease, color .15s ease, border-color .15s ease; }
 .source-chip i { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--chip); }
-.source-chip:hover { background: var(--surface); color: var(--ink); }
-.source-chip.active { border-color: transparent; background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
-.collect-input-wrap { display: flex; flex: 1; min-width: 200px; align-items: center; gap: 9px; padding: 0 4px 0 13px; border-left: 1px solid var(--line); border-radius: 0; color: var(--faint); }
-.collect-input-wrap input { width: 100%; min-width: 0; height: 42px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 13.5px; }
+.source-chip:hover { background: var(--paper); color: var(--ink); }
+.source-chip.active { border-color: color-mix(in srgb, var(--accent) 32%, transparent); background: var(--accent-soft); color: var(--accent-strong); }
+.collect-input-wrap { display: flex; flex: 1; min-width: 200px; align-items: center; gap: 9px; padding: 0 4px 0 13px; border-radius: 10px; color: var(--faint); }
+.collect-input-wrap input { width: 100%; min-width: 0; height: 42px; border: 0; outline: 0; background: transparent; color: var(--ink); font-size: 13px; }
 .collect-input-wrap input::placeholder { color: var(--faint); }
 .import-paste-button { display: grid; width: 42px; height: 42px; flex: none; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--muted); }
 .import-paste-button:hover { color: var(--accent); border-color: var(--accent); }
