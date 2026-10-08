@@ -218,7 +218,11 @@ export default function Home() {
   return (
     <div>
       <section className="public-hero">
-        <h1 className="display-title anim-enter" style={{ '--lift': '14px', animationDuration: '.55s' } as React.CSSProperties}>把好内容，收进来。</h1>
+        <p className="hero-greeting anim-enter" style={{ '--lift': '10px', animationDuration: '.45s' } as React.CSSProperties}>把好内容，收进来。</p>
+        <h1 className="display-title anim-enter" style={{ '--lift': '14px', animationDuration: '.55s' } as React.CSSProperties}>一个安静的知识角落。</h1>
+        <p className="hero-lede anim-enter" style={{ '--lift': '12px', animationDuration: '.55s', animationDelay: '.08s' } as React.CSSProperties}>
+          微信、X、B 站上读到的有价值内容，<br className="hero-break" />都收在自己的库里慢慢看。
+        </p>
       </section>
 
       <section className="collect-shell anim-enter" style={{ '--lift': '14px', animationDuration: '.5s', animationDelay: '.12s' } as React.CSSProperties}>

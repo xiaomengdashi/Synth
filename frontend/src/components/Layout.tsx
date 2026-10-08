@@ -145,6 +145,7 @@ export default function Layout() {
                 </div>
               )}
             </div>
+            <span className="header-divider" aria-hidden="true" />
             <Link to="/admin" className="header-admin-link">管理后台 <ArrowUpRight size={13} /></Link>
           </div>
         </div>
@@ -155,7 +156,7 @@ export default function Layout() {
       </main>
 
       <footer className="site-footer">
-        <span>© {new Date().getFullYear()} SynthAI</span>
+        <strong>© {new Date().getFullYear()} SynthAI</strong>
         <span>把值得读的内容，留在自己的知识库里。</span>
       </footer>
 
