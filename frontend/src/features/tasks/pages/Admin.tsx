@@ -18,7 +18,7 @@ const sourceLabels: Record<Article['source_type'], string> = {
   other: '其他来源',
 };
 
-const sourceColors = ['#16a34a', '#4ade80', '#f0a13c', '#38bdf8', '#a78bfa', '#94a3b8', '#64748b'];
+const sourceColors = ['var(--ac-chart-1)', 'var(--ac-chart-2)', 'var(--ac-chart-3)', 'var(--ac-chart-4)', 'var(--ac-chart-5)', 'var(--ac-chart-6)', 'var(--ac-chart-7)'];
 
 function getDayKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
@@ -140,10 +140,10 @@ function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourc
 
 function TaskStatusChart({ tasks }: { tasks: Task[] }) {
   const statuses = [
-    { key: 'completed', label: '已完成', color: '#16a34a' },
-    { key: 'processing', label: '处理中', color: '#f0a13c' },
-    { key: 'pending', label: '排队中', color: '#94a3b8' },
-    { key: 'failed', label: '失败', color: '#ef4444' },
+    { key: 'completed', label: '已完成', color: 'var(--ac-chart-1)' },
+    { key: 'processing', label: '处理中', color: 'var(--ac-chart-3)' },
+    { key: 'pending', label: '排队中', color: 'var(--ac-chart-6)' },
+    { key: 'failed', label: '失败', color: 'var(--ac-chart-danger)' },
   ];
   const total = tasks.length || 1;
 

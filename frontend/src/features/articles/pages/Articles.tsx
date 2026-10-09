@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LayoutGrid, List, Star } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import ArticleList, { sourceLabel } from '../components/ArticleList';
@@ -47,8 +47,10 @@ export default function Articles() {
       });
   }, [statsVersion]);
   const [searchParams, setSearchParams] = useSearchParams();
-  const [view, setView] = useState<ViewMode>('list');
-  const [sort, setSort] = useState<SortOrder>('new');
+  const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('articles-view') === 'grid' ? 'grid' : 'list'));
+  const [sort, setSort] = useState<SortOrder>(() => (localStorage.getItem('articles-sort') === 'old' ? 'old' : 'new'));
+  useEffect(() => { localStorage.setItem('articles-view', view); }, [view]);
+  useEffect(() => { localStorage.setItem('articles-sort', sort); }, [sort]);
 
   const query = searchParams.get('q')?.trim() || '';
   const source = searchParams.get('source') || 'all';
@@ -57,13 +59,17 @@ export default function Articles() {
   // 筛选/搜索由后端完成;与 store 记录的已加载参数组合对比,不一致就(重)取——
   // 即使某次 reset 请求被进行中的续载吞掉,续载结束后本 effect 也会自动补发
   const articlesLoadedKey = useAppStore((state) => state.articlesLoadedKey);
+  const articlesErrorKey = useAppStore((state) => state.articlesErrorKey);
+  // 与 fetchArticles 成功/失败时登记的 key 同构:category 恒空段|source|q|starred
+  const currentKey = `|${source === 'all' ? '' : source}|${query}|${starredOnly ? '1' : ''}`;
+  const loadFailed = articlesErrorKey === currentKey;
   useEffect(() => {
     if (articlesLoading) return;
-    // 与 fetchArticles 成功时记录的 loadedKey 同构:category 恒空段|source|q|starred
-    const key = `|${source === 'all' ? '' : source}|${query}|${starredOnly ? '1' : ''}`;
-    if (articlesLoadedKey === key) return;
+    if (articlesLoadedKey === currentKey) return;
+    // 同一筛选失败后不再自动重试(否则失败→清 loading→再请求会无限循环),换筛选即可重新加载
+    if (articlesErrorKey === currentKey) return;
     void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined, starred: starredOnly || undefined });
-  }, [fetchArticles, source, query, starredOnly, articlesLoading, articlesLoadedKey]);
+  }, [fetchArticles, source, query, starredOnly, articlesLoading, articlesLoadedKey, articlesErrorKey, currentKey]);
 
   const sortedArticles = useMemo(() => {
     const factor = sort === 'new' ? -1 : 1;
@@ -142,7 +148,11 @@ export default function Articles() {
         <ArticleList
           articles={sortedArticles}
           mode={view}
-          emptyMessage={query || activeFilterLabel || starredOnly
+          emptyMessage={articles.length === 0 && loadFailed
+            ? '文章加载失败，请检查服务是否可用后刷新页面。'
+            : articlesLoading && articles.length === 0
+            ? '正在加载文章…'
+            : query || activeFilterLabel || starredOnly
             ? starredOnly && !query && !activeFilterLabel
               ? '还没有收藏的文章。点亮列表或文章页的星标，稍后来这里接着读。'
               : `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}${starredOnly && (query || activeFilterLabel) ? '且收藏' : ''}的文章，换个筛选试试。`

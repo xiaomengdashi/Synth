@@ -3,7 +3,7 @@ import type { Article } from '../../articles/types';
 import type { AppConfig } from '../../config/types';
 import type { Task } from '../../tasks/types';
 import { adminFetch } from '../../../utils/adminAuth';
-import { applyTheme, DEFAULT_THEME, isThemeId, type ThemeId } from '../themes';
+import { applyTheme, DEFAULT_THEME, isThemeId, LEGACY_THEME_MAP, type ThemeId } from '../themes';
 
 export interface ToastMessage {
   id: string;
@@ -33,6 +33,8 @@ interface AppState {
   articlesTotal: number;
   /** 最近一次成功加载列表的参数组合:页面据此判断当前筛选是否已加载,被续载吞掉的 reset 能自动补发 */
   articlesLoadedKey: string;
+  /** 最近一次加载失败的参数组合:页面据此停止对同一筛选的自动重试,避免失败时无限循环请求 */
+  articlesErrorKey: string;
   /** 收藏等改变 stats 分布的操作 +1,列表页据此重拉计数 */
   statsVersion: number;
   fetchTasks: () => Promise<void>;
@@ -48,6 +50,7 @@ interface AppState {
 const getInitialTheme = (): ThemeId => {
   const saved = localStorage.getItem('theme');
   if (saved && isThemeId(saved)) return saved;
+  if (saved && LEGACY_THEME_MAP[saved]) return LEGACY_THEME_MAP[saved];
   return saved === 'light' ? 'zhimo' : DEFAULT_THEME;
 };
 
@@ -78,6 +81,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   articlesLoading: false,
   articlesTotal: 0,
   articlesLoadedKey: '',
+  articlesErrorKey: '',
   statsVersion: 0,
   tasks: [],
   toasts: [],
@@ -175,6 +179,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const pageSize = fetchAll ? 50 : 20;
     const offset = reset ? 0 : state.articles.length;
+    // 与成功时登记的 loadedKey 同构,失败时据此记录 errorKey
+    const requestKey = `${category ?? ''}|${source ?? ''}|${keyword}|${starred ? '1' : ''}`;
     set({ articlesLoading: true });
     try {
       const catParam = category === '__none' ? '__none__' : category;
@@ -201,12 +207,13 @@ export const useAppStore = create<AppState>((set, get) => ({
           // 只有 reset 才登记参数组合:续载是既有筛选的延伸,若在此记录,被吞掉的
           // reset 会被误认为已加载而永不补发
           articlesLoadedKey: reset ? loadedKey : current.articlesLoadedKey,
+          articlesErrorKey: '',
           articlesLoading: false,
         };
       });
     } catch (e) {
       console.error('Failed to fetch articles', e);
-      set({ articlesLoading: false });
+      set({ articlesLoading: false, articlesErrorKey: requestKey });
     }
   },
   fetchTasks: async () => {

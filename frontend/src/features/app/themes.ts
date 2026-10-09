@@ -5,7 +5,7 @@
  * 注意:index.html 头部的防闪烁脚本内联了同一份 id→明暗映射,两处需同步。
  */
 
-export type ThemeId = 'zhimo' | 'qingci' | 'qiushi' | 'subai' | 'moye' | 'dianqing' | 'daizi';
+export type ThemeId = 'zhimo' | 'qingci' | 'moye' | 'dianqing';
 
 export interface ThemeMeta {
   id: ThemeId;
@@ -19,12 +19,16 @@ export interface ThemeMeta {
 export const THEMES: ThemeMeta[] = [
   { id: 'zhimo', name: '纸墨', hint: '松绿纸白', dark: false, swatch: { paper: '#f6f5f1', accent: '#175b41' } },
   { id: 'qingci', name: '青瓷', hint: '天青釉白', dark: false, swatch: { paper: '#f1f4f2', accent: '#2b8274' } },
-  { id: 'qiushi', name: '秋柿', hint: '柿橙米纸', dark: false, swatch: { paper: '#f7f2e6', accent: '#bb5a17' } },
-  { id: 'subai', name: '素白', hint: '纯白墨调', dark: false, swatch: { paper: '#ffffff', accent: '#1f2124' } },
   { id: 'moye', name: '墨夜', hint: '玄墨竹青', dark: true, swatch: { paper: '#1a1815', accent: '#6fbf8f' } },
   { id: 'dianqing', name: '靛青', hint: '靛夜月青', dark: true, swatch: { paper: '#12161f', accent: '#82aae0' } },
-  { id: 'daizi', name: '黛紫', hint: '黛夜藤紫', dark: true, swatch: { paper: '#16131d', accent: '#a68cd4' } },
 ];
+
+/** 已下线主题的旧值 → 最接近的保留主题,避免已选用户被重置到默认 */
+export const LEGACY_THEME_MAP: Record<string, ThemeId> = {
+  qiushi: 'zhimo',
+  subai: 'zhimo',
+  daizi: 'moye',
+};
 
 export const DEFAULT_THEME: ThemeId = 'moye';
 

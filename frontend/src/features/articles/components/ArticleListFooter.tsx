@@ -23,6 +23,8 @@ export default function ArticleListFooter({ emptyCount, category, source, q, sta
     return () => window.removeEventListener('scroll', check);
   }, [fetchArticles, emptyCount, category, source, q, starred]);
 
+  // 空列表由空状态(或页面的加载文案)独占展示,这里不再挂加载哨兵
+  if (emptyCount === 0) return null;
   if (!hasMore) {
     return emptyCount >= 5 ? (
       <p className="list-end-note">已加载全部文章</p>

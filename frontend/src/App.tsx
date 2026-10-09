@@ -40,7 +40,7 @@ const ShareSetup = lazyPage(() => import('./features/sharing/ShareSetup'));
 
 function PageLoading() {
   return (
-    <div style={{ display: 'grid', placeItems: 'center', minHeight: '50vh', color: 'var(--muted, #7d776b)' }}>
+    <div style={{ display: 'grid', placeItems: 'center', minHeight: '50vh', color: 'var(--muted, #5e5a4f)' }}>
       <Loader2 size={22} className="animate-spin" />
     </div>
   );
