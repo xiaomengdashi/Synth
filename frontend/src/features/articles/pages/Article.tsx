@@ -7,7 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 // common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
-import { ArrowLeft, ArrowUp, Download, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, ArrowUp, BookOpen, Download, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
@@ -71,8 +71,10 @@ function ArticleToc({
   onNavigate: (item: ArticleHeading) => void;
   preventDefaultJump?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
-    <nav className="article-toc" aria-label="文章目录">
+    <nav className={`article-toc ${expanded ? 'toc-expanded' : ''}`} aria-label="文章目录">
+      <button className="toc-mobile-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>文章目录 · {items.length} 节 <span>{expanded ? '收起' : '展开'}</span></button>
       <div className="article-toc-head">
         <strong>目录</strong>
         <span className="article-toc-count">{items.length} 节</span>
@@ -191,6 +193,7 @@ export default function Article() {
   const initialArticle = storeArticle?.content_md ? storeArticle : null;
 
   const [article, setArticle] = useState<ArticleType | null>(initialArticle);
+  const [notesOpen, setNotesOpen] = useState(false);
   const [loading, setLoading] = useState(!initialArticle);
   // 兜底:后端异常数据缺 content_md 时渲染按空正文处理,不进 ErrorBoundary
   const contentMd = article?.content_md || '';
@@ -523,6 +526,7 @@ export default function Article() {
           <span aria-current="page">{sourceLabel(article.source_type)}</span>
         </nav>
         <div className="reader-tools">
+          <button className="reader-tool" aria-expanded={notesOpen} aria-controls="reader-notes-panel" onClick={() => setNotesOpen(!notesOpen)}><BookOpen size={14} />{notesOpen ? '收起笔记' : '笔记'}</button>
           <button
             type="button"
             className={`reader-tool star-tool ${article.is_starred ? 'starred' : ''}`}
@@ -548,7 +552,7 @@ export default function Article() {
         </div>
       </div>
 
-      <div className={`reader-layout ${tocItems.length > 0 ? 'has-toc' : ''}`}>
+      <div className={`reader-layout reading-layout ${tocItems.length > 0 ? 'has-toc' : ''} ${notesOpen ? 'with-notes' : ''}`}>
       <div className={isXArticle ? 'article-reader article-reader-x' : 'article-reader'}>
         {isXArticle ? (
           <header className="x-article-header">
@@ -666,13 +670,13 @@ export default function Article() {
           }}
         />
       ) : null}
-      </div>
       <ArticleNotes
         articleId={article.id}
         contentRoot={resolveNotesRoot}
         contentVersion={wxContentVer}
-        hasToc={tocItems.length > 0}
+        panelOpen={notesOpen}
       />
+      </div>
       <RelatedArticles articleId={article.id} hasToc={tocItems.length > 0} />
       {showBackToTop ? (
         <button

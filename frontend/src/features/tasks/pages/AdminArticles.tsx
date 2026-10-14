@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, Sparkles, Trash2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
+import ArticleInspector from '../components/ArticleInspector';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatAbsolute } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
@@ -34,6 +34,7 @@ function useIsMobile() {
 export default function AdminArticles() {
   const { articles, articlesTotal, articlesLoading, fetchArticles, deleteArticle, batchDeleteArticles, batchSetCategory, updateArticle, pushToast } = useAppStore();
   const [categories, setCategories] = useState<string[]>([]);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [cat, setCat] = useState('all');
   const [src, setSrc] = useState('all');
@@ -221,7 +222,7 @@ export default function AdminArticles() {
           ) : articles.map((article) => (
             <article key={article.id} className="ac-card article-card-m">
               <div className="ac-card-body">
-                <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
+                <button type="button" className="cell-main article-preview-trigger" onClick={() => setPreviewId(article.id)}>{article.title}</button>
                 <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
                 <div className="article-card-m-meta">
                   <input
@@ -306,7 +307,7 @@ export default function AdminArticles() {
                     />
                   </td>
                   <td>
-                    <Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link>
+                    <button type="button" className="cell-main article-preview-trigger" onClick={() => setPreviewId(article.id)}>{article.title}</button>
                     <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
                   </td>
                   <td>{getSourceLabel(article.source_type)}</td>
@@ -335,6 +336,7 @@ export default function AdminArticles() {
       </section>
       )}
 
+      <ArticleInspector article={articles.find(a => a.id === previewId) || null} categories={categories} onClose={() => setPreviewId(null)} onCategory={(article, value) => changeCategory(article.id, article.title, value)} />
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="删除文章"

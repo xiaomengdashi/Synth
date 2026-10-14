@@ -4,17 +4,11 @@ import {
   BookOpenText,
   ChevronRight,
   Cpu,
-  Highlighter,
-  KeyRound,
   LayoutDashboard,
-  Mail,
   Menu,
   Moon,
   Newspaper,
-  PlugZap,
-  Smartphone,
   Sun,
-  Tags,
   X,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
@@ -23,27 +17,16 @@ import { BrandMark } from './Layout';
 import ToastStack from './ToastStack';
 import AdminGate from './AdminGate';
 
-const NAV_GROUPS: { label: string; items: { path: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
-  { label: '工作台', items: [{ path: '/admin', label: '总览', icon: LayoutDashboard }] },
-  {
-    label: '内容',
-    items: [
-      { path: '/admin/articles', label: '文章管理', icon: Newspaper },
-      { path: '/admin/notes', label: '划线笔记', icon: Highlighter },
-      { path: '/admin/categories', label: '文章分类', icon: Tags },
-      { path: '/admin/tasks', label: '处理任务', icon: Activity },
-    ],
-  },
-  {
-    label: '系统',
-    items: [
-      { path: '/admin/tikhub', label: 'TikHub 数据服务', icon: PlugZap },
-      { path: '/admin/model', label: '模型服务', icon: Cpu },
-      { path: '/admin/email', label: '邮箱导入', icon: Mail },
-      { path: '/admin/share', label: '手机分享导入', icon: Smartphone },
-      { path: '/admin/token', label: '访问令牌', icon: KeyRound },
-    ],
-  },
+const NAV_GROUPS = [
+  { path: '/admin', label: '工作台', icon: LayoutDashboard },
+  { path: '/admin/articles', label: '内容管理', icon: Newspaper },
+  { path: '/admin/tasks', label: '导入与任务', icon: Activity },
+  { path: '/admin/tikhub', label: '系统设置', icon: Cpu },
+];
+const SECTIONS = [
+  { label: '内容管理', items: [{ path: '/admin/articles', label: '文章管理' }, { path: '/admin/notes', label: '划线笔记' }, { path: '/admin/categories', label: '文章分类' }] },
+  { label: '导入与任务', items: [{ path: '/admin/tasks', label: '处理任务' }, { path: '/admin/email', label: '邮箱导入' }, { path: '/admin/share', label: '手机分享导入' }] },
+  { label: '系统设置', items: [{ path: '/admin/tikhub', label: 'TikHub 数据服务' }, { path: '/admin/model', label: '模型服务' }, { path: '/admin/token', label: '访问令牌' }] },
 ];
 
 /** 面包屑:上级可点击跳转,最后一级是当前位置。 */
@@ -75,7 +58,7 @@ function useAdminBreadcrumbs(pathname: string) {
   if (pathname.startsWith('/admin/tikhub') || pathname.startsWith('/admin/tikhub')) {
     return [{ label: '后台管理', to: '/admin' }, { label: 'TikHub 数据服务' }];
   }
-  return [{ label: '后台管理', to: '/admin' }, { label: '总览' }];
+  return [{ label: '后台管理', to: '/admin' }, { label: '工作台' }];
 }
 
 export default function AdminLayout() {
@@ -98,13 +81,10 @@ export default function AdminLayout() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [navOpen]);
 
+  const section = SECTIONS.find(group => group.items.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)));
   const isNavActive = (path: string) => {
     if (path === '/admin') return location.pathname === '/admin';
-    if (path === '/admin/tikhub') {
-      // 「多平台查询」挂在 TikHub 之下,侧边栏保持一致的选中态
-      return location.pathname.startsWith('/admin/tikhub');
-    }
-    return location.pathname === path;
+    return SECTIONS.find(group => group.items[0].path === path) === section;
   };
 
   return (
@@ -119,22 +99,9 @@ export default function AdminLayout() {
         </Link>
 
         <nav className="ac-nav" aria-label="后台导航">
-          {NAV_GROUPS.map((group) => (
-            <div className="ac-nav-group" key={group.label}>
-              <div className="ac-nav-label">{group.label}</div>
-              {group.items.map((item) => (
-                <Link
-                  to={item.path}
-                  key={item.path}
-                  className={isNavActive(item.path) ? 'ac-nav-item active' : 'ac-nav-item'}
-                  aria-current={isNavActive(item.path) ? 'page' : undefined}
-                >
-                  <item.icon size={16} />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </div>
-          ))}
+          <div className="ac-nav-label">工作空间</div>
+          {NAV_GROUPS.map(item => <Link to={item.path} key={item.path} className={isNavActive(item.path) ? 'ac-nav-item active' : 'ac-nav-item'} aria-current={isNavActive(item.path) ? 'page' : undefined}><item.icon size={18} /><span>{item.label}</span></Link>)}
+
         </nav>
 
         <div className="ac-side-foot">
@@ -169,6 +136,12 @@ export default function AdminLayout() {
         </header>
 
         <main className="ac-main">
+          {section ? <>
+            <header className="ac-workspace-heading"><p className="eyebrow">SynthAI 控制台</p><h1>{section.label}</h1></header>
+            <nav className="ac-section-nav" aria-label={`${section.label}页面`}>
+              {section.items.map(item => <Link key={item.path} to={item.path} className={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`) ? 'active' : ''} aria-current={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`) ? 'page' : undefined}>{item.label}</Link>)}
+            </nav>
+          </> : null}
           <Outlet />
         </main>
       </div>

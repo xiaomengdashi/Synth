@@ -1,321 +1,60 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Check, Clipboard, Link2, Loader2, Send, Smartphone, Upload, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Star, Tags } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
+import ArticleList, { sourceLabel } from '../components/ArticleList';
+import ImportPanel from '../components/ImportPanel';
 import type { Article } from '../types';
-import type { Task } from '../../tasks/types';
-import ArticleList from '../components/ArticleList';
-
-type Source = 'wechat' | 'x' | 'bilibili';
-type TaskStatusResponse = {
-  status?: Task['status'];
-  current_step?: string;
-  article_id?: string;
-  article?: Article;
-  error?: string;
-};
-
-const sourceMeta: Record<Source, { label: string; short: string; placeholder: string; color: string }> = {
-  wechat: { label: '微信公众号', short: '微信', placeholder: '粘贴 mp.weixin.qq.com 文章链接', color: 'var(--wechat)' },
-  x: { label: 'X / Twitter', short: 'X', placeholder: '粘贴 x.com 文章或帖子链接', color: 'var(--x-blue)' },
-  bilibili: { label: 'Bilibili', short: 'B 站', placeholder: '粘贴 bilibili.com 视频链接', color: 'var(--bili)' },
-};
-
-// 用户从部分 App 分享出来的链接常不带 scheme,按能解析出主机名的宽松口径识别
-function withHttpsScheme(value: string): string {
-  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value) ? value : `https://${value}`;
-}
-
-function detectSourceFromUrl(value: string): Source | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  try {
-    const hostname = new URL(withHttpsScheme(trimmed)).hostname.toLowerCase();
-    if (hostname === 'mp.weixin.qq.com' || hostname.endsWith('.weixin.qq.com')) return 'wechat';
-    if (hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com')) return 'x';
-    if (hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com') || hostname === 'b23.tv') return 'bilibili';
-  } catch {
-    // Keep the current selection while the user is still typing a URL.
-  }
-  return null;
-}
-
-/** 提交前规范化:补 scheme、要求合法主机名。解析失败返回 null(原生 type=url 校验在
- * 部分 webview 不弹提示,提交会被静默拦下,必须换成显式校验+错误反馈)。 */
-function normalizeContentUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(withHttpsScheme(trimmed));
-    if (!parsed.hostname.includes('.')) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
 
 export default function Home() {
-  const { articles, articlesTotal, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
-  const [source, setSource] = useState<Source>('wechat');
-  const [url, setUrl] = useState('');
-  const [detectedSource, setDetectedSource] = useState<Source | null>(null);
-  const [clipboardMessage, setClipboardMessage] = useState('');
-  const [isPasting, setIsPasting] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [htmlImportOpen, setHtmlImportOpen] = useState(false);
-  const [htmlOriginalUrl, setHtmlOriginalUrl] = useState('');
-  const [htmlText, setHtmlText] = useState('');
-  const [htmlFileName, setHtmlFileName] = useState('');
-  const [isHtmlImporting, setIsHtmlImporting] = useState(false);
-
-  // 空闲时预取详情页 chunk(含 markdown/highlight 依赖,约 500KB):点进文章时免等下载
+  const [recent, setRecent] = useState<Article[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const version = useAppStore(state => state.statsVersion);
+  const articlesVersion = useAppStore(state => state.articlesTotal);
   useEffect(() => {
-    const prefetch = () => { void import('./Article'); };
-    (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
-  }, []);
-
-  const pollTaskStatus = async (backendTaskId: string, localTaskId: string) => {
-    let pollCount = 0;
-    while (pollCount < 120) {
-      try {
-        const response = await fetch(`/api/v1/tasks/${backendTaskId}/status`);
-        const data: TaskStatusResponse = await response.json();
-        if (!response.ok || data.error) throw new Error(data.error || '获取任务状态失败');
-        updateTask(localTaskId, {
-          status: data.status || 'failed',
-          current_step: data.current_step || '任务状态异常',
-          article_id: data.article_id,
-        });
-        if (data.status === 'completed' || data.status === 'failed') {
-          setIsSubmitting(false);
-          if (data.status === 'completed') {
-            if (data.article) addArticle(data.article);
-            await fetchArticles();
-            pushToast({ title: '内容已保存，已加入文章库', tone: 'success' });
-          } else {
-            pushToast({ title: data.current_step || '处理失败，请检查配置', tone: 'error' });
-          }
-          return;
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-      pollCount += 1;
-      await new Promise((resolve) => window.setTimeout(resolve, 2000));
-    }
-    updateTask(localTaskId, { status: 'failed', current_step: '任务处理超时' });
-    setIsSubmitting(false);
-    pushToast({ title: '任务处理超时，请到后台查看', tone: 'error' });
-  };
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!url.trim()) return;
-    const normalizedUrl = normalizeContentUrl(url);
-    if (!normalizedUrl) {
-      pushToast({ title: '链接格式看不懂，请检查后重新粘贴', tone: 'error' });
-      return;
-    }
-    setIsSubmitting(true);
-    const originalUrl = normalizedUrl;
-    const localTaskId = Math.random().toString(36).slice(2, 11);
-    addTask({
-      id: localTaskId,
-      original_url: originalUrl,
-      status: 'pending',
-      current_step: '正在提交链接…',
-      created_at: new Date().toISOString(),
-    });
-    setUrl('');
-    setDetectedSource(null);
-
-    try {
-      const response = await fetch('/api/v1/tasks/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: originalUrl }),
-      });
-      if (!response.ok) throw new Error('提交任务失败');
-      const data = await response.json();
-      updateTask(localTaskId, { status: 'processing', current_step: '已进入处理队列' });
-      void pollTaskStatus(data.task_id, localTaskId);
-    } catch (error) {
-      updateTask(localTaskId, {
-        status: 'failed',
-        current_step: `提交失败：${error instanceof Error ? error.message : '未知错误'}`,
-      });
-      setIsSubmitting(false);
-      pushToast({ title: '链接提交失败，请稍后重试', tone: 'error' });
-    }
-  };
-
-  const applyUrlInput = (nextUrl: string) => {
-    const detected = detectSourceFromUrl(nextUrl);
-    setUrl(nextUrl);
-    setDetectedSource(detected);
-    if (detected) setSource(detected);
-  };
-
-  const handlePasteImport = async () => {
-    if (!navigator.clipboard?.readText) {
-      setClipboardMessage('当前浏览器不支持直接读取剪贴板，请手动粘贴。');
-      return;
-    }
-    setIsPasting(true);
-    setClipboardMessage('');
-    try {
-      const clipboardText = (await navigator.clipboard.readText()).trim();
-      if (!clipboardText) {
-        setClipboardMessage('剪贴板里还没有可导入的内容。');
-        return;
-      }
-      applyUrlInput(clipboardText);
-    } catch {
-      setClipboardMessage('没有拿到剪贴板权限，请先允许访问，或手动粘贴。');
-    } finally {
-      setIsPasting(false);
-    }
-  };
-
-  const handleHtmlFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    if (file.size > 15 * 1024 * 1024) {
-      pushToast({ title: 'HTML 文件不能超过 15 MB', tone: 'error' });
-      return;
-    }
-    setHtmlFileName(file.name);
-    setHtmlText(await file.text());
-  };
-
-  const handleHtmlImport = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!htmlOriginalUrl.trim() || !htmlText.trim()) return;
-    setIsHtmlImporting(true);
-    try {
-      const response = await fetch('/api/v1/articles/import-html', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ original_url: htmlOriginalUrl.trim(), html: htmlText }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || 'HTML 导入失败');
-      addArticle(data);
-      await fetchArticles();
-      setHtmlImportOpen(false);
-      setHtmlOriginalUrl('');
-      setHtmlText('');
-      setHtmlFileName('');
-      pushToast({ title: '网页 HTML 已导入文章库', tone: 'success' });
-    } catch (error) {
-      pushToast({ title: error instanceof Error ? error.message : 'HTML 导入失败', tone: 'error' });
-    } finally {
-      setIsHtmlImporting(false);
-    }
-  };
-
+    let cancelled = false;
+    setLoading(true);
+    fetch('/api/v1/articles?limit=20&offset=0')
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(data => { if (!cancelled) { setRecent(data.data); setTotal(data.total); setError(false); } })
+      .catch(() => { if (!cancelled) setError(true); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [version, articlesVersion, reload]);
+  const continuing = recent.filter(a => a.read_progress > 0.05 && a.read_progress < 0.95).slice(0, 3);
   return (
-    <div>
-      <section className="public-hero">
-        <p className="hero-greeting anim-enter" style={{ '--lift': '10px', animationDuration: '.45s' } as React.CSSProperties}>把好内容，收进来。</p>
-        <h1 className="display-title anim-enter" style={{ '--lift': '14px', animationDuration: '.55s' } as React.CSSProperties}>一个安静的知识角落。</h1>
-        <p className="hero-lede anim-enter" style={{ '--lift': '12px', animationDuration: '.55s', animationDelay: '.08s' } as React.CSSProperties}>
-          微信、X、B 站上读到的有价值内容，<br className="hero-break" />都收在自己的库里慢慢看。
-        </p>
-      </section>
-
-      <section className="collect-shell anim-enter" style={{ '--lift': '14px', animationDuration: '.5s', animationDelay: '.12s' } as React.CSSProperties}>
-        <form className="collect-bar" onSubmit={handleSubmit}>
-          <div className="source-chips" role="group" aria-label="选择来源">
-            {(Object.keys(sourceMeta) as Source[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`source-chip ${source === value ? 'active' : ''}`}
-                aria-pressed={source === value}
-                style={{ '--chip': sourceMeta[value].color } as React.CSSProperties}
-                onClick={() => setSource(value)}
-              >
-                <i />{sourceMeta[value].short}
-              </button>
-            ))}
-          </div>
-          <label className="collect-input-wrap">
-            <Link2 size={16} aria-hidden="true" />
-            <input
-              value={url}
-              onChange={(event) => {
-                applyUrlInput(event.target.value);
-                setClipboardMessage('');
-              }}
-              placeholder={sourceMeta[source].placeholder}
-              type="text"
-              inputMode="url"
-              autoComplete="off"
-              spellCheck={false}
-              aria-label="粘贴内容链接"
-            />
-          </label>
-          <button type="button" className="import-paste-button" onClick={() => void handlePasteImport()} disabled={isSubmitting || isPasting} aria-label="读取剪贴板并填入" title="读取剪贴板并填入">
-            {isPasting ? <Loader2 size={15} className="animate-spin" /> : <Clipboard size={15} />}
-          </button>
-          <button type="submit" className="primary-button" disabled={isSubmitting || !url.trim()}>
-            {isSubmitting ? <><Loader2 size={15} className="animate-spin" />处理中</> : <><Send size={15} />开始导入</>}
-          </button>
-        </form>
-        <p className="collect-hint">
-          {detectedSource ? <Check size={13} /> : <Link2 size={13} />}
-          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴链接后会自动识别来源；微信安全验证不会自动打开浏览器。')}
-        </p>
-        <div className="collect-alt">
-          <Link to="/admin/share"><Smartphone size={13} />iPhone 分享导入</Link>
-          <button type="button" onClick={() => setHtmlImportOpen(true)}><Upload size={13} />导入网页 HTML</button>
+    <div className="reading-home">
+      <header className="workspace-heading">
+        <div><p className="eyebrow">我的知识库</p><h1>今天，接着读。</h1></div>
+        <Link className="text-link" to="/articles">全部文章 <span className="workspace-count">{total}</span><ArrowRight size={15} /></Link>
+      </header>
+      <ImportPanel />
+      <div className="home-content-layout">
+        <section id="latest-articles" className="recent-section">
+          <div className="section-heading"><div><h2>最近导入</h2><p>新收进来的内容，都在这里。</p></div><Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link></div>
+          {error ? <div className="empty-state">文章暂时加载失败。<button className="secondary-button" onClick={() => setReload(v => v + 1)}>重新加载</button></div>
+            : <ArticleList articles={recent.slice(0, 8)} mode="list" emptyMessage={loading ? '正在加载文章…' : '还没有文章。在上方粘贴链接，保存第一篇内容。'} />}
+        </section>
+        <div className="home-reading-sidebar">
+      {continuing.length > 0 && <section className="continue-section">
+        <div className="section-heading"><div><h2>继续阅读</h2><p>最近读到这里</p></div><BookOpen size={19} /></div>
+        <div className="continue-grid">{continuing.map(a => <Link to={`/article/${a.id}`} className="continue-item" key={a.id}>
+          <span className="continue-source">{sourceLabel(a.source_type)}</span><h3>{a.title}</h3>
+          <div className="continue-progress"><span style={{ width: `${Math.round(a.read_progress * 100)}%` }} /></div>
+          <span className="continue-foot">已读 {Math.round(a.read_progress * 100)}% <ArrowRight size={14} /></span>
+        </Link>)}</div>
+      </section>}
+        <aside className="home-shortcuts" aria-label="阅读快捷入口">
+          <p className="eyebrow">我的阅读</p>
+          <Link to="/articles?starred=1"><Star size={18} /><div><strong>星标文章</strong><span>留给值得再读的内容</span></div><ArrowRight size={14} /></Link>
+          <Link to="/articles"><Tags size={18} /><div><strong>按分类浏览</strong><span>在文章库中整理与查找</span></div><ArrowRight size={14} /></Link>
+          <div className="home-reading-note"><BookOpen size={20} /><p>读到一半也没关系。<br />下次打开，会回到上次的位置。</p></div>
+        </aside>
         </div>
-      </section>
-
-      {htmlImportOpen ? (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !isHtmlImporting && setHtmlImportOpen(false)}>
-          <section className="config-modal html-import-modal" role="dialog" aria-modal="true" aria-labelledby="html-import-title" onMouseDown={(event) => event.stopPropagation()}>
-            <div className="config-modal-header">
-              <div><h2 id="html-import-title">导入保存的网页 HTML</h2><p>不打开浏览器、不重新访问微信，直接导入你保存的完整网页。</p></div>
-              <button type="button" className="modal-close" aria-label="关闭 HTML 导入" onClick={() => setHtmlImportOpen(false)} disabled={isHtmlImporting}><X size={17} /></button>
-            </div>
-            <form onSubmit={handleHtmlImport}>
-              <div className="form-grid">
-                <div className="form-field full">
-                  <label htmlFor="html-original-url">原文链接</label>
-                  <input id="html-original-url" type="url" value={htmlOriginalUrl} onChange={(event) => setHtmlOriginalUrl(event.target.value)} placeholder="https://mp.weixin.qq.com/s/..." required />
-                  <p className="form-help">请填写文章原始链接，用于标题、来源和文章归档。</p>
-                </div>
-                <div className="form-field full">
-                  <label>网页文件</label>
-                  <div className="html-file-row">
-                    <label className="secondary-button html-file-button"><Upload size={14} />选择 HTML 文件<input type="file" accept=".html,.htm,text/html" onChange={handleHtmlFile} /></label>
-                    <span>{htmlFileName || '也可以直接在下方粘贴源码'}</span>
-                  </div>
-                </div>
-                <div className="form-field full">
-                  <label htmlFor="html-source">网页源码</label>
-                  <textarea id="html-source" className="html-source-input" value={htmlText} onChange={(event) => setHtmlText(event.target.value)} placeholder="将保存的网页 HTML 粘贴到这里，需包含微信公众号的 #js_content 正文节点。" rows={10} required />
-                </div>
-              </div>
-              <div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setHtmlImportOpen(false)} disabled={isHtmlImporting}>取消</button><button type="submit" className="primary-button" disabled={isHtmlImporting || !htmlOriginalUrl.trim() || !htmlText.trim()}>{isHtmlImporting ? <><Loader2 size={14} className="animate-spin" />导入中</> : <><Upload size={14} />导入文章</>}</button></div>
-            </form>
-          </section>
-        </div>
-      ) : null}
-
-      {/* 首页固定展示最新 12 篇;完整列表(含渐进加载)在文章库页,由「查看全部」进入 */}
-      <section id="latest-articles" className="recent-section">
-        <div className="section-heading">
-          <div><h2>最近收藏</h2><p>最新整理的内容会出现在最前面。</p></div>
-          <div className="section-heading-side">
-            {articlesTotal > 12 ? <Link className="text-link" to="/articles">查看全部 <ArrowRight size={14} /></Link> : null}
-          </div>
-        </div>
-        <ArticleList articles={articles.slice(0, 12)} />
-      </section>
+      </div>
     </div>
   );
 }

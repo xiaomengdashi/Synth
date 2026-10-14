@@ -49,13 +49,13 @@ export default function ArticleNotes({
   articleId,
   contentRoot,
   contentVersion,
-  hasToc = false,
+  panelOpen = false,
 }: {
   articleId: string;
   contentRoot: () => Element | ShadowRoot | null;
   /** 内容根被整体重写后的信号(微信 shadow innerHTML 重写),递增以触发重画 */
   contentVersion: number;
-  hasToc?: boolean;
+  panelOpen?: boolean;
 }) {
   const pushToast = useAppStore((state) => state.pushToast);
 
@@ -388,10 +388,11 @@ export default function ArticleNotes({
         </div>
       ) : null}
 
-      {notes.length > 0 ? (
-        <section className={`notes-block ${hasToc ? 'has-toc' : ''}`.trim()} aria-label="划线笔记">
+      <aside id="reader-notes-panel" className="reader-notes-panel" hidden={!panelOpen} aria-label="划线笔记">
+        <section className="notes-block">
           <div className="notes-inner">
             <h2 className="notes-title">划线笔记</h2>
+            {notes.length === 0 && <p className="notes-empty">选中正文中的文字，添加你的第一条划线笔记。</p>}
             <div className="notes-rows">
               {notes.map((note) => (
                 <div className="note-row" key={note.id}>
@@ -410,7 +411,7 @@ export default function ArticleNotes({
             </div>
           </div>
         </section>
-      ) : null}
+      </aside>
     </>
   );
 }

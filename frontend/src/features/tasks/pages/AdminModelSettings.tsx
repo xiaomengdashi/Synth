@@ -236,14 +236,20 @@ function GenerationPanel() {
 
 /** 模型服务：连接、语音转写与生成参数 */
 export default function AdminModelSettings() {
+  const [panel, setPanel] = useState('connection');
   return (
     <div>
-      <AdminPageHeader summary={<span>模型服务：连接、语音转写与生成参数</span>} />
-      <div className="ac-settings-page"><div className="ac-settings-content">
-        <ConnectionPanel />
-        <TranscriptionPanel />
-        <GenerationPanel />
-      </div></div>
+      <AdminPageHeader summary={<span>配置导入与笔记生成使用的服务</span>} />
+      <div className="settings-workspace">
+        <nav className="settings-subnav" aria-label="模型服务设置">
+          {[['connection', '模型连接'], ['transcription', '语音转写'], ['generation', '生成参数']].map(([value, label]) => <button key={value} className={panel === value ? 'active' : ''} aria-pressed={panel === value} onClick={() => setPanel(value)}>{label}</button>)}
+        </nav>
+        <div className="ac-settings-content">
+          <div hidden={panel !== 'connection'}><ConnectionPanel /></div>
+          <div hidden={panel !== 'transcription'}><TranscriptionPanel /></div>
+          <div hidden={panel !== 'generation'}><GenerationPanel /></div>
+        </div>
+      </div>
     </div>
   );
 }

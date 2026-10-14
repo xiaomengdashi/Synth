@@ -6,6 +6,7 @@ import type { Task } from '../types';
 import AdminPageHeader from '../components/AdminPageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
 import { formatDistanceToNow } from '../../../utils/formatDate';
+import { summarizeTaskStep } from '../taskPresentation';
 
 const STATUS_BADGES: Record<Task['status'], { cls: string; label: string }> = {
   completed: { cls: 'success', label: '已完成' },
@@ -49,7 +50,7 @@ export default function AdminTasks() {
             <div className="ac-empty">当前没有处理任务。回到前台提交一条链接即可开始。</div>
           ) : tasks.map((task) => {
             const badge = STATUS_BADGES[task.status];
-            const step = task.status === 'completed' ? '' : task.current_step;
+            const step = task.status === 'completed' ? '' : summarizeTaskStep(task.current_step || '');
             return (
               <article key={task.id} className="ac-card task-card-m">
                 <div className="ac-card-body">
@@ -89,7 +90,7 @@ export default function AdminTasks() {
                 <tr><td colSpan={4}><div className="ac-empty">当前没有处理任务。回到前台提交一条链接即可开始。</div></td></tr>
               ) : tasks.map((task) => {
                 const badge = STATUS_BADGES[task.status];
-                const step = task.status === 'completed' ? '' : task.current_step;
+                const step = task.status === 'completed' ? '' : summarizeTaskStep(task.current_step || '');
                 return (
                   <tr key={task.id}>
                     <td>

@@ -85,12 +85,11 @@ export default function Layout() {
             <span>SynthAI</span>
           </Link>
           <nav className="public-nav" aria-label="主导航">
-            <Link to="/" className={location.pathname === '/' ? 'active' : ''}>发现</Link>
+            <Link to="/" className={location.pathname === '/' ? 'active' : ''}>首页</Link>
             <Link to="/articles" className={location.pathname.startsWith('/article') ? 'active' : ''}>文章库</Link>
-            <Link to="/categories" className={location.pathname.startsWith('/categor') ? 'active' : ''}>分类</Link>
           </nav>
           <div className="header-actions">
-            <form className="header-search" onSubmit={handleSearch} role="search">
+            <form className={`header-search ${location.pathname === '/articles' ? 'library-header-search' : ''}`} onSubmit={handleSearch} role="search">
               <input
                 value={searchValue}
                 onChange={(event) => handleSearchInputChange(event.target.value)}
@@ -151,7 +150,7 @@ export default function Layout() {
         </div>
       </header>
 
-      <main className="site-main">
+      <main className={`site-main ${location.pathname.startsWith('/article/') ? 'reader-site-main' : ''}`}>
         <Outlet />
       </main>
 

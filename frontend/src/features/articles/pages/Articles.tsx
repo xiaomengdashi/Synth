@@ -1,170 +1,95 @@
-import { useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, List, Star } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { BookOpen, ChevronDown, LayoutGrid, List, Search, Star, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import ArticleList, { sourceLabel } from '../components/ArticleList';
+import ArticleList from '../components/ArticleList';
 import ArticleListFooter from '../components/ArticleListFooter';
-import type { Article } from '../types';
 import { useAppStore } from '../../app/store/useAppStore';
 
-type SourceFilter = 'wechat' | 'x' | 'bilibili';
-type ViewMode = 'list' | 'grid';
-type SortOrder = 'new' | 'old';
-
-const FILTERS: { value: SourceFilter | 'all'; label: string; color?: string }[] = [
-  { value: 'all', label: '全部' },
-  { value: 'wechat', label: '微信', color: 'var(--wechat)' },
-  { value: 'x', label: 'X', color: 'var(--x-blue)' },
-  { value: 'bilibili', label: 'B 站', color: 'var(--bili)' },
-];
+const SOURCES = [{ value: 'wechat', label: '微信' }, { value: 'x', label: 'X / Twitter' }, { value: 'bilibili', label: 'B 站' }];
 
 export default function Articles() {
-  const articles = useAppStore((state) => state.articles);
-  const articlesLoading = useAppStore((state) => state.articlesLoading);
-  const fetchArticles = useAppStore((state) => state.fetchArticles);
-  const articlesTotal = useAppStore((state) => state.articlesTotal);
-  const [sourceCounts, setSourceCounts] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
-  const [starredCount, setStarredCount] = useState<number | null>(null);
-
-  // 空闲时预取详情页 chunk:列表页停留时间长,预取后点开文章零等待
-  useEffect(() => {
-    const prefetch = () => { void import('./Article'); };
-    (window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500)))(prefetch);
-  }, []);
-
-  // 来源/收藏计数在挂载与 statsVersion 变化时拉取:滚动续载/排序不改变分布,
-  // 但收藏翻转会——store 里 +1 版本号驱动这里重拉,让「只看收藏 N」即时准确
-  const statsVersion = useAppStore((state) => state.statsVersion);
-  useEffect(() => {
-    fetch('/api/v1/articles/stats')
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        setSourceCounts(data?.sources ?? null);
-        setStarredCount(typeof data?.starred === 'number' ? data.starred : null);
-      })
-      .catch(() => {
-        setSourceCounts(null);
-        setStarredCount(null);
-      });
-  }, [statsVersion]);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('articles-view') === 'grid' ? 'grid' : 'list'));
-  const [sort, setSort] = useState<SortOrder>(() => (localStorage.getItem('articles-sort') === 'old' ? 'old' : 'new'));
+  const { articles, articlesLoading, articlesTotal, fetchArticles, articlesLoadedKey, articlesErrorKey, statsVersion } = useAppStore();
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q')?.trim() || '';
+  const source = params.get('source') || '';
+  const category = params.get('cat') || '';
+  const starred = params.get('starred') === '1';
+  const [search, setSearch] = useState(query);
+  const [view, setView] = useState(() => localStorage.getItem('articles-view') === 'grid' ? 'grid' : 'list');
+  const [sort, setSort] = useState(() => localStorage.getItem('articles-sort') === 'old' ? 'old' : 'new');
+  const [names, setNames] = useState<string[]>([]);
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const [stats, setStats] = useState<{ sources?: Record<string, number>; starred?: number } | null>(null);
+  const [navigationError, setNavigationError] = useState(false);
+  const [navReload, setNavReload] = useState(0);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => { setSearch(query); }, [query]);
   useEffect(() => { localStorage.setItem('articles-view', view); }, [view]);
   useEffect(() => { localStorage.setItem('articles-sort', sort); }, [sort]);
-
-  const query = searchParams.get('q')?.trim() || '';
-  const source = searchParams.get('source') || 'all';
-  const starredOnly = searchParams.get('starred') === '1';
-
-  // 筛选/搜索由后端完成;与 store 记录的已加载参数组合对比,不一致就(重)取——
-  // 即使某次 reset 请求被进行中的续载吞掉,续载结束后本 effect 也会自动补发
-  const articlesLoadedKey = useAppStore((state) => state.articlesLoadedKey);
-  const articlesErrorKey = useAppStore((state) => state.articlesErrorKey);
-  // 与 fetchArticles 成功/失败时登记的 key 同构:category 恒空段|source|q|starred
-  const currentKey = `|${source === 'all' ? '' : source}|${query}|${starredOnly ? '1' : ''}`;
-  const loadFailed = articlesErrorKey === currentKey;
   useEffect(() => {
-    if (articlesLoading) return;
-    if (articlesLoadedKey === currentKey) return;
-    // 同一筛选失败后不再自动重试(否则失败→清 loading→再请求会无限循环),换筛选即可重新加载
-    if (articlesErrorKey === currentKey) return;
-    void fetchArticles({ reset: true, source: source === 'all' ? undefined : source, q: query || undefined, starred: starredOnly || undefined });
-  }, [fetchArticles, source, query, starredOnly, articlesLoading, articlesLoadedKey, articlesErrorKey, currentKey]);
-
-  const sortedArticles = useMemo(() => {
-    const factor = sort === 'new' ? -1 : 1;
-    // 展示层兜底:收藏视图下过滤掉 store 里已被取消收藏的行(toggleStar 只 patch 不过滤数组)
-    const visible = starredOnly ? articles.filter((a) => a.is_starred !== false) : articles;
-    return [...visible].sort((a, b) => factor * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()));
-  }, [articles, sort, starredOnly]);
-
-  const applySource = (next: string) => {
-    const params = new URLSearchParams(searchParams);
-    if (next === 'all') params.delete('source');
-    else params.set('source', next);
-    setSearchParams(params, { replace: true });
+    let cancelled = false;
+    const read = async (url: string) => { const res = await fetch(url); if (!res.ok) throw new Error(); return res.json(); };
+    Promise.all([read('/api/v1/categories'), read('/api/v1/categories/counts'), read('/api/v1/articles/stats')])
+      .then(([categories, totals, statistics]) => {
+        if (cancelled) return;
+        setNames(categories.names || []); setCounts({ ...totals.counts, __none: totals.uncategorized || 0 }); setStats(statistics); setNavigationError(false);
+      }).catch(() => { if (!cancelled) setNavigationError(true); });
+    return () => { cancelled = true; };
+  }, [statsVersion, navReload]);
+  const key = `${category === 'all' ? '' : category}|${source}|${query}|${starred ? '1' : ''}`;
+  const options = { category: category && category !== 'all' ? category : undefined, source: source || undefined, q: query || undefined, starred: starred || undefined };
+  const failed = articlesErrorKey === key;
+  useEffect(() => {
+    if (articlesLoading || articlesLoadedKey === key || articlesErrorKey === key) return;
+    void fetchArticles({ reset: true, category: category && category !== 'all' ? category : undefined, source: source || undefined, q: query || undefined, starred: starred || undefined });
+  }, [articlesLoading, articlesLoadedKey, articlesErrorKey, key, category, source, query, starred, fetchArticles]);
+  const ready = articlesLoadedKey === key;
+  const visible = useMemo(() => [...(ready ? articles : [])].filter(a => !starred || a.is_starred !== false)
+    .sort((a, b) => (sort === 'new' ? -1 : 1) * (new Date(a.created_at).getTime() - new Date(b.created_at).getTime())), [articles, ready, sort, starred]);
+  const change = (name: string, value: string) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(name, value); else next.delete(name);
+    setParams(next, { replace: true });
   };
-
-  const applyStarred = (next: boolean) => {
-    const params = new URLSearchParams(searchParams);
-    if (next) params.set('starred', '1');
-    else params.delete('starred');
-    setSearchParams(params, { replace: true });
-  };
-
-  const activeFilterLabel = source === 'all' ? null : sourceLabel(source as Article['source_type']);
-  const filtering = Boolean(query) || source !== 'all' || starredOnly;
-
+  const submitSearch = (event: FormEvent) => { event.preventDefault(); change('q', search.trim()); };
+  const filtering = Boolean(query || source || (category && category !== 'all') || starred);
+  const total = stats?.sources ? Object.values(stats.sources).reduce((sum, n) => sum + n, 0) : null;
+  const categoryLabel = category === '__none' ? '未分类' : category === 'all' ? '' : category;
   return (
-    <div>
-      <section className="page-head">
-        <div>
-          <h1>文章库</h1>
-          <p>{query ? `正在筛选包含“${query}”的文章。` : '按时间整理的全部收藏内容。'}</p>
-        </div>
-        <span className="section-count">{filtering ? `筛选出 ${articlesTotal} 篇` : `共 ${articlesTotal} 篇`}</span>
-      </section>
-
-      <section className="filter-bar">
-        <div className="filter-chips" role="group" aria-label="按来源筛选">
-          {FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              className={`filter-chip ${source === filter.value ? 'active' : ''}`}
-              aria-pressed={source === filter.value}
-              style={filter.color ? ({ '--chip': filter.color } as React.CSSProperties) : undefined}
-              onClick={() => applySource(filter.value)}
-            >
-              {filter.color ? <i /> : null}
-              {filter.label}
-              <em>{filter.value === 'all'
-                ? (sourceCounts ? sourceCounts.wechat + sourceCounts.x + sourceCounts.bilibili + sourceCounts.other : articlesTotal)
-                : (sourceCounts ? sourceCounts[filter.value as keyof typeof sourceCounts] : 0)}</em>
-            </button>
-          ))}
-        </div>
-        <div className="view-tools">
-          <button
-            type="button"
-            className={`filter-chip star-filter ${starredOnly ? 'active' : ''}`}
-            aria-pressed={starredOnly}
-            onClick={() => applyStarred(!starredOnly)}
-          >
-            <Star size={13} />只看收藏<em>{starredCount ?? 0}</em>
-          </button>
-          <div className="seg" role="group" aria-label="切换视图">
-            <button type="button" aria-pressed={view === 'list'} onClick={() => setView('list')} title="列表视图"><List size={14} /></button>
-            <button type="button" aria-pressed={view === 'grid'} onClick={() => setView('grid')} title="卡片视图"><LayoutGrid size={14} /></button>
+    <div className="library-workspace">
+      <aside className={`library-sidebar ${filtersOpen ? 'is-open' : ''}`} aria-label="文章筛选">
+        <button className="library-mobile-toggle" onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen} aria-controls="library-navigation">分类与来源 {filtering && <span className="filter-dot" />}<ChevronDown size={16} /></button>
+        <div id="library-navigation" className="library-navigation">
+          <p className="eyebrow">我的知识库</p>
+          <button className={`library-nav-item ${!filtering ? 'active' : ''}`} onClick={() => setParams({})}><BookOpen size={16} /><span>全部文章</span><small>{total ?? '—'}</small></button>
+          <button className={`library-nav-item ${starred ? 'active' : ''}`} aria-pressed={starred} onClick={() => change('starred', starred ? '' : '1')}><Star size={16} /><span>星标文章</span><small>{stats?.starred ?? '—'}</small></button>
+          <div className="library-nav-group"><h2>分类</h2>
+            <button className={`library-nav-item ${!category || category === 'all' ? 'active' : ''}`} onClick={() => change('cat', '')}>全部分类</button>
+            {names.map(name => <button className={`library-nav-item ${category === name ? 'active' : ''}`} key={name} onClick={() => change('cat', name)}><span>{name}</span><small>{counts[name] ?? 0}</small></button>)}
+            <button className={`library-nav-item ${category === '__none' ? 'active' : ''}`} onClick={() => change('cat', '__none')}><span>未分类</span><small>{counts.__none ?? 0}</small></button>
           </div>
-          <div className="seg" role="group" aria-label="切换排序">
-            <button type="button" aria-pressed={sort === 'new'} onClick={() => setSort('new')}>最新</button>
-            <button type="button" aria-pressed={sort === 'old'} onClick={() => setSort('old')}>最早</button>
+          <div className="library-nav-group"><h2>来源</h2>
+            <button className={`library-nav-item ${!source ? 'active' : ''}`} onClick={() => change('source', '')}>全部来源</button>
+            {SOURCES.map(item => <button key={item.value} className={`library-nav-item ${source === item.value ? 'active' : ''}`} onClick={() => change('source', item.value)}><span>{item.label}</span><small>{stats?.sources?.[item.value] ?? '—'}</small></button>)}
+          </div>
+          {navigationError && <button className="text-link" onClick={() => setNavReload(v => v + 1)}>筛选信息加载失败，重试</button>}
+        </div>
+      </aside>
+      <div className="library-main">
+        <header className="workspace-heading"><div><p className="eyebrow">阅读与收藏</p><h1>{categoryLabel || (starred ? '星标文章' : '文章库')}</h1></div><span className="section-count">{ready ? `${articlesTotal} 篇` : '正在查找…'}</span></header>
+        <div className="library-toolbar">
+          <form className="library-search" onSubmit={submitSearch}><Search size={17} /><input aria-label="搜索文章库" placeholder="搜索标题、摘要或链接" value={search} onChange={e => setSearch(e.target.value)} /><button type="submit">搜索</button></form>
+          <div className="view-tools">
+            <select className="library-sort" aria-label="文章排序" value={sort} onChange={e => setSort(e.target.value)}><option value="new">最新导入</option><option value="old">最早导入</option></select>
+            <div className="seg" role="group" aria-label="切换视图"><button aria-label="列表视图" aria-pressed={view === 'list'} onClick={() => setView('list')}><List size={16} /></button><button aria-label="卡片视图" aria-pressed={view === 'grid'} onClick={() => setView('grid')}><LayoutGrid size={16} /></button></div>
           </div>
         </div>
-      </section>
-
-      <section>
-        <ArticleList
-          articles={sortedArticles}
-          mode={view}
-          emptyMessage={articles.length === 0 && loadFailed
-            ? '文章加载失败，请检查服务是否可用后刷新页面。'
-            : articlesLoading && articles.length === 0
-            ? '正在加载文章…'
-            : query || activeFilterLabel || starredOnly
-            ? starredOnly && !query && !activeFilterLabel
-              ? '还没有收藏的文章。点亮列表或文章页的星标，稍后来这里接着读。'
-              : `没有${activeFilterLabel ? `来自${activeFilterLabel}` : ''}${query && activeFilterLabel ? '且匹配关键词' : '匹配关键词'}${starredOnly && (query || activeFilterLabel) ? '且收藏' : ''}的文章，换个筛选试试。`
-            : '还没有文章。粘贴一条链接，开始建立你的第一篇知识卡片。'}
-        />
-        <ArticleListFooter
-          emptyCount={articles.length}
-          source={source === 'all' ? undefined : source}
-          q={query || undefined}
-          starred={starredOnly || undefined}
-        />
-      </section>
+        {filtering && <div className="active-filters"><span>当前筛选</span>{query && <button onClick={() => change('q', '')}>{query}<X size={12} /></button>}{categoryLabel && <button onClick={() => change('cat', '')}>{categoryLabel}<X size={12} /></button>}{source && <button onClick={() => change('source', '')}>{SOURCES.find(s => s.value === source)?.label || source}<X size={12} /></button>}{starred && <button onClick={() => change('starred', '')}>星标<X size={12} /></button>}<button className="clear-filters" onClick={() => setParams({})}>清空筛选</button></div>}
+        {failed ? <div className="empty-state">文章加载失败。<button className="secondary-button" onClick={() => void fetchArticles({ reset: true, ...options })}>重新加载</button></div> : <>
+          <ArticleList articles={visible} mode={view as 'list' | 'grid'} emptyMessage={!ready || articlesLoading ? '正在加载文章…' : filtering ? '没有匹配的文章，试试清空筛选或换个关键词。' : '还没有文章。回到首页，粘贴链接开始导入。'} />
+          {ready && <ArticleListFooter emptyCount={visible.length} {...options} />}
+        </>}
+      </div>
     </div>
   );
 }
