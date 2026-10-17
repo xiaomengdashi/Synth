@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowUpRight, BookOpen, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Loader2, RefreshCw, X } from 'lucide-react';
 import type { Article } from '../../articles/types';
 import { sourceLabel } from '../../articles/components/ArticleList';
 import { formatAbsolute } from '../../../utils/formatDate';
 
-export default function ArticleInspector({ article, categories, onClose, onCategory }: {
+export default function ArticleInspector({ article, categories, onClose, onCategory, onRefetch, refetchStep }: {
   article: Article | null; categories: string[]; onClose: () => void; onCategory: (article: Article, category: string) => void;
+  onRefetch: (article: Article) => void; refetchStep?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [detail, setDetail] = useState<Article | null>(null);
@@ -32,6 +33,7 @@ export default function ArticleInspector({ article, categories, onClose, onCateg
         <dl><div><dt>保存时间</dt><dd>{formatAbsolute(new Date(article.created_at))}</dd></div><div><dt>阅读状态</dt><dd>{article.read_progress >= 0.95 ? '已读' : article.read_progress > 0 ? `已读 ${Math.round(article.read_progress * 100)}%` : '未读'}</dd></div></dl>
         <div className="ac-field"><label htmlFor="inspector-category">文章分类</label><select id="inspector-category" className="ac-select" value={article.category || ''} onChange={event => onCategory(article, event.target.value)}><option value="">未分类</option>{categories.map(name => <option key={name}>{name}</option>)}</select></div>
         {failed && <p className="ac-help">原文信息暂时无法加载，可打开文章重试。</p>}
-      </div><footer><Link className="ac-btn primary" to={`/article/${article.id}`}><BookOpen size={15} />打开阅读</Link>{detail?.original_url && <a className="ac-btn secondary" href={detail.original_url} target="_blank" rel="noopener noreferrer">查看原文<ArrowUpRight size={15} /></a>}</footer></>}
+        {refetchStep && <p className="ac-help article-refetch-progress" role="status">{refetchStep}</p>}
+      </div><footer><Link className="ac-btn primary" to={`/article/${article.id}`}><BookOpen size={15} />打开阅读</Link><button className="ac-btn secondary" type="button" disabled={Boolean(refetchStep)} onClick={() => onRefetch(article)} title="根据原始链接更新正文和摘要，失败保留原内容">{refetchStep ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}{refetchStep ? '获取中' : '重新获取'}</button>{detail?.original_url && <a className="ac-btn secondary" href={detail.original_url} target="_blank" rel="noopener noreferrer">查看原文<ArrowUpRight size={15} /></a>}</footer></>}
   </dialog>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, Sparkles, Trash2 } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import AdminPageHeader from '../components/AdminPageHeader';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -7,6 +7,7 @@ import ArticleInspector from '../components/ArticleInspector';
 import { adminFetch } from '../../../utils/adminAuth';
 import { formatAbsolute } from '../../../utils/formatDate';
 import type { Article } from '../../articles/types';
+import useArticleRefetch from '../hooks/useArticleRefetch';
 
 type RegenProgress = {
   running: boolean; total: number; done: number; ok: number;
@@ -33,6 +34,7 @@ function useIsMobile() {
 
 export default function AdminArticles() {
   const { articles, articlesTotal, articlesLoading, fetchArticles, deleteArticle, batchDeleteArticles, batchSetCategory, updateArticle, pushToast } = useAppStore();
+  const { jobs: refetchJobs, revision: refetchRevision, refetchArticle } = useArticleRefetch();
   const [categories, setCategories] = useState<string[]>([]);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -104,7 +106,7 @@ export default function AdminArticles() {
   useEffect(() => {
     if (articlesLoading) return;
     const keyword = query.trim();
-    const key = `${cat}|${src}|${keyword}`;
+    const key = `${cat}|${src}|${keyword}|${refetchRevision}`;
     if (lastKey.current === key) return;
     lastKey.current = key;
     void fetchArticles({
@@ -114,7 +116,7 @@ export default function AdminArticles() {
       source: src === 'all' ? undefined : src,
       q: keyword || undefined,
     });
-  }, [fetchArticles, cat, src, query, articlesLoading]);
+  }, [fetchArticles, cat, src, query, articlesLoading, refetchRevision]);
 
   // 换筛选条件即放弃当前勾选;列表刷新后剔除已不存在的文章
   useEffect(() => { setSelected(new Set()); }, [cat, src, query]);
@@ -224,6 +226,7 @@ export default function AdminArticles() {
               <div className="ac-card-body">
                 <button type="button" className="cell-main article-preview-trigger" onClick={() => setPreviewId(article.id)}>{article.title}</button>
                 <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
+                {refetchJobs[article.id] && <p className="cell-sub article-refetch-progress" role="status">{refetchJobs[article.id]}</p>}
                 <div className="article-card-m-meta">
                   <input
                     className="ac-check"
@@ -245,6 +248,9 @@ export default function AdminArticles() {
                 </div>
                 <div className="article-card-m-foot">
                   <span className="cell-time">{formatAbsolute(new Date(article.created_at))}</span>
+                  <button className="ac-btn secondary sm" type="button" disabled={Boolean(refetchJobs[article.id])} onClick={() => void refetchArticle(article)} aria-label={`重新获取「${article.title}」`} title="根据原始链接更新正文和摘要，失败保留原内容">
+                    {refetchJobs[article.id] ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}{refetchJobs[article.id] ? '获取中' : '重新获取'}
+                  </button>
                   <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}>
                     <Trash2 size={13} />删除
                   </button>
@@ -309,6 +315,7 @@ export default function AdminArticles() {
                   <td>
                     <button type="button" className="cell-main article-preview-trigger" onClick={() => setPreviewId(article.id)}>{article.title}</button>
                     <span className="cell-sub" title={article.original_url}>{article.original_url}</span>
+                    {refetchJobs[article.id] && <span className="cell-sub article-refetch-progress" role="status">{refetchJobs[article.id]}</span>}
                   </td>
                   <td>{getSourceLabel(article.source_type)}</td>
                   <td>
@@ -325,6 +332,7 @@ export default function AdminArticles() {
                   <td className="cell-time">{formatAbsolute(new Date(article.created_at))}</td>
                   <td>
                     <div className="ac-row-actions">
+                      <button className="ac-btn secondary sm" type="button" disabled={Boolean(refetchJobs[article.id])} onClick={() => void refetchArticle(article)} aria-label={`重新获取「${article.title}」`} title="根据原始链接更新正文和摘要，失败保留原内容">{refetchJobs[article.id] ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}{refetchJobs[article.id] ? '获取中' : '重新获取'}</button>
                       <button className="ac-btn danger-ghost sm" type="button" onClick={() => setPendingDelete(article)} aria-label={`删除「${article.title}」`}><Trash2 size={13} />删除</button>
                     </div>
                   </td>
@@ -336,7 +344,7 @@ export default function AdminArticles() {
       </section>
       )}
 
-      <ArticleInspector article={articles.find(a => a.id === previewId) || null} categories={categories} onClose={() => setPreviewId(null)} onCategory={(article, value) => changeCategory(article.id, article.title, value)} />
+      <ArticleInspector article={articles.find(a => a.id === previewId) || null} categories={categories} onClose={() => setPreviewId(null)} onCategory={(article, value) => changeCategory(article.id, article.title, value)} onRefetch={article => void refetchArticle(article)} refetchStep={previewId ? refetchJobs[previewId] : undefined} />
       <ConfirmDialog
         open={Boolean(pendingDelete)}
         title="删除文章"

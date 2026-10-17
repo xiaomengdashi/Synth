@@ -22,5 +22,11 @@ def article_from_db_record(article) -> dict:
         "original_url": article.original_url,
         "source_type": article.source_type,
         "cover_image_url": article.cover_image_url,
+        "account_name": article.account_name,
+        "publish_time": article.publish_time,
+        "category": article.category,
+        "is_starred": article.is_starred,
+        "read_progress": article.read_progress,
+        "updated_at": article.updated_at.isoformat() if article.updated_at else "",
         "created_at": article.created_at.isoformat() if article.created_at else "",
     }

@@ -117,9 +117,9 @@ async def create_task_record(task_id: str, url: str, created_at_iso: str):
         await session.commit()
 
 
-async def process_task(task_id: str, url: str, config):
+async def process_task(task_id: str, url: str, config, target_article_id: str | None = None):
     try:
-        await set_processing_status(task_id, "正在初始化处理流程...")
+        await set_processing_status(task_id, "正在重新获取原始链接..." if target_article_id else "正在初始化处理流程...")
 
         def update_step(step: str):
             update_task(task_id, current_step=step)
@@ -297,47 +297,41 @@ async def process_task(task_id: str, url: str, config):
 
         title = _normalize_title(title)
 
-        article_id = str(uuid.uuid4())
-        update_task(task_id, status="completed", current_step="处理完成", article_id=article_id)
-
-        source_type = detect_source_type(source_url)
-        article_data = {
-            "id": article_id,
-            "title": title,
-            "summary": summary,
-            "content_md": generated_content,
-            "original_url": source_url,
-            "source_type": source_type,
-            "cover_image_url": cover_image_url,
-            "account_name": account_name,
-            "publish_time": publish_time,
-            "created_at": TASKS_DB[task_id]["created_at"],
+        if not generated_content.strip():
+            raise RuntimeError("未获取到可保存的正文")
+        article_id = target_article_id or str(uuid.uuid4())
+        completed_step = "重新获取完成" if target_article_id else "处理完成"
+        content_fields = {
+            "title": title, "summary": summary, "content_md": generated_content,
+            "source_type": detect_source_type(source_url), "cover_image_url": cover_image_url,
+            "account_name": account_name, "publish_time": publish_time,
         }
-
-        TASKS_DB[task_id]["article"] = article_data
-        ARTICLES_DB[article_id] = article_data
-
         async with AsyncSessionLocal() as session:
-            session.add(
-                Article(
-                    id=article_id,
-                    title=title,
-                    summary=summary,
-                    content_md=generated_content,
-                    original_url=source_url,
-                    source_type=source_type,
-                    cover_image_url=cover_image_url,
-                    account_name=account_name,
-                    publish_time=publish_time,
+            if target_article_id:
+                db_article = await session.get(Article, target_article_id)
+                if db_article is None:
+                    raise RuntimeError("原文章已删除，已停止重新获取")
+                # Only fetched content changes; reader metadata and notes retain their identity.
+                for field, value in content_fields.items():
+                    setattr(db_article, field, value)
+            else:
+                db_article = Article(
+                    id=article_id, original_url=source_url, **content_fields,
                     created_at=datetime.datetime.fromisoformat(task_created_at(TASKS_DB[task_id])),
                 )
-            )
+                session.add(db_article)
             db_task = await session.get(Task, task_id)
             if db_task:
                 db_task.status = "completed"
-                db_task.current_step = "处理完成"
+                db_task.current_step = completed_step
                 db_task.article_id = article_id
             await session.commit()
+            article_data = article_from_db_record(db_article)
+
+        # Publish completion/cache only after both article and task are durably committed.
+        ARTICLES_DB[article_id] = article_data
+        update_task(task_id, status="completed", current_step=completed_step,
+                    article_id=article_id, article=article_data)
     except Exception as exc:
         import traceback
 

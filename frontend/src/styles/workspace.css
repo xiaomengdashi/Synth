@@ -104,6 +104,7 @@
 .inspector-summary{margin:0 0 24px;font-size:14px;color:var(--ac-muted);line-height:1.9;overflow-wrap:anywhere}
 .inspector-body dl{margin-bottom:26px}.inspector-body dl div{display:flex;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid var(--ac-line);font-size:12px}.inspector-body dt{color:var(--ac-muted)}
 .article-inspector footer{display:flex;flex-wrap:wrap;gap:10px;padding:0 24px 28px}
+.article-refetch-progress{color:var(--ac-accent);overflow-wrap:anywhere}.article-card-m-foot{flex-wrap:wrap}
 /* A single reading rail keeps actions, navigation and notes aligned. */
 .reader-site-main{width:min(1400px,calc(100% - 48px))}
 .reader-outer-row,.reader-outer-row.with-toc{width:min(1000px,100%);margin-bottom:18px}

@@ -2,22 +2,22 @@ import asyncio
 import datetime
 import threading
 import uuid
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete as sa_delete, func, or_, select, update as sa_update
 from fastapi.encoders import jsonable_encoder
 from app.database import get_db
-from app.models import Article
+from app.models import Article, Task
 from app.services.fetchers.article import parse_article_html
 from app.services.fetchers.tikhub import fetch_tikhub_tweet
 from app.services.article_summary import generate_article_summary
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.settings_store import numeric_setting
-from app.services.task_service import build_local_summary, detect_source_type
+from app.services.task_service import build_local_summary, detect_source_type, process_task
 from app.services.related_articles import fetch_related
 from app.services.note_export import article_field, build_note_markdown, safe_filename
 
@@ -26,6 +26,7 @@ from app.routers.config import get_runtime_config
 from app.routers.admin_auth import require_admin
 
 router = APIRouter()
+_refetch_submission_lock = asyncio.Lock()
 
 
 class HtmlImportPayload(BaseModel):
@@ -340,6 +341,45 @@ async def update_article_progress(article_id: str, payload: ArticleProgressPaylo
     return {"progress": next_progress}
 
 
+@router.post("/{article_id}/refetch", status_code=202)
+async def refetch_article(
+    article_id: str,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_admin),
+):
+    """重新获取原始链接；同一文章的进行中任务复用，旧内容留到成功提交后替换。"""
+    async with _refetch_submission_lock:
+        article = await db.get(Article, article_id)
+        if article is None:
+            raise HTTPException(status_code=404, detail="文章不存在")
+        url = (article.original_url or "").strip()
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise HTTPException(status_code=400, detail="原始链接无效，无法重新获取文章")
+        active = await db.scalar(select(Task).where(
+            Task.article_id == article_id, Task.status.in_(["pending", "processing"]),
+        ).order_by(Task.created_at.desc()).limit(1))
+        if active:
+            return {"task_id": active.id, "article_id": article_id, "status": active.status,
+                    "current_step": active.current_step, "original_url": active.original_url,
+                    "created_at": active.created_at.isoformat(), "reused": True}
+
+        config = await get_runtime_config()
+        task_id = str(uuid.uuid4())
+        created_at = datetime.datetime.now(datetime.timezone.utc).replace(tzinfo=None)
+        task = Task(id=task_id, original_url=url, status="pending", article_id=article_id,
+                    current_step="等待重新获取", created_at=created_at)
+        db.add(task)
+        await db.commit()
+        task_data = {"id": task_id, "original_url": url, "status": "pending",
+                     "article_id": article_id, "current_step": task.current_step,
+                     "created_at": created_at.isoformat()}
+        TASKS_DB[task_id] = task_data
+        background_tasks.add_task(process_task, task_id, url, config, article_id)
+        return {**task_data, "task_id": task_id, "reused": False}
+
+
 @router.get("/{article_id}")
 async def get_article(
     article_id: str,
@@ -350,7 +390,7 @@ async def get_article(
     article = result.scalars().first()
 
     if article:
-        # 正文不可变(仅分类等元数据可改且会更新 updated_at),ETag 命中时 304 省掉整段正文传输;
+        # 重新获取正文及修改元数据都会更新 updated_at，ETag 命中时省掉整段正文传输；
         # 收藏/进度只翻标记不动 updated_at,必须一并纳入 ETag,否则翻转后重验证命中 304 会把旧阅读态还回去
         etag = (
             f'W/"{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}'
