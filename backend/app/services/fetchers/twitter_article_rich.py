@@ -1,6 +1,21 @@
+"""TikHub X 长文 Draft.js 数据的 Markdown 渲染。
+
+块级类型之外，同时处理行内 inlineStyleRanges（粗体/斜体/删除线/
+下划线/行内代码）与 LINK 类型 entityRanges，尽量保留原文的行内格式。
+"""
 from __future__ import annotations
 
 from typing import Any
+
+# Draft.js 行内样式 → Markdown 记号；UNDERLINE 无原生等价物，用 <u> 标签。
+_STYLE_MARKERS = (
+    ("CODE", "`"),
+    ("BOLD", "**"),
+    ("ITALIC", "*"),
+    ("STRIKETHROUGH", "~~"),
+)
+_UNDERLINE_STYLE = "UNDERLINE"
+_INLINE_STYLE_NAMES = frozenset(name for name, _ in _STYLE_MARKERS) | {_UNDERLINE_STYLE}
 
 
 def _deep_get(value: Any, *keys: Any) -> Any:
@@ -97,6 +112,101 @@ def _article_media_url_map(article_result: dict[str, Any]) -> dict[str, str]:
     return media_url_map
 
 
+def _clamped_range(item: dict[str, Any], size: int) -> tuple[int, int] | None:
+    offset = item.get("offset")
+    length = item.get("length")
+    if not isinstance(offset, int) or not isinstance(length, int):
+        return None
+    start = max(0, min(offset, size))
+    end = min(size, start + max(0, length))
+    return (start, end) if end > start else None
+
+
+def _wrap_run(segment: str, styles: frozenset[str] | set[str]) -> str:
+    if not styles or not segment.strip():
+        return segment
+    # 记号包在空白内侧，避免 `**加粗 **` 这类因边界空白而失效的 Markdown。
+    leading = segment[: len(segment) - len(segment.lstrip())]
+    trailing = segment[len(segment.rstrip()):]
+    core = segment.strip()
+    for style, marker in _STYLE_MARKERS:
+        if style in styles:
+            if style == "CODE" and "`" in core:
+                # 行内代码自身含反引号时，用带空隙的双反引号包裹。
+                core = f"`` {core} ``"
+            else:
+                core = f"{marker}{core}{marker}"
+    if _UNDERLINE_STYLE in styles:
+        core = f"<u>{core}</u>"
+    return leading + core + trailing
+
+
+def _render_styled_segment(segment: str, styles_seq: list[set[str]]) -> str:
+    if not any(styles_seq):
+        return segment
+    parts: list[str] = []
+    index = 0
+    while index < len(styles_seq):
+        styles = styles_seq[index]
+        end = index + 1
+        while end < len(styles_seq) and styles_seq[end] == styles:
+            end += 1
+        parts.append(_wrap_run(segment[index:end], styles))
+        index = end
+    return "".join(parts)
+
+
+def _render_block_text(block: dict[str, Any], entity_map: dict[str, Any]) -> str:
+    """渲染文本块：应用 inlineStyleRanges 与 LINK 行内实体，返回带格式的文本。"""
+    text = str(block.get("text") or "")
+    if not text:
+        return ""
+    size = len(text)
+    char_styles: list[set[str]] = [set() for _ in range(size)]
+    char_links: list[str | None] = [None] * size
+
+    for item in block.get("inlineStyleRanges") or []:
+        if not isinstance(item, dict):
+            continue
+        style = str(item.get("style") or "").upper()
+        if style not in _INLINE_STYLE_NAMES:
+            continue
+        span = _clamped_range(item, size)
+        if span:
+            for position in range(span[0], span[1]):
+                char_styles[position].add(style)
+
+    for item in block.get("entityRanges") or []:
+        if not isinstance(item, dict):
+            continue
+        entity_key = item.get("key")
+        entity = entity_map.get(str(entity_key)) if entity_key is not None else None
+        if not isinstance(entity, dict) or str(entity.get("type") or "").upper() != "LINK":
+            continue
+        url = str(_deep_get(entity, "data", "url") or "").strip()
+        if not url:
+            continue
+        span = _clamped_range(item, size)
+        if span:
+            for position in range(span[0], span[1]):
+                char_links[position] = url
+
+    parts: list[str] = []
+    index = 0
+    while index < size:
+        link = char_links[index]
+        end = index + 1
+        while end < size and char_links[end] == link:
+            end += 1
+        styled = _render_styled_segment(text[index:end], char_styles[index:end])
+        if link:
+            href = f"<{link}>" if (" " in link or ")" in link) else link
+            styled = f"[{styled}]({href})"
+        parts.append(styled)
+        index = end
+    return "".join(parts)
+
+
 def _render_atomic_block(block: dict[str, Any], entity_map: dict[str, Any], media_url_map: dict[str, str]) -> list[str]:
     parts: list[str] = []
     for entity_range in block.get("entityRanges") or []:
@@ -149,7 +259,7 @@ def render_twitter_article_result(article_result: dict[str, Any]) -> dict[str, A
             ordered_counter = 0
             continue
 
-        text = str(block.get("text") or "")
+        text = _render_block_text(block, entity_map)
         if not text:
             continue
         if block_type != "ordered-list-item":

@@ -37,10 +37,20 @@ def _clean_css(css: str) -> str:
 
 
 def _text_matches(expected: str, captured: str) -> bool:
-    # TikHub 全文会丢失正文中的示意图和表格文字（实测），逐字相等会把完整长文误判为不一致；
-    # 相似度阈值只需拦截"页面不是同一篇文章"级别的差异。
+    # TikHub 全文会丢失正文中的代码块、示意图和表格文字（实测，技术教程类
+    # 长文可丢失近半内容），逐字相等或整体相似度会把完整长文误判为不一致。
+    # 改用双向子集校验：TikHub 文本几乎全部能在原页找到（原页 ⊇ TikHub），
+    # 或原页几乎全部包含于 TikHub 文本，都说明是同一篇文章；
+    # 只拦截"页面不是同一篇文章"（登录墙、错误页、内容无关）级别的差异。
     normalize = lambda s: re.sub(r'\s+', '', s)
-    return difflib.SequenceMatcher(None, normalize(expected), normalize(captured)).ratio() >= 0.85
+    a, b = normalize(expected), normalize(captured)
+    if not a or not b:
+        return a == b
+    matcher = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    if matcher.ratio() >= 0.85:
+        return True
+    matched = sum(block.size for block in matcher.get_matching_blocks())
+    return matched / len(a) >= 0.9 or matched / len(b) >= 0.9
 
 
 def parse_x_article_page(html: str, url: str) -> dict:
@@ -65,7 +75,10 @@ def parse_x_article_page(html: str, url: str) -> dict:
         declarations = []
         for decl in style.split(';'):
             prop, sep, value = decl.partition(':')
-            if sep and prop.strip().lower() in STYLE_PROPERTIES and not re.search(r'url|expression|[<>\\]', value, re.I):
+            # 行内样式白名单 + CSS 自定义属性（X 代码块 shiki 语法高亮依赖
+            # --shiki-light/--shiki-dark 等变量，剥掉即丢全部语法颜色）。
+            is_allowed = prop.strip().lower() in STYLE_PROPERTIES or prop.strip().lower().startswith('--')
+            if sep and is_allowed and not re.search(r'url|expression|[<>\\]', value, re.I):
                 declarations.append(f'{prop.strip()}:{value.strip()}')
         if declarations: n['style'] = ';'.join(declarations)
         for attr in ('src', 'poster'):

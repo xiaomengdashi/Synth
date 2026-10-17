@@ -40,6 +40,25 @@ def test_rejects_login_or_missing_article_and_removes_active_content():
     assert 'onerror' not in body and 'javascript:' not in body and '127.0.0.1' not in body
 
 
+def test_preserves_shiki_css_custom_properties_for_syntax_colors():
+    # 实测（xueyu1125/status/2111023511603188071）：X 代码块语法高亮靠 inline 的
+    # --shiki-light/--shiki-dark 自定义属性，不在白名单会被整段剥掉，代码全部失去颜色。
+    page = PAGE.replace(
+        '<figure><img src="https://pbs.twimg.com/media/a.jpg" alt="原图"></figure>',
+        '<div class="x-article-code"><div><span class="x-article-code-font">bash</span></div>'
+        '<div class="x-article-code-body"><pre class="shiki" style="--shiki-light:#0a0a0a;--shiki-dark:#e5e5e5;--shiki-light-bg:#fffffe;--shiki-dark-bg:#1e1e1e"><code>'
+        '<span class="line"><span style="--shiki-light:#009FFF;--shiki-dark:#08C0EF">brew</span> install uv</span>'
+        '</code></pre></div></div>',
+    )
+    body = parse_x_article_page(page, URL)['body_html']
+    assert '--shiki-light:#0a0a0a' in body and '--shiki-dark-bg:#1e1e1e' in body
+    assert '--shiki-light:#009FFF;--shiki-dark:#08C0EF' in body
+    # 危险值仍被拒绝：含 url()/expression/尖括号的自定义属性不保留
+    evil = PAGE.replace('<p class="leading-relaxed">', '<p style="--evil:url(https://evil/x);--ok:#fff">')
+    body2 = parse_x_article_page(evil, URL)['body_html']
+    assert '--evil' not in body2 and '--ok:#fff' in body2
+
+
 def test_saves_media_and_fonts_and_checks_tikhub_text(tmp_path):
     requests = []
     def handle(request):
@@ -90,6 +109,22 @@ def test_tikhub_text_missing_diagram_blocks_still_matches():
     body = '编程 Agent 向 LLM 发出的第一次请求包含初始上下文，以及用户的第一条消息。' * 20
     captured = body + 'text请求1：[系统][工具][用户]' + 'text压缩后：[系统][工具][摘要]' + '概念主要作用上下文窗口限制模型一次能够处理的内容范围'
     assert _text_matches(body, captured)
+
+
+def test_tikhub_text_missing_half_the_article_still_matches():
+    # 实测（xueyu1125/status/2111023511603188071）：TikHub 纯文本全文丢失全部代码块，
+    # 全文 3932 字 vs 原页 7950 字，整体相似度仅 0.64，被误判为不同文章导致补采整体失败。
+    paragraphs = '我要用 mlx-lm 对 Qwen2.5-1.5B-Instruct 做 LoRA 微调，请把目录下的文件清洗成问答对。' * 30
+    code_blocks = 'bash#用Homebrew安装uvbrewinstalluv' + 'toml[project]name="qwen2-5-1-5b-x"version="0.1.0"requires-python=">=3.13"' + 'bash#验证MLX是否识别AppleGPU，输出应为Metal:True' * 10
+    page_text = paragraphs + code_blocks + paragraphs  # 原页：正文 + 大量代码块
+    tikhub_text = paragraphs + paragraphs  # TikHub：只剩段落，代码块全丢
+    assert _text_matches(tikhub_text, page_text)
+
+
+def test_unrelated_article_text_is_rejected():
+    expected = '第一篇文章讲大模型微调的完整流程' * 30
+    captured = '第二篇文章完全在讲另一个话题的内容' * 30
+    assert not _text_matches(expected, captured)
 
 
 def test_read_retries_transport_errors_before_giving_up():

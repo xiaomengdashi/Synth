@@ -408,6 +408,60 @@
 .x-article-markdown code { font-family: var(--mono); font-size: .86em; }
 .x-article-markdown :not(pre) > code { overflow-wrap: anywhere; }
 .x-article-markdown blockquote { margin: 1.5em 0; padding-left: 1em; border-left: 3px solid var(--accent); color: var(--muted); }
+.x-replica-warning { margin: 0 0 26px; padding: 12px 16px; border: 1px dashed var(--faint); border-radius: 10px; background: var(--paper); color: var(--muted); font-family: var(--mono); font-size: 11.5px; line-height: 1.7; }
+.x-replica-warning p { margin: 0; }
+
+/* ---------- X 长文副本通用版式 ----------
+   X 所有长文共用同一套平台渲染器（p/h2/ul/figure/img/a + .x-article-code/.shiki），
+   本站 Tailwind 构建不含这些原站类，这里按 X 平台 CSS 取值对结构元素复刻，
+   任意 X 文章的副本都能一致渲染。语法色来自清洗后保留的 --shiki-light/--shiki-dark
+   自定义属性（token span 自带、其余继承自 pre）。 */
+
+/* 正文基础：X 根节点 text-[16px] leading-[1.6]，字体 Chirp（后端已本地化 woff2，XArticleView 注册） */
+.x-source-body { overflow-wrap: break-word; font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.6; color: #0f1419; }
+.x-source-body p { margin: 0 0 16px; }
+.x-source-body h2 { margin: 36px 0 10px; font-size: 19px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; text-wrap: balance; }
+.x-source-body h3 { margin: 28px 0 8px; font-size: 17px; line-height: 1.35; font-weight: 600; text-wrap: balance; }
+.x-source-body h4, .x-source-body h5, .x-source-body h6 { margin: 20px 0 6px; font-size: 16px; font-weight: 600; text-wrap: balance; }
+.x-source-body ul, .x-source-body ol { margin: 4px 0 16px; padding-left: 24px; }
+.x-source-body ul { list-style-type: disc; }
+.x-source-body ol { list-style-type: decimal; }
+.x-source-body li { margin: 4px 0; }
+.x-source-body a { color: #1d9bf0; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.x-source-body figure { margin: 24px 0; width: 100%; }
+.x-source-body img { display: block; width: 100%; height: auto; max-height: min(80vh, 720px); object-fit: contain; border-radius: 6px; }
+.x-source-body video { display: block; width: 100%; border-radius: 6px; }
+.x-source-body blockquote { margin: 24px 0; padding-left: 16px; border-left: 2px solid #1d9bf0; font-style: italic; }
+.x-source-body table { max-width: 100%; margin: 20px 0; border-collapse: collapse; }
+.x-source-body th, .x-source-body td { border: 1px solid #cfd9de; padding: 8px 10px; text-align: left; }
+.x-source-body hr { margin: 24px 0; border: 0; border-top: 1px solid #eff3f4; }
+/* X 多图网格容器 */
+.x-source-body .grid { display: grid; gap: 8px; }
+
+/* 代码块卡片：X 用 .x-article-code 包裹、.x-article-code-body 定位、pre.shiki 承载 token。
+   语言标签固定右上角，不依赖其外层包装结构（有无包装 div 均可）。 */
+.x-source-body .x-article-code { position: relative; margin: 24px 0; overflow: hidden; border: 1px solid #e5e5e5; border-radius: 6px; background: var(--shiki-light-bg, #fffffe); color: var(--shiki-light, #0a0a0a); }
+.x-source-body .x-article-code-body { position: relative; }
+.x-source-body .x-article-code pre { margin: 0; min-height: 48px; padding: 34px 16px 14px; white-space: pre-wrap; overflow-wrap: anywhere; background: transparent; color: var(--shiki-light, #0a0a0a); font-family: Berkeley Mono, 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; }
+.x-source-body .x-article-code pre span { color: var(--shiki-light, inherit); }
+.x-source-body .x-article-code-font { position: absolute; top: 9px; right: 12px; padding: 2px 6px; border-radius: 4px; color: #536471; font-family: Berkeley Mono, 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 11px; line-height: 16px; }
+/* 未包进 .x-article-code 的零散代码块兜底 */
+.x-source-body pre:not(.shiki) { overflow-x: auto; padding: 14px 16px; border-radius: 6px; background: #f7f9f9; font-family: Berkeley Mono, 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; }
+.x-source-body code { font-family: Berkeley Mono, 'JetBrains Mono', 'SF Mono', ui-monospace, Menlo, Consolas, monospace; }
+.x-source-body :not(pre) > code { font-size: .9em; overflow-wrap: anywhere; }
+
+/* 暗色主题：X 的 shiki 双主题自带 --shiki-dark* 变量，跟随站点 .dark 切换 */
+.dark .x-source-body { color: #e7e9ea; }
+.dark .x-source-body h2, .dark .x-source-body h3, .dark .x-source-body h4, .dark .x-source-body h5, .dark .x-source-body h6 { color: #e7e9ea; }
+.dark .x-source-body a { color: #1d9bf0; }
+.dark .x-source-body blockquote { border-color: #1d9bf0; }
+.dark .x-source-body th, .dark .x-source-body td { border-color: #536471; }
+.dark .x-source-body hr { border-top-color: #2f3336; }
+.dark .x-source-body .x-article-code { border-color: rgba(255, 255, 255, .08); background: var(--shiki-dark-bg, #1e1e1e); color: var(--shiki-dark, #e5e5e5); }
+.dark .x-source-body .x-article-code pre { color: var(--shiki-dark, #e5e5e5); }
+.dark .x-source-body .x-article-code pre span { color: var(--shiki-dark, inherit); }
+.dark .x-source-body .x-article-code-font { color: #7d8896; }
+.dark .x-source-body pre:not(.shiki) { background: #1e1e1e; color: #e5e5e5; }
 
 /* ---------- 弹窗与表单(HTML 导入等) ---------- */
 .modal-backdrop { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(17, 20, 17, .45); backdrop-filter: blur(5px); }
