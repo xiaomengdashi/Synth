@@ -1,72 +1,265 @@
 import { useEffect, useState } from 'react';
-import { Activity, ArrowRight, CheckCircle2, FileText, Mail, Settings2, Smartphone, Wallet } from 'lucide-react';
+import { BarChart3, CheckCircle2, FileText, ListChecks, Newspaper, Settings2, TrendingUp, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
-import ImportPanel from '../../articles/components/ImportPanel';
-import { sourceLabel } from '../../articles/components/ArticleList';
-import type { Article } from '../../articles/types';
-import type { Account } from '../../tikhub/types';
+import { formatAbsolute } from '../../../utils/formatDate';
 import { money, requestJson } from '../../tikhub/client';
-import { formatDistanceToNow } from '../../../utils/formatDate';
-import { summarizeTaskStep } from '../taskPresentation';
+import type { Account } from '../../tikhub/types';
+import type { Article } from '../../articles/types';
+import type { Task } from '../types';
+
+const sourceLabels: Record<Article['source_type'], string> = {
+  wechat: '微信公众号',
+  x: 'X / Twitter',
+  bilibili: 'Bilibili',
+  douyin: '抖音',
+  csdn: 'CSDN',
+  cnblogs: '博客园',
+  other: '其他来源',
+};
+
+const sourceColors = ['var(--ac-chart-1)', 'var(--ac-chart-2)', 'var(--ac-chart-3)', 'var(--ac-chart-4)', 'var(--ac-chart-5)', 'var(--ac-chart-6)', 'var(--ac-chart-7)'];
+
+function getDayKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function getLastSevenDays() {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(today);
+    date.setHours(0, 0, 0, 0);
+    date.setDate(today.getDate() - (6 - index));
+    return date;
+  });
+}
+
+function countArticlesByDay(articles: Article[]) {
+  const days = getLastSevenDays();
+  const counts = days.map((day) => articles.filter((article) => getDayKey(new Date(article.created_at)) === getDayKey(day)).length);
+  return { days, counts };
+}
+
+function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; articlesTotal: number }) {
+  const { days, counts } = countArticlesByDay(articles);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const chartWidth = 680;
+  const chartHeight = 220;
+  const padding = { top: 18, right: 18, bottom: 32, left: 28 };
+  const maxCount = Math.max(...counts, 1);
+  const xStep = (chartWidth - padding.left - padding.right) / (counts.length - 1);
+  const yScale = (chartHeight - padding.top - padding.bottom) / maxCount;
+  const points = counts.map((count, index) => `${padding.left + index * xStep},${chartHeight - padding.bottom - count * yScale}`).join(' ');
+  const areaPoints = `${padding.left},${chartHeight - padding.bottom} ${points} ${chartWidth - padding.right},${chartHeight - padding.bottom}`;
+  // 悬停提示框:SVG 原生 rect+text 随 viewBox 缩放;顶点上方放不下时翻到点下方
+  const tipLabel = hovered === null ? '' : `${days[hovered].getMonth() + 1}/${days[hovered].getDate()} 新增 ${counts[hovered]} 篇`;
+  const tipWidth = 118;
+  const tipHeight = 24;
+
+  return (
+    <div className="ac-card ac-span-2">
+      <div className="ac-card-head">
+        <h2 className="ac-card-title"><TrendingUp size={15} /> 内容增长趋势</h2>
+        <span className="ac-card-caption">近 7 天</span>
+      </div>
+      <div className="ac-card-body">
+        <div className="chart-summary"><strong>{Math.max(articlesTotal, articles.length)}</strong><span>篇累计内容</span><TrendingUp size={14} /></div>
+        <svg className="trend-chart" viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label="近七天文章生成数量趋势图">
+          {[0, 1, 2, 3].map((line) => {
+            const y = padding.top + ((chartHeight - padding.top - padding.bottom) / 3) * line;
+            return <line key={line} x1={padding.left} x2={chartWidth - padding.right} y1={y} y2={y} className="chart-grid-line" />;
+          })}
+          <polygon points={areaPoints} className="trend-area" />
+          <polyline points={points} className="trend-line" />
+          {counts.map((count, index) => {
+            const x = padding.left + index * xStep;
+            const y = chartHeight - padding.bottom - count * yScale;
+            return <g key={getDayKey(days[index])}><circle cx={x} cy={y} r="4" className="trend-point" /><text x={x} y={chartHeight - 9} textAnchor="middle" className="chart-axis-label">{`${days[index].getMonth() + 1}/${days[index].getDate()}`}</text></g>;
+          })}
+          {hovered !== null ? (() => {
+            const x = padding.left + hovered * xStep;
+            const y = chartHeight - padding.bottom - counts[hovered] * yScale;
+            const above = y - 12 - tipHeight >= 0;
+            const boxY = above ? y - 12 - tipHeight : y + 12;
+            const boxX = Math.min(Math.max(x - tipWidth / 2, padding.left), chartWidth - padding.right - tipWidth);
+            return (
+              <g className="chart-tooltip">
+                <rect x={boxX} y={boxY} width={tipWidth} height={tipHeight} rx="6" className="chart-tooltip-box" />
+                <text x={boxX + tipWidth / 2} y={boxY + 16} textAnchor="middle" className="chart-tooltip-text">{tipLabel}</text>
+              </g>
+            );
+          })() : null}
+          {counts.map((count, index) => {
+            const x = padding.left + index * xStep;
+            const y = chartHeight - padding.bottom - count * yScale;
+            return (
+              <circle
+                key={`hit-${getDayKey(days[index])}`}
+                cx={x}
+                cy={y}
+                r="16"
+                className="trend-hit"
+                onMouseEnter={() => setHovered(index)}
+                onMouseLeave={() => setHovered((prev) => (prev === index ? null : prev))}
+              />
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourceStats: { wechat: number; x: number; bilibili: number; other: number } | null }) {
+  const sourceCounts = (sourceStats
+    ? (Object.entries(sourceLabels) as [string, string][])
+        .map(([source, label]) => ({ source: source as Article['source_type'], label, count: (sourceStats as Record<string, number>)[source] || 0 }))
+        .filter((item) => item.count > 0)
+    : Object.entries(sourceLabels)
+        .map(([source, label]) => ({ source: source as Article['source_type'], label, count: articles.filter((article) => article.source_type === source).length }))
+        .filter((item) => item.count > 0)
+  ).sort((a, b) => b.count - a.count);
+  const statTotal = sourceStats ? sourceStats.wechat + sourceStats.x + sourceStats.bilibili + sourceStats.other : 0;
+  const total = statTotal || articles.length || 1;
+
+  return (
+    <div className="ac-card">
+      <div className="ac-card-head">
+        <h2 className="ac-card-title"><BarChart3 size={15} /> 来源分布</h2>
+        <span className="ac-card-caption">{sourceCounts.length} 类来源</span>
+      </div>
+      <div className="ac-card-body">
+        <div className="source-bar" aria-label="文章来源分布"><span className="source-bar-wechat" style={{ width: `${(sourceCounts.find((item) => item.source === 'wechat')?.count || 0) / total * 100}%` }} /><span className="source-bar-x" style={{ width: `${(sourceCounts.find((item) => item.source === 'x')?.count || 0) / total * 100}%` }} /><span className="source-bar-other" style={{ width: `${sourceCounts.filter((item) => item.source !== 'wechat' && item.source !== 'x').reduce((sum, item) => sum + item.count, 0) / total * 100}%` }} /></div>
+        <div className="source-list">
+          {sourceCounts.length === 0 ? <div className="chart-empty">还没有来源数据</div> : sourceCounts.map((item, index) => <div className="source-item" key={item.source}><span className="source-name"><i style={{ background: sourceColors[index] || sourceColors[sourceColors.length - 1] }} />{item.label}</span><strong>{item.count}<small>篇 · {Math.round(item.count / total * 100)}%</small></strong></div>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TaskStatusChart({ tasks }: { tasks: Task[] }) {
+  const statuses = [
+    { key: 'completed', label: '已完成', color: 'var(--ac-chart-1)' },
+    { key: 'processing', label: '处理中', color: 'var(--ac-chart-3)' },
+    { key: 'pending', label: '排队中', color: 'var(--ac-chart-6)' },
+    { key: 'failed', label: '失败', color: 'var(--ac-chart-danger)' },
+  ];
+  const total = tasks.length || 1;
+
+  return (
+    <div className="ac-card">
+      <div className="ac-card-head">
+        <h2 className="ac-card-title"><ListChecks size={15} /> 任务状态</h2>
+      </div>
+      <div className="ac-card-body">
+        <div className="task-status-total"><strong>{tasks.length}</strong><span>条任务记录</span></div>
+        <div className="status-bars">
+          {statuses.map((status) => { const count = tasks.filter((task) => task.status === status.key).length; return <div className="status-bar-row" key={status.key}><div className="status-bar-label"><span>{status.label}</span><strong>{count}</strong></div><div className="status-bar-track"><span style={{ width: `${count / total * 100}%`, background: status.color }} /></div></div>; })}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Admin() {
-  const { tasks, fetchTasks, statsVersion } = useAppStore();
-  const articlesVersion = useAppStore(state => state.articlesTotal);
-  const [articles, setArticles] = useState<Article[]>([]);
-  const [total, setTotal] = useState<number | null>(null);
+  const { articles, tasks, fetchArticles, fetchTasks } = useAppStore();
+  const articlesTotal = useAppStore((state) => state.articlesTotal);
+  const [sourceStats, setSourceStats] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
-  const [articlesError, setArticlesError] = useState(false);
   useEffect(() => {
-    let cancelled = false;
-    fetch('/api/v1/articles?limit=5&offset=0').then(res => { if (!res.ok) throw new Error(); return res.json(); })
-      .then(data => { if (!cancelled) { setArticles(data.data); setTotal(data.total); setArticlesError(false); } })
-      .catch(() => { if (!cancelled) setArticlesError(true); });
-    return () => { cancelled = true; };
-  }, [statsVersion, articlesVersion]);
-  useEffect(() => {
+    void fetchArticles({ reset: true, all: true });
+    fetch('/api/v1/articles/stats')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => setSourceStats(data?.sources ?? null))
+      .catch(() => setSourceStats(null));
     void fetchTasks();
-    const timer = window.setInterval(() => void fetchTasks(), 5000);
-    return () => window.clearInterval(timer);
-  }, [fetchTasks]);
-  useEffect(() => {
-    let cancelled = false;
-    requestJson<Account>('/api/v1/tikhub/account').then(data => { if (!cancelled) setAccount(data); })
-      .catch(() => {}).finally(() => { if (!cancelled) setAccountLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-  const active = tasks.filter(t => t.status === 'processing' || t.status === 'pending');
-  const failed = tasks.filter(t => t.status === 'failed');
-  const attention = [...active, ...failed].slice(0, 4);
+    // TikHub 状态属于展示性信息，查询失败时静默降级
+    void requestJson<Account>('/api/v1/tikhub/account')
+      .then(setAccount)
+      .catch(() => setAccount(null))
+      .finally(() => setAccountLoading(false));
+  }, [fetchArticles, fetchTasks]);
+
+  const completedCount = tasks.filter((task) => task.status === 'completed').length;
+  const processingCount = tasks.filter((task) => task.status === 'processing' || task.status === 'pending').length;
+
   return (
-    <div className="admin-workspace">
-      <header className="ac-workspace-heading"><div><p className="eyebrow">SynthAI 控制台</p><h1>工作台</h1><p>导入内容，查看进度，整理你的知识库。</p></div><Link className="ac-btn secondary" to="/admin/articles">管理文章 <ArrowRight size={15} /></Link></header>
-      <div className="workspace-metrics">
-        <Link to="/admin/articles"><FileText size={18} /><span>已保存文章<strong>{total ?? '—'}<small>篇</small></strong></span></Link>
-        <Link to="/admin/tasks"><Activity size={18} /><span>处理中<strong>{active.length}<small>条</small></strong></span></Link>
-        <Link to="/admin/tasks"><span className={`metric-dot ${failed.length ? 'has-errors' : ''}`} /><span>失败任务<strong>{failed.length}<small>条</small></strong></span></Link>
-        <Link to="/admin/tikhub"><Wallet size={18} /><span>TikHub 余额<strong>{accountLoading ? '…' : account?.configured ? money(account.user?.balance) : '—'}</strong></span></Link>
-      </div>
-      <div className="admin-work-grid">
-        <div className="admin-work-main">
-          <section className="work-section"><div className="work-section-heading"><h2>快速导入</h2><span>粘贴链接，直接开始</span></div><ImportPanel /></section>
-          <section className="work-section"><div className="work-section-heading"><h2>需要关注 <span className="work-count">{active.length + failed.length}</span></h2><Link to="/admin/tasks">全部任务 <ArrowRight size={14} /></Link></div>
-            {attention.length ? <div className="work-task-list">{attention.map(task => <Link to="/admin/tasks" key={task.id} className="work-task">
-              <span className={`ac-badge ${task.status === 'failed' ? 'danger' : 'processing'}`}>{task.status === 'failed' ? '失败' : task.status === 'pending' ? '排队中' : '处理中'}</span>
-              <div><strong>{task.original_url}</strong><p>{summarizeTaskStep(task.current_step || '等待处理')}</p></div><ArrowRight size={15} />
-            </Link>)}</div> : <div className="work-empty"><CheckCircle2 size={22} /><div><strong>暂时没有需要处理的任务</strong><p>提交链接后，可以在这里查看处理状态。</p></div></div>}
-          </section>
-          <section className="work-section"><div className="work-section-heading"><h2>最近入库</h2><Link to="/admin/articles">全部文章 <ArrowRight size={14} /></Link></div>
-            {articlesError ? <p className="ac-empty">文章加载失败，请稍后刷新。</p> : articles.length ? <div className="work-article-list">{articles.map(article => <Link to={`/article/${article.id}`} className="work-article" key={article.id}><div><strong>{article.title}</strong><span>{sourceLabel(article.source_type)} · {article.category || '未分类'}</span></div><time>{formatDistanceToNow(new Date(article.created_at))}</time><ArrowRight size={14} /></Link>)}</div> : <p className="ac-empty">{total === null ? '正在加载…' : '还没有文章，在上方导入第一条链接。'}</p>}
-          </section>
+    <div className="ac-stack">
+      <section className="ac-kpis" aria-label="数据概览">
+        <div className="ac-kpi">
+          <div className="ac-kpi-label"><span className="ac-kpi-icon"><FileText size={14} /></span>文章总数</div>
+          <div className="ac-kpi-value">{Math.max(articlesTotal, articles.length)}<small>篇</small></div>
+          <div className="ac-kpi-hint">已进入前台文章库</div>
         </div>
-        <aside className="admin-work-aside">
-          <section className="work-side-section"><p className="eyebrow">更多导入方式</p><Link to="/admin/email"><Mail size={18} /><div><strong>邮箱导入</strong><span>收取邮件中的内容</span></div><ArrowRight size={14} /></Link><Link to="/admin/share"><Smartphone size={18} /><div><strong>手机分享</strong><span>在手机上随手保存</span></div><ArrowRight size={14} /></Link></section>
-          <section className="work-side-section"><p className="eyebrow">服务状态</p><div className="service-status"><span className={`metric-dot ${account?.configured ? 'is-ready' : ''}`} /><strong>TikHub 数据服务</strong></div><p className="work-side-copy">{accountLoading ? '正在检查账户…' : account?.configured ? '已配置，可用于微信、X 和 B 站内容导入。' : account === null ? '暂时无法读取账户信息。' : '尚未配置，设置后即可导入平台内容。'}</p><Link className="service-settings" to="/admin/tikhub"><Settings2 size={15} />管理服务配置 <ArrowRight size={14} /></Link></section>
-          <section className="work-side-section"><p className="eyebrow">整理内容</p><Link to="/admin/categories"><div><strong>维护文章分类</strong><span>让内容更容易找到</span></div><ArrowRight size={14} /></Link><Link to="/admin/notes"><div><strong>回顾划线笔记</strong><span>留住阅读时的想法</span></div><ArrowRight size={14} /></Link></section>
-        </aside>
-      </div>
+        <div className="ac-kpi">
+          <div className="ac-kpi-label"><span className="ac-kpi-icon"><CheckCircle2 size={14} /></span>已完成任务</div>
+          <div className="ac-kpi-value">{completedCount}<small>条</small></div>
+          <div className="ac-kpi-hint">抓取并保存成功</div>
+        </div>
+        <div className="ac-kpi">
+          <div className="ac-kpi-label"><span className="ac-kpi-icon"><ListChecks size={14} /></span>处理中</div>
+          <div className="ac-kpi-value">{processingCount}<small>{processingCount ? '进行中' : '空闲'}</small></div>
+          <div className="ac-kpi-hint"><Link className="ac-link" to="/admin/tasks">查看处理任务</Link></div>
+        </div>
+        <div className="ac-kpi">
+          <div className="ac-kpi-label"><span className="ac-kpi-icon"><Wallet size={14} /></span>TikHub 余额</div>
+          {accountLoading ? (
+            <>
+              <div className="ac-kpi-value is-empty">—</div>
+              <div className="ac-kpi-hint">正在查询账户…</div>
+            </>
+          ) : account === null ? (
+            <>
+              <div className="ac-kpi-value is-empty">—</div>
+              <div className="ac-kpi-hint">账户信息暂不可用</div>
+            </>
+          ) : !account.configured ? (
+            <>
+              <div className="ac-kpi-value is-empty">未配置</div>
+              <div className="ac-kpi-hint"><Link className="ac-link" to="/admin/tikhub"><Settings2 size={13} /> 前往配置 Key</Link></div>
+            </>
+          ) : (
+            <>
+              <div className="ac-kpi-value">{money(account.user?.balance)}</div>
+              <div className="ac-kpi-hint">今日请求 {account.daily_usage?.total_request_per_day ?? '—'} 次</div>
+            </>
+          )}
+        </div>
+      </section>
+
+      <section className="ac-dash-grid" aria-label="内容数据图表">
+        <ArticleTrendChart articles={articles} articlesTotal={Math.max(articlesTotal, articles.length)} />
+        <SourceBreakdown articles={articles} sourceStats={sourceStats} />
+        <div className="ac-card ac-span-2">
+          <div className="ac-card-head">
+            <h2 className="ac-card-title"><Newspaper size={15} /> 最近文章</h2>
+            <div className="ac-card-head-actions">
+              <Link className="ac-btn ghost sm" to="/admin/articles">全部文章</Link>
+            </div>
+          </div>
+          <div className="ac-table-wrap">
+            <table className="ac-table">
+              <thead>
+                <tr><th>文章</th><th>来源</th><th>保存时间</th></tr>
+              </thead>
+              <tbody>
+                {articles.length === 0 ? (
+                  <tr><td colSpan={3}><div className="ac-empty">还没有保存文章。回到前台提交一条链接即可开始。</div></td></tr>
+                ) : articles.slice(0, 5).map((article) => (
+                  <tr key={article.id}>
+                    <td><Link className="cell-main" to={`/article/${article.id}`}>{article.title}</Link></td>
+                    <td>{sourceLabels[article.source_type]}</td>
+                    <td className="cell-time">{formatAbsolute(new Date(article.created_at))}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <TaskStatusChart tasks={tasks} />
+      </section>
     </div>
   );
 }

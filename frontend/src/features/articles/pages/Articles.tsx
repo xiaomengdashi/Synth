@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BookOpen, ChevronDown, LayoutGrid, List, Search, Star, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import ArticleList from '../components/ArticleList';
+import ArticleList, { sourceColor } from '../components/ArticleList';
 import ArticleListFooter from '../components/ArticleListFooter';
 import { useAppStore } from '../../app/store/useAppStore';
 
-const SOURCES = [{ value: 'wechat', label: '微信' }, { value: 'x', label: 'X / Twitter' }, { value: 'bilibili', label: 'B 站' }];
+const SOURCES = [{ value: 'wechat', label: '微信' }, { value: 'x', label: 'X / Twitter' }, { value: 'bilibili', label: 'B 站' }] as const;
 
 export default function Articles() {
   const { articles, articlesLoading, articlesTotal, fetchArticles, articlesLoadedKey, articlesErrorKey, statsVersion } = useAppStore();
@@ -51,6 +51,9 @@ export default function Articles() {
     if (value) next.set(name, value); else next.delete(name);
     setParams(next, { replace: true });
   };
+  const toggleFilter = (name: 'cat' | 'source', value: string) => {
+    change(name, params.get(name) === value ? '' : value);
+  };
   const submitSearch = (event: FormEvent) => { event.preventDefault(); change('q', search.trim()); };
   const filtering = Boolean(query || source || (category && category !== 'all') || starred);
   const total = stats?.sources ? Object.values(stats.sources).reduce((sum, n) => sum + n, 0) : null;
@@ -61,16 +64,16 @@ export default function Articles() {
         <button className="library-mobile-toggle" onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen} aria-controls="library-navigation">分类与来源 {filtering && <span className="filter-dot" />}<ChevronDown size={16} /></button>
         <div id="library-navigation" className="library-navigation">
           <p className="eyebrow">我的知识库</p>
-          <button className={`library-nav-item ${!filtering ? 'active' : ''}`} onClick={() => setParams({})}><BookOpen size={16} /><span>全部文章</span><small>{total ?? '—'}</small></button>
-          <button className={`library-nav-item ${starred ? 'active' : ''}`} aria-pressed={starred} onClick={() => change('starred', starred ? '' : '1')}><Star size={16} /><span>星标文章</span><small>{stats?.starred ?? '—'}</small></button>
-          <div className="library-nav-group"><h2>分类</h2>
-            <button className={`library-nav-item ${!category || category === 'all' ? 'active' : ''}`} onClick={() => change('cat', '')}>全部分类</button>
-            {names.map(name => <button className={`library-nav-item ${category === name ? 'active' : ''}`} key={name} onClick={() => change('cat', name)}><span>{name}</span><small>{counts[name] ?? 0}</small></button>)}
-            <button className={`library-nav-item ${category === '__none' ? 'active' : ''}`} onClick={() => change('cat', '__none')}><span>未分类</span><small>{counts.__none ?? 0}</small></button>
+          <button className={`library-nav-item library-scope ${!starred ? 'active' : ''}`} aria-pressed={!starred} onClick={() => setParams({})}><BookOpen size={16} /><span>全部文章</span><small>{total ?? '—'}</small></button>
+          <button className={`library-nav-item library-scope ${starred ? 'active' : ''}`} aria-pressed={starred} onClick={() => change('starred', starred ? '' : '1')}><Star size={16} /><span>星标文章</span><small>{stats?.starred ?? '—'}</small></button>
+          <div className="library-nav-group"><div className="library-group-heading"><h2>分类</h2></div>
+            <button className={`library-nav-item ${!category || category === 'all' ? 'active' : ''}`} aria-label="显示全部分类" aria-pressed={!category || category === 'all'} onClick={() => change('cat', '')}><span>全部</span><small>{total ?? '—'}</small></button>
+            {names.map(name => <button className={`library-nav-item ${category === name ? 'active' : ''}`} aria-pressed={category === name} title={name} key={name} onClick={() => toggleFilter('cat', name)}><span>{name}</span><small>{counts[name] ?? 0}</small></button>)}
+            <button className={`library-nav-item ${category === '__none' ? 'active' : ''}`} aria-pressed={category === '__none'} onClick={() => toggleFilter('cat', '__none')}><span>未分类</span><small>{counts.__none ?? 0}</small></button>
           </div>
-          <div className="library-nav-group"><h2>来源</h2>
-            <button className={`library-nav-item ${!source ? 'active' : ''}`} onClick={() => change('source', '')}>全部来源</button>
-            {SOURCES.map(item => <button key={item.value} className={`library-nav-item ${source === item.value ? 'active' : ''}`} onClick={() => change('source', item.value)}><span>{item.label}</span><small>{stats?.sources?.[item.value] ?? '—'}</small></button>)}
+          <div className="library-nav-group"><div className="library-group-heading"><h2>来源</h2></div>
+            <button className={`library-nav-item ${!source ? 'active' : ''}`} aria-label="显示全部来源" aria-pressed={!source} onClick={() => change('source', '')}><span>全部</span><small>{total ?? '—'}</small></button>
+            {SOURCES.map(item => <button key={item.value} className={`library-nav-item ${source === item.value ? 'active' : ''}`} aria-pressed={source === item.value} onClick={() => toggleFilter('source', item.value)}><i className="library-source-dot" style={{ background: sourceColor(item.value) }} aria-hidden="true" /><span>{item.label}</span><small>{stats?.sources?.[item.value] ?? '—'}</small></button>)}
           </div>
           {navigationError && <button className="text-link" onClick={() => setNavReload(v => v + 1)}>筛选信息加载失败，重试</button>}
         </div>

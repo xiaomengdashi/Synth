@@ -18,7 +18,7 @@ import ToastStack from './ToastStack';
 import AdminGate from './AdminGate';
 
 const NAV_GROUPS = [
-  { path: '/admin', label: '工作台', icon: LayoutDashboard },
+  { path: '/admin', label: '总览', icon: LayoutDashboard },
   { path: '/admin/articles', label: '内容管理', icon: Newspaper },
   { path: '/admin/tasks', label: '导入与任务', icon: Activity },
   { path: '/admin/tikhub', label: '系统设置', icon: Cpu },
@@ -58,7 +58,7 @@ function useAdminBreadcrumbs(pathname: string) {
   if (pathname.startsWith('/admin/tikhub') || pathname.startsWith('/admin/tikhub')) {
     return [{ label: '后台管理', to: '/admin' }, { label: 'TikHub 数据服务' }];
   }
-  return [{ label: '后台管理', to: '/admin' }, { label: '工作台' }];
+  return [{ label: '后台管理', to: '/admin' }, { label: '总览' }];
 }
 
 export default function AdminLayout() {

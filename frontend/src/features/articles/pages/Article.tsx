@@ -72,6 +72,7 @@ function ArticleToc({
   preventDefaultJump?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const baseLevel = Math.min(...items.map(item => item.level));
   return (
     <nav className={`article-toc ${expanded ? 'toc-expanded' : ''}`} aria-label="文章目录">
       <button className="toc-mobile-toggle" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>文章目录 · {items.length} 节 <span>{expanded ? '收起' : '展开'}</span></button>
@@ -81,7 +82,7 @@ function ArticleToc({
       </div>
       <ol className="article-toc-list">
         {items.map((item) => (
-          <li key={item.id} className={`article-toc-level-${item.level}`}>
+          <li key={item.id} className={`article-toc-level-${item.level}`} style={{ paddingLeft: Math.min(item.level - baseLevel, 3) * 12 }}>
             <a
               href={`#${item.id}`}
               title={item.text}
@@ -525,31 +526,6 @@ export default function Article() {
           <span>/</span>
           <span aria-current="page">{sourceLabel(article.source_type)}</span>
         </nav>
-        <div className="reader-tools">
-          <button className="reader-tool" aria-expanded={notesOpen} aria-controls="reader-notes-panel" onClick={() => setNotesOpen(!notesOpen)}><BookOpen size={14} />{notesOpen ? '收起笔记' : '笔记'}</button>
-          <button
-            type="button"
-            className={`reader-tool star-tool ${article.is_starred ? 'starred' : ''}`}
-            aria-pressed={article.is_starred === true}
-            onClick={() => void handleToggleStar()}
-          >
-            <Star size={13} fill={article.is_starred ? 'currentColor' : 'none'} />
-            {article.is_starred ? '已收藏' : '收藏'}
-          </button>
-          <a
-            className="reader-tool"
-            href={article.original_url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <ExternalLink size={13} /> 查看原文
-          </a>
-          {/* attachment 响应头触发浏览器下载,无需 JS;download 属性兜底文章被并发删除时
-              404 JSON 也只落成文件下载,不会整页跳走丢阅读上下文 */}
-          <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
-            <Download size={13} /> 导出本文
-          </a>
-        </div>
       </div>
 
       <div className={`reader-layout reading-layout ${tocItems.length > 0 ? 'has-toc' : ''} ${notesOpen ? 'with-notes' : ''}`}>
@@ -658,6 +634,32 @@ export default function Article() {
             </div>
         </div>
       </div>
+      <aside className="reader-sidebar" aria-label="阅读工具与目录">
+        <div className="reader-tools" role="group" aria-label="文章操作">
+          <button className="reader-tool" aria-expanded={notesOpen} aria-controls="reader-notes-panel" onClick={() => setNotesOpen(!notesOpen)}><BookOpen size={14} />{notesOpen ? '收起笔记' : '笔记'}</button>
+          <button
+            type="button"
+            className={`reader-tool star-tool ${article.is_starred ? 'starred' : ''}`}
+            aria-pressed={article.is_starred === true}
+            onClick={() => void handleToggleStar()}
+          >
+            <Star size={13} fill={article.is_starred ? 'currentColor' : 'none'} />
+            {article.is_starred ? '已收藏' : '收藏'}
+          </button>
+          <a
+            className="reader-tool"
+            href={article.original_url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <ExternalLink size={13} /> 查看原文
+          </a>
+          {/* attachment 响应头触发浏览器下载,无需 JS;download 属性兜底文章被并发删除时
+              404 JSON 也只落成文件下载,不会整页跳走丢阅读上下文 */}
+          <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
+            <Download size={13} /> 导出本文
+          </a>
+        </div>
       {tocItems.length > 0 ? (
         <ArticleToc
           items={tocItems}
@@ -676,6 +678,7 @@ export default function Article() {
         contentVersion={wxContentVer}
         panelOpen={notesOpen}
       />
+      </aside>
       </div>
       <RelatedArticles articleId={article.id} hasToc={tocItems.length > 0} />
       {showBackToTop ? (
