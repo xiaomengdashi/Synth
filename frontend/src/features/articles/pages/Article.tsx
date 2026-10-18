@@ -444,7 +444,7 @@ export default function Article() {
       return;
     }
 
-    fetch(`/api/v1/articles/x-preview?url=${encodeURIComponent(article.original_url)}`)
+    fetch(`/api/v1/articles/${article.id}/x-preview`)
       .then((res) => {
         if (!res.ok) {
           throw new Error('Failed to fetch tweet preview');

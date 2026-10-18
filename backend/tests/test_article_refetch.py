@@ -123,12 +123,13 @@ def test_refetch_updates_same_article_preserving_reader_metadata_and_notes(refet
     assert saved['original_url'] == ORIGINAL_URL
     assert saved['created_at'] == CREATED.replace(tzinfo=datetime.UTC).astimezone().isoformat()
     assert saved['updated_at'] != UPDATED.isoformat()
-    assert saved['email_message_id'] == 'mail-id'
+    # email_message_id 是内部去重键,读者级详情不再外发——落库校验移到下方 verify()
     assert saved['account_name'] == PAYLOAD['account_name']
     assert current.headers['etag'] != before.headers['etag']
 
     async def verify():
         async with sessions() as session:
+            assert (await session.get(Article, 'saved')).email_message_id == 'mail-id'
             assert await session.scalar(select(func.count()).select_from(Article)) == 1
             assert (await session.get(Note, 'note')).note == '保留笔记'
             assert (await session.get(Task, task_id)).status == 'completed'

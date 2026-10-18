@@ -217,7 +217,9 @@ def test_malformed_upstream_payload_is_safe(payload, monkeypatch):
 
 
 def test_x_preview_uses_saved_key(console, monkeypatch):
+    from app.database import get_db
     from app.routers import articles
+    from app.services.runtime_store import ARTICLES_DB
     _, write_settings, _ = console
     write_settings({'tikhubApiKey': 'saved-preview-key'})
     seen = []
@@ -229,8 +231,22 @@ def test_x_preview_uses_saved_key(console, monkeypatch):
     monkeypatch.setattr(articles, 'fetch_tikhub_tweet', fetch)
     app = FastAPI()
     app.include_router(articles.router, prefix='/articles')
-    with TestClient(app) as http:
-        response = http.get('/articles/x-preview', params={'url': 'https://x.com/a/status/123'})
+
+    class _EmptyDb:
+        async def get(self, model, pk):
+            return None
+
+    async def empty_db():
+        yield _EmptyDb()
+
+    app.dependency_overrides[get_db] = empty_db
+    ARTICLES_DB['console-x-preview'] = {'id': 'console-x-preview', 'original_url': 'https://x.com/a/status/123'}
+    try:
+        with TestClient(app) as http:
+            response = http.get('/articles/console-x-preview/x-preview')
+    finally:
+        ARTICLES_DB.pop('console-x-preview', None)
+        articles._x_preview_cache.pop('console-x-preview', None)
     assert response.status_code == 200
     assert seen[0]['tikhubApiKey'] == 'saved-preview-key'
 

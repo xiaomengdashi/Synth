@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import threading
+import time
 import uuid
 from urllib.parse import quote, urlsplit
 
@@ -16,6 +17,7 @@ from app.services.fetchers.article import parse_article_html
 from app.services.fetchers.tikhub import fetch_tikhub_tweet
 from app.services.fetchers.x_providers import fetch_x_with_priority
 from app.services.article_summary import generate_article_summary
+from app.services.article_public import public_account_name, public_article_payload
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.settings_store import numeric_setting
 from app.services.task_service import build_local_summary, detect_source_type, process_task
@@ -76,11 +78,16 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         .offset(offset)
     )
     mappings = result.mappings().all()
-    rows = [{k: v for k, v in row.items() if k != "total"} for row in mappings]
+    rows = []
+    for row in mappings:
+        item = {k: v for k, v in row.items() if k != "total"}
+        # 邮件导入文章作者位存的是发件人邮箱地址,读者面统一脱敏
+        item["account_name"] = public_account_name(item.get("account_name"))
+        rows.append(item)
 
     # 内存兜底仅在无任何过滤时生效;带过滤条件时必须走 DB 计数,否则搜索会静默漏结果
     if not rows and offset == 0 and not filters and ARTICLES_DB:
-        return {"total": len(ARTICLES_DB), "data": list(ARTICLES_DB.values())}
+        return {"total": len(ARTICLES_DB), "data": [public_article_payload(a) for a in ARTICLES_DB.values()]}
 
     total = mappings[0]["total"] if mappings else 0
     if not mappings and offset > 0:
@@ -165,15 +172,40 @@ async def get_related_articles(article_id: str, db: AsyncSession = Depends(get_d
     return jsonable_encoder({"data": rows})
 
 
-@router.get("/x-preview")
-async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
+_X_PREVIEW_TTL_SECONDS = 300.0
+# 文章维度的预览缓存:防匿名访客反复触发同一篇回源消耗抓取配额
+_x_preview_cache: dict[str, tuple[float, dict]] = {}
+
+
+@router.get("/{article_id}/x-preview")
+async def get_article_x_preview(article_id: str, db: AsyncSession = Depends(get_db)):
+    """旧 X 文章正文未内嵌 payload,前台详情页经此兜底重取。
+
+    只预览已入库文章的 original_url——匿名访客不能借本接口抓任意推文消耗
+    TikHub/twitter-cli 配额;结果按文章缓存 5 分钟。
+    """
+    now = time.monotonic()
+    cached = _x_preview_cache.get(article_id)
+    if cached and cached[0] > now:
+        return cached[1]
+    article = await db.get(Article, article_id)
+    if article is not None:
+        url = (article.original_url or "").strip()
+    else:
+        url = str((ARTICLES_DB.get(article_id) or {}).get("original_url") or "").strip()
+    if not url:
+        raise HTTPException(status_code=404, detail="Article not found")
     try:
-        return (await fetch_x_with_priority(
+        payload = (await fetch_x_with_priority(
             url, await get_runtime_config(), lambda step: None,
             tikhub_fetcher=fetch_tikhub_tweet,
         ))["payload"]
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    if len(_x_preview_cache) > 500:
+        _x_preview_cache.clear()
+    _x_preview_cache[article_id] = (now + _X_PREVIEW_TTL_SECONDS, payload)
+    return payload
 
 
 @router.post("/import-html")
@@ -407,13 +439,14 @@ async def get_article(
                 "Cache-Control": "private, no-cache",
             })
         return JSONResponse(
-            content=jsonable_encoder(article),
+            # 读者级详情走字段白名单:email_message_id 等内部列不随整行 ORM 外发
+            content=jsonable_encoder(public_article_payload(article)),
             headers={"ETag": etag, "Cache-Control": "private, no-cache"},
         )
 
     # 如果数据库找不到，尝试从内存数据里找
     if article_id in ARTICLES_DB:
-        return ARTICLES_DB[article_id]
+        return public_article_payload(ARTICLES_DB[article_id])
 
     raise HTTPException(status_code=404, detail="Article not found")
 

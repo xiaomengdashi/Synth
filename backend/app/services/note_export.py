@@ -12,6 +12,8 @@ import re
 
 from bs4 import BeautifulSoup
 
+from app.services.article_public import public_account_name
+
 # 摘要段头,与前端 Article.tsx 的 SUMMARY_SECTION_PATTERN 同形:## 内容摘要\n\n<文本>\n\n--- 之后是正文
 _SUMMARY_SECTION_RE = re.compile(r"^##\s*(?:(?:AI\s*)?摘要|内容摘要)\s*\n+([\s\S]*?)\n+\s*---\s*\n*")
 _HTML_BLOCK_RE = re.compile(
@@ -157,7 +159,8 @@ def build_note_markdown(article) -> str:
         f"source: {yaml_safe(source_label(article_field(article, 'source_type')))}",
         f"category: {yaml_safe(category)}",
     ]
-    account_name = str(article_field(article, "account_name") or "").strip()
+    # 邮件导入文章的作者位是发件人邮箱地址,导出文件随读者级接口分发,统一脱敏
+    account_name = public_account_name(article_field(article, "account_name"))
     if account_name:
         lines.append(f"account_name: {yaml_safe(account_name)}")
     date = note_date(article_field(article, "publish_time"), article_field(article, "created_at"))

@@ -45,6 +45,7 @@ def guard_client(tmp_path, monkeypatch):
     app.include_router(articles.router, prefix='/api/v1/articles')
     app.include_router(admin_auth.router, prefix='/api/v1/admin-auth')
     app.dependency_overrides[get_db] = database
+    app.state.sessions = sessions
     admin_auth._login_failures.clear()
     with TestClient(app) as client:
         yield client
@@ -81,6 +82,42 @@ def test_task_status_polling_stays_public(guard_client):
     # iPhone 快捷指令轮询入口保持开放:鉴权层放行(业务层对未知 id 返回 200 兜底体)
     response = guard_client.get('/api/v1/tasks/unknown-id/status')
     assert response.status_code == 200 and 'error' in response.json()
+
+
+def test_article_reader_endpoints_hide_internal_fields(guard_client):
+    # 读者级详情/列表/导出只出文章内容与展示元信息:
+    # email_message_id 是内部去重键,account_name 里的发件人邮箱须脱敏
+    import datetime
+
+    from app.models import Article as ArticleModel
+    sessions = guard_client.app.state.sessions
+
+    async def seed():
+        async with sessions() as session:
+            session.add(ArticleModel(
+                id='audit-1', title='审计样例', summary='摘要', content_md='正文',
+                original_url='https://x.com/a/status/1', source_type='x',
+                account_name='friend@163.com',
+                email_message_id='<secret-message-id@mailer.example>',
+                created_at=datetime.datetime.now(datetime.UTC).replace(tzinfo=None),
+            ))
+            await session.commit()
+
+    asyncio.run(seed())
+    detail = guard_client.get('/api/v1/articles/audit-1').json()
+    assert 'email_message_id' not in detail
+    assert detail['account_name'] == '邮件来稿'
+    listing = guard_client.get('/api/v1/articles?limit=5').json()['data'][0]
+    assert 'email_message_id' not in listing
+    assert listing['account_name'] == '邮件来稿'
+    exported = guard_client.get('/api/v1/articles/audit-1/export').text
+    assert 'friend@163.com' not in exported
+    assert '邮件来稿' in exported
+
+
+def test_x_preview_rejects_unknown_article(guard_client):
+    # 旧形态(匿名自选任意推文 URL 的抓取代理)已下线:未入库的 id 一律 404
+    assert guard_client.get('/api/v1/articles/not-stored/x-preview').status_code == 404
 
 
 def test_login_rate_limit_locks_out_after_failures(guard_client, monkeypatch):

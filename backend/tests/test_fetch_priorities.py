@@ -64,10 +64,21 @@ def test_priority_admin_auth(priority_client):
 
 
 def test_x_preview_uses_saved_order(priority_client, monkeypatch):
+    from app.database import get_db
     from app.routers import articles
     from app.services.fetchers import x_providers
+    from app.services.runtime_store import ARTICLES_DB
     client = priority_client
     client.app.include_router(articles.router, prefix='/api/v1/articles')
+
+    class _EmptyDb:
+        async def get(self, model, pk):
+            return None
+
+    async def empty_db():
+        yield _EmptyDb()
+
+    client.app.dependency_overrides[get_db] = empty_db
     client.put('/api/v1/config/fetch-priorities', json={'priorities': {'x': ['x_graphql', 'tikhub', 'twitter_cli']}})
     async def download(url, *args):
         return {'payload': {'tweet_text': '按后台顺序获取的正文', 'media_items': []}}
@@ -75,7 +86,13 @@ def test_x_preview_uses_saved_order(priority_client, monkeypatch):
         raise RuntimeError('此预览不应访问 TikHub')
     monkeypatch.setattr(x_providers, 'fetch_x_via_graphql', download)
     monkeypatch.setattr(articles, 'fetch_tikhub_tweet', paid)
-    response = client.get('/api/v1/articles/x-preview', params={'url': 'https://x.com/author/status/123456789'})
+    ARTICLES_DB['x-preview-order'] = {'id': 'x-preview-order', 'original_url': 'https://x.com/author/status/123456789'}
+    try:
+        response = client.get('/api/v1/articles/x-preview-order/x-preview')
+    finally:
+        ARTICLES_DB.pop('x-preview-order', None)
+        articles._x_preview_cache.pop('x-preview-order', None)
+        client.app.dependency_overrides.pop(get_db, None)
     assert response.status_code == 200
     assert response.json()['tweet_text'] == '按后台顺序获取的正文'
 
