@@ -322,12 +322,7 @@ html.dark[data-admin-theme="everforest"] .admin-console { --ac-accent:#a7c080; -
   --ac-glass-edge:color-mix(in srgb,var(--ac-line-strong) 52%,rgba(255,255,255,.42));
   --ac-glass-highlight:rgba(255,255,255,.20);
 }
-.admin-console .ac-main {
-  background:
-    radial-gradient(ellipse 780px 520px at 86% -3%,color-mix(in srgb,var(--ac-accent) 38%,transparent),transparent 72%),
-    radial-gradient(ellipse 600px 460px at 0% 25%,color-mix(in srgb,var(--ac-accent) 22%,transparent),transparent 74%),
-    var(--ac-canvas);
-}
+.admin-console .ac-main { background:var(--ac-canvas); }
 .admin-console .ac-sidebar {
   background:color-mix(in srgb,var(--ac-side-bg) 86%,transparent);
   border-right-color:var(--ac-glass-edge);
