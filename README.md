@@ -34,6 +34,8 @@ uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 
 后端服务将在 `http://127.0.0.1:8000` 启动。
 
+页面时间跟随部署服务器的系统时区（或运行环境的 `TZ` 设置）。数据库保存 UTC 时间，接口返回带偏移的本地时间，前台使用服务器提供的时区显示。
+
 ### 2. 启动前端服务
 
 然后，进入 `frontend` 目录并启动开发服务器：
@@ -62,7 +64,7 @@ npm run dev  # 或 yarn dev / pnpm dev
 
 后台 `/admin/tikhub` 的「获取方式与优先级」面板按平台列出可用方式。使用上下按钮调整顺序并保存，新导入、分享导入、X 预览和「重新获取」均读取服务端保存的顺序；前一种获取失败或返回空正文时自动回退。已在处理中的任务使用提交时的配置。
 
-X 新增 **Content Downloader**：复用 `content-downloader` 项目的 yt-dlp 子进程获取方法，将推文正文、作者、时间和媒体映射到现有阅读格式。实现随本项目部署，依赖现有 `requirements.txt` 中的 yt-dlp，无需部署 `~/content-downloader`，无需 TikHub Key，也不读取本机登录态。只请求元数据，不下载整段视频；60 秒超时后终止子进程并回退。纯文字推文允许无视频格式；空正文、明显截断、X 长文入口或不匹配的外链结果不算获取成功。长文仍由 TikHub 和现有原页补采处理。
+X 的 **X GraphQL** 方法直接请求 X 网页公开的 `TweetResultByRestId` 操作（不是官方开发者 API），获取完整 Article JSON，并将 Draft.js 的段落、标题、嵌套列表、行内格式及 atomic 媒体渲染为 HTML。按 `media_entities` 与封面 URL 下载图片、GIF（X 通常以 MP4 提供）和视频，保存到 `backend/data/media/x/<推文ID>/media/`，HTML 正文随文章记录入库并由文章库阅读页统一展示；不生成独立 HTML 页面，`/media/x/` 仅提供图片、视频及字体资源。失败资源会显示明确警告，不把缺失媒体伪装为完整成功。复用后台「X 登录配置」保存的 `auth_token` 与 `ct0`，无需安装 twitter-cli，也不读取浏览器 Cookie。旧 X Content Downloader／yt-dlp 方法已删除，已保存的优先级会原位迁移为 X GraphQL；微信公众号的 Content Downloader 不变。
 
 微信公众号也支持 **Content Downloader**：复用 `content-downloader` 的 `WeChatOAParser` 公开网页请求方式，使用 30 秒超时和浏览器请求头直接获取 HTML，无需 TikHub Key 或登录态。提取完整的嵌套 `#js_content` 正文、公众号名、发布时间与封面，保留原排版、代码换行、图片地址及语音标签；图片由现有微信阅读视图按原地址加载。验证页、失效页和空正文不会作为文章保存，自动回退下一种方式。
 

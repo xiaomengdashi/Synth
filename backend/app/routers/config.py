@@ -8,8 +8,14 @@ from app.services.fetch_priorities import SETTINGS_KEY, priority_view, resolve_p
 from app.services.twitter_cli_settings import twitter_cli_config_view, twitter_cli_updates
 
 from app.routers.admin_auth import require_admin
+from app.timezones import server_time_zone
 
 router = APIRouter()
+
+
+@router.get('/timezone')
+async def get_server_timezone():
+    return {'timeZone': server_time_zone()}
 
 
 class FetchPrioritiesModel(BaseModel):

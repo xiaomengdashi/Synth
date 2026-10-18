@@ -1,3 +1,5 @@
+from app.timezones import local_iso
+
 TASKS_DB: dict[str, dict] = {}
 ARTICLES_DB: dict[str, dict] = {}
 
@@ -27,6 +29,6 @@ def article_from_db_record(article) -> dict:
         "category": article.category,
         "is_starred": article.is_starred,
         "read_progress": article.read_progress,
-        "updated_at": article.updated_at.isoformat() if article.updated_at else "",
-        "created_at": article.created_at.isoformat() if article.created_at else "",
+        "updated_at": local_iso(article.updated_at),
+        "created_at": local_iso(article.created_at),
     }

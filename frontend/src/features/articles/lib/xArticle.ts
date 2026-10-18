@@ -1,3 +1,4 @@
+import { getServerTimeZone } from '../../../utils/formatDate.ts';
 export interface XArticleReplica {
   version: 1;
   status: 'complete' | 'partial' | 'text-only';
@@ -36,7 +37,7 @@ function escapeHtml(value: string = ''): string {
   return value.replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]!));
 }
 function safeUrl(value: string = ''): string {
-  if (/^\/media\/x\/[a-f0-9]+\.(?:jpg|jpeg|png|gif|webp|mp4|webm|woff2)$/.test(value)) return value;
+  if (/^\/media\/x\/(?:\d+\/media\/)?[a-f0-9]+\.(?:jpg|jpeg|png|gif|webp|mp4|webm|woff2)$/.test(value)) return value;
   try { const u = new URL(value); return u.protocol === 'https:' && !u.username && !u.password ? u.href : ''; }
   catch { return ''; }
 }
@@ -49,7 +50,7 @@ export function buildXArticleDocument(article: XArticleReplica, origin: string, 
   const cover = safeUrl(article.cover_url);
   const source = safeUrl(article.source_url);
   const date = article.created_at && !Number.isNaN(Date.parse(article.created_at))
-    ? new Date(article.created_at).toLocaleString('zh-CN', {hour12:false}) : '';
+    ? new Date(article.created_at).toLocaleString('zh-CN', { timeZone: getServerTimeZone(),hour12:false}) : '';
   const body = article.body_html || `<div class="fallback-text">${escapeHtml(article.text)}</div>`;
   // bodyOnly：站点页头已展示标题/作者/封面，iframe 只渲染正文并铺满卡片宽度，
   // 字号行高贴近站点阅读节奏，避免"一篇文章里嵌另一套版式"的割裂感。

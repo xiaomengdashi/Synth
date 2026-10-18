@@ -121,7 +121,7 @@ def test_refetch_updates_same_article_preserving_reader_metadata_and_notes(refet
     assert saved['title'] == PAYLOAD['title']
     assert PAYLOAD['extracted_md'] in saved['content_md']
     assert saved['original_url'] == ORIGINAL_URL
-    assert saved['created_at'] == CREATED.isoformat()
+    assert saved['created_at'] == CREATED.replace(tzinfo=datetime.UTC).astimezone().isoformat()
     assert saved['updated_at'] != UPDATED.isoformat()
     assert saved['email_message_id'] == 'mail-id'
     assert saved['account_name'] == PAYLOAD['account_name']
@@ -224,7 +224,7 @@ def test_refetch_rejects_non_http_original_url(refetch_client):
 def test_x_import_and_refetch_use_saved_provider_order(refetch_client, monkeypatch):
     """Changing the stored priority must affect both import and in-place refetch."""
     import json
-    from app.services.fetchers import content_downloader_x
+    from app.services.fetchers import x_providers
     client, sessions = refetch_client
     url = 'https://x.com/author/status/123456789'
     async def prepare():
@@ -235,16 +235,11 @@ def test_x_import_and_refetch_use_saved_provider_order(refetch_client, monkeypat
             await session.commit()
         await settings_store.save_settings({'fetchProviderPriorities': json.dumps({'x': ['content_downloader', 'tikhub']})})
     asyncio.run(prepare())
-    class Process:
-        returncode = 0
-        async def communicate(self):
-            return json.dumps({'id': '123456789', 'extractor_key': 'Twitter', 'description': '新方法获取的完整正文',
-                               'uploader': '作者', 'uploader_id': 'author', 'timestamp': 1720000000}).encode(), b''
-    async def spawn(*args, **kwargs):
-        return Process()
+    async def graphql(url, update_step, config):
+        return {'payload': {'title': '新方法标题', 'tweet_text': '新方法获取的完整正文', 'author_name': '作者', 'cover_image_url': '', 'created_at': ''}}
     def unexpected_paid(*args):
         raise AssertionError('首选成功后不应访问 TikHub')
-    monkeypatch.setattr(content_downloader_x.asyncio, 'create_subprocess_exec', spawn)
+    monkeypatch.setattr(x_providers, 'fetch_x_via_graphql', graphql)
     monkeypatch.setattr(task_service, 'fetch_tikhub_tweet', unexpected_paid)
     refetched = status(client, submit(client))
     assert refetched['status'] == 'completed'
@@ -304,11 +299,13 @@ def test_wechat_import_and_refetch_follow_priority_without_losing_saved_content(
     assert new_task['article']['source_type'] == 'wechat'
 
 
-def test_cli_article_refetch_uses_rich_markdown_when_original_page_is_unavailable(refetch_client, monkeypatch):
+def test_cli_article_refetch_renders_rich_json_without_original_page(refetch_client, monkeypatch, tmp_path):
     import json
     import sys
     from app.services.fetchers import x_twitter_cli as cli
+    from app.config import settings
     client, sessions = refetch_client
+    monkeypatch.setattr(settings, 'MEDIA_DIR', str(tmp_path / 'media'))
     url = 'https://x.com/author/status/123456789'
     async def prepare():
         async with sessions() as session:
@@ -343,6 +340,40 @@ def test_cli_article_refetch_uses_rich_markdown_when_original_page_is_unavailabl
     assert task['status'] == 'completed'
     article = task['article']
     assert article['title'] == 'CLI 重新获取的长文'
-    assert '**完整**' in article['content_md']
-    assert 'twitter-cli' in article['content_md']
+    assert '<strong>完整</strong>长文正文' in article['content_md']
+    assert '"status": "complete"' in article['content_md']
+    assert 'archive_url' not in article['content_md']
     assert article['category'] == 'C++' and article['is_starred'] and article['read_progress'] == .6
+
+
+def test_article_list_detail_related_and_task_dates_have_server_offset(refetch_client):
+    client, _ = refetch_client
+    listing = client.get('/api/v1/articles').json()['data'][0]
+    detail = client.get('/api/v1/articles/saved').json()
+    assert listing['created_at'] == detail['created_at'] == CREATED.replace(tzinfo=datetime.UTC).astimezone().isoformat()
+    assert listing['updated_at'] == detail['updated_at'] == UPDATED.replace(tzinfo=datetime.UTC).astimezone().isoformat()
+    task = status(client, submit(client))
+    tasks_list = client.get('/api/v1/tasks').json()['data']
+    assert datetime.datetime.fromisoformat(task['created_at']).utcoffset() is not None
+    assert tasks_list[0]['created_at'] == task['created_at']
+    assert task['article']['created_at'] == detail['created_at']
+    runtime_store.TASKS_DB.clear()
+    restored = status(client, task['id'])
+    assert restored['created_at'] == task['created_at']
+    assert restored['article']['created_at'] == detail['created_at']
+
+
+def test_new_submission_saves_utc_and_returns_local_time(refetch_client):
+    client, sessions = refetch_client
+    before = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+    response = client.post('/api/v1/tasks/submit', json={'url': ORIGINAL_URL})
+    task = status(client, response.json()['task_id'])
+    after = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
+    assert task['status'] == 'completed'
+    async def check():
+        async with sessions() as session:
+            saved = await session.get(Article, task['article_id'])
+            assert before <= saved.created_at <= after
+    asyncio.run(check())
+    assert datetime.datetime.fromisoformat(task['created_at']).utcoffset() is not None
+    assert task['article']['created_at'] == task['created_at']

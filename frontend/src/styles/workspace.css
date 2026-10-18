@@ -115,6 +115,8 @@
 .reader-sidebar .reader-tools{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding:0;border:0;border-radius:0;background:transparent}
 .reader-sidebar .reader-tool{justify-content:flex-start;gap:8px;width:100%;height:36px;padding:0 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);font-size:12px;white-space:nowrap}
 .reader-sidebar .reader-tool:hover,.reader-sidebar .reader-tool[aria-expanded='true']{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.reader-sidebar .reader-tool.danger{color:var(--danger)}
+.reader-sidebar .reader-tool.danger:hover{border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--surface));color:var(--danger)}
 .reader-sidebar .article-toc{position:static;width:100%;padding:0;margin-top:26px}
 .reader-sidebar .article-toc-head{letter-spacing:0;margin-bottom:10px;padding-bottom:12px}
 .reader-sidebar .article-toc-head strong{font-size:13px;letter-spacing:0}

@@ -2,7 +2,7 @@
 import asyncio
 
 from app.services.fetch_priorities import PROVIDERS, resolve_priorities
-from app.services.fetchers.content_downloader_x import fetch_content_downloader_tweet
+from app.services.fetchers.x_graphql import fetch_x_via_graphql
 from app.services.fetchers.x_twitter_cli import fetch_x_via_twitter_cli
 
 
@@ -22,8 +22,8 @@ async def fetch_x_with_priority(url: str, config: dict, update_step, *, tikhub_f
         prefix = "正在回退到" if index else "正在通过"
         update_step(f"{prefix} {label} 获取 X 内容...")
         try:
-            if provider == "content_downloader":
-                result = await fetch_content_downloader_tweet(url)
+            if provider == "x_graphql":
+                result = await fetch_x_via_graphql(url, update_step, config)
             elif provider == "twitter_cli":
                 result = await fetch_x_via_twitter_cli(url, update_step, config)
             else:

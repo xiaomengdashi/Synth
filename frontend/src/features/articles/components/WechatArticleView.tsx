@@ -1,3 +1,4 @@
+import { getServerTimeZone } from '../../../utils/formatDate';
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 
 /**
@@ -8,7 +9,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
  * 并复刻微信页面 JS 的关键行为：
  *   - 图片懒加载属性转正（data-src → src）
  *   - 图片按 min(data-w, 可用宽度) 定宽、按 data-ratio 定高
- *   - visibility:hidden 修正
+ *   - visibility:hidden / 正文 opacity:0 修正
  * 正文 HTML 未经任何改写，内联样式原样生效，因此与原文一致。
  * 相比旧的 iframe 方案：无高度同步、无 sandbox、无跨窗消息，天然自适应高度。
  */
@@ -102,8 +103,12 @@ const WECHAT_PAGE_CSS = `
 
 /** Shadow DOM 内的复刻运行时：懒加载转正、显隐修正、图片定宽、标题目录。返回 resize 清理函数。 */
 function applyWechatRuntime(root: ShadowRoot, onTocItems?: (items: WechatTocItem[]) => void) {
-  const content = root.querySelector('#js_content');
+  const content = root.querySelector<HTMLElement>('#js_content');
   if (!content) return;
+
+  // 原站由 JS 在加载后显示正文；离线渲染不运行原站脚本，需解除根节点的隐藏状态。
+  content.style.setProperty('opacity', '1', 'important');
+  content.style.setProperty('visibility', 'visible', 'important');
 
   content.querySelectorAll<HTMLImageElement>('img[data-src]').forEach((img) => {
     if (!img.getAttribute('src')) img.setAttribute('src', img.getAttribute('data-src') || '');
@@ -167,13 +172,13 @@ function formatPublishTime(raw: string): string {
   if (/^\d{13}$/.test(value)) {
     const date = new Date(Number(value));
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+      return date.toLocaleDateString('zh-CN', { timeZone: getServerTimeZone(), year: 'numeric', month: 'long', day: 'numeric' });
     }
   }
   if (/^\d{10}$/.test(value)) {
     const date = new Date(Number(value) * 1000);
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+      return date.toLocaleDateString('zh-CN', { timeZone: getServerTimeZone(), year: 'numeric', month: 'long', day: 'numeric' });
     }
   }
   return value;
@@ -223,7 +228,7 @@ const WechatArticleView = forwardRef<WechatArticleViewHandle, WechatArticleViewP
         title || '未知文章标题',
         htmlContent,
         (accountName || '').trim(),
-        formatPublishTime(publishTime) || (createdAt ? new Date(createdAt).toLocaleDateString('zh-CN') : ''),
+        formatPublishTime(publishTime) || (createdAt ? new Date(createdAt).toLocaleDateString('zh-CN', { timeZone: getServerTimeZone() }) : ''),
       );
 
       const cleanup = applyWechatRuntime(root, (items) => onTocItemsRef.current?.(items));

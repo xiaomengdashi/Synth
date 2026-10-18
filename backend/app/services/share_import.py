@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert
 
 from app.models import Article, Task
+from app.timezones import local_iso
 from app.services.content_sources import detect_source_type, SOURCE_DOMAINS
 
 X_HOSTS = {"x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}
@@ -128,7 +129,7 @@ def task_result(task: Task, reused: bool) -> dict:
     return {
         "task_id": task.id, "status": task.status, "current_step": task.current_step,
         "original_url": task.original_url, "article_id": task.article_id,
-        "created_at": task.created_at.isoformat(), "reused": reused,
+        "created_at": local_iso(task.created_at), "reused": reused,
     }
 
 

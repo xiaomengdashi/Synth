@@ -101,7 +101,7 @@ export default function ArticleList({
                   <StarButton article={article} />
                 </span>
                 <span className="meta-source"><i />{sourceLabel(article.source_type)}</span>
-                <time>{formatAbsolute(new Date(article.created_at))}</time>
+                <time dateTime={article.created_at} title="导入时间">{formatAbsolute(new Date(article.created_at))}</time>
               </span>
             </Link>
           </div>

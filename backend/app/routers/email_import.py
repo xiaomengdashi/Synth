@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.database import AsyncSessionLocal
+from app.timezones import local_iso, utc_naive
 from app.models import Article
 from app.routers.admin_auth import require_admin
 from app.services import settings_store
@@ -130,7 +131,7 @@ async def _import_articles_for_message(message: EmailMessageData, config: dict |
     """一个 md 附件一篇 Article;同一事务提交,失败则整封重试。
     created_at 用邮件收件时间——前台列表的排序与相对时间都跟真实收件顺序一致。"""
     try:
-        received_at = datetime.datetime.strptime(message.date, "%Y-%m-%d %H:%M")
+        received_at = utc_naive(datetime.datetime.fromisoformat(message.date).astimezone())
     except ValueError:
         received_at = datetime.datetime.now(datetime.UTC).replace(tzinfo=None)
     imported: list[dict] = []
@@ -154,7 +155,7 @@ async def _import_articles_for_message(message: EmailMessageData, config: dict |
                 "cover_image_url": cover_image_url,
                 "account_name": message.from_addr,
                 "publish_time": message.date,
-                "created_at": received_at.isoformat(),
+                "created_at": local_iso(received_at),
             }
             ARTICLES_DB[article_id] = article_data
             session.add(Article(

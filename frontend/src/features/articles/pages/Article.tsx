@@ -1,3 +1,4 @@
+import { getServerTimeZone } from '../../../utils/formatDate';
 import { useParams, Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
 import type { Article as ArticleType } from '../types';
@@ -13,6 +14,7 @@ import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
 import XArticleView from '../components/XArticleView';
 import ArticleNotes from '../components/ArticleNotes';
+import ArticleDeleteButton from '../components/ArticleDeleteButton';
 import { extractXArticle } from '../lib/xArticle';
 import { clampProgress, shouldMarkRead, shouldReport, shouldRestore } from '../lib/readingState';
 import { sourceColor, sourceLabel } from '../components/ArticleList';
@@ -501,7 +503,7 @@ export default function Article() {
       : '';
 
   const xCreatedAt = xPreview?.created_at
-    ? new Date(xPreview.created_at).toLocaleString('zh-CN', { hour12: false })
+    ? new Date(xPreview.created_at).toLocaleString('zh-CN', { timeZone: getServerTimeZone(), hour12: false })
     : '';
   const isXArticle = article.source_type === 'x';
 
@@ -532,7 +534,7 @@ export default function Article() {
       <div className={isXArticle ? 'article-reader article-reader-x' : 'article-reader'}>
         {isXArticle ? (
           <header className="x-article-header">
-            <div className="x-article-kicker"><span>{new Date(article.created_at).toLocaleDateString('zh-CN')}</span></div>
+            <div className="x-article-kicker"><span>{new Date(article.created_at).toLocaleDateString('zh-CN', { timeZone: getServerTimeZone() })}</span></div>
             <h1>{article.title}</h1>
             <div className="x-article-byline">
               <img src={xPreview?.author_avatar_url || article.cover_image_url} alt={xPreview?.author_name || 'X 作者'} />
@@ -551,7 +553,7 @@ export default function Article() {
             <p className="reader-byline" style={{ '--src': sourceColor(article.source_type) } as React.CSSProperties}>
               <i aria-hidden="true" />
               {article.account_name ? <strong>{article.account_name}</strong> : null}
-              <span>{sourceLabel(article.source_type)} · {new Date(article.created_at).toLocaleDateString('zh-CN')}</span>
+              <span>{sourceLabel(article.source_type)} · {new Date(article.created_at).toLocaleDateString('zh-CN', { timeZone: getServerTimeZone() })}</span>
             </p>
             {article.cover_image_url ? (
               <div className="reader-cover"><img src={article.cover_image_url} alt="" /></div>
@@ -659,6 +661,7 @@ export default function Article() {
           <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
             <Download size={13} /> 导出本文
           </a>
+          <ArticleDeleteButton key={article.id} articleId={article.id} title={article.title} />
         </div>
       {tocItems.length > 0 ? (
         <ArticleToc

@@ -10,14 +10,15 @@ PROVIDERS = {
     "tikhub": {"label": "TikHub", "description": "使用后台保存的 TikHub API Key。"},
     "content_downloader": {
         "label": "Content Downloader",
-        "description": "使用 Content Downloader 的平台专用获取方法，无需 TikHub Key；空正文或不支持的内容自动回退。",
+        "description": "使用微信公众号公开网页获取方法，无需 TikHub Key；验证页或空正文自动回退。",
     },
+    "x_graphql": {"label": "X GraphQL", "description": "通过 TweetResultByRestId 获取完整 JSON，将 Draft.js 渲染为文章库正文，图片和 GIF/视频保存到本地；复用「X 登录配置」中的登录态，无需安装 twitter-cli。"},
     "direct": {"label": "网页直取", "description": "直接获取网页并解析正文。"},
     "yt_dlp": {"label": "yt-dlp", "description": "获取视频与字幕；无字幕时使用已配置的 MiniMax 转写，需服务器安装 ffmpeg。"},
     "twitter_cli": {"label": "twitter-cli", "description": "使用 X 登录态获取正文和长文富文本；在后台「X 登录配置」中保存 auth_token 与 ct0，后端需已安装 twitter-cli。"},
 }
 PLATFORMS = {
-    "x": {"label": "X / Twitter", "providers": ["tikhub", "content_downloader", "twitter_cli"]},
+    "x": {"label": "X / Twitter", "providers": ["tikhub", "x_graphql", "twitter_cli"]},
     "wechat": {"label": "微信公众号", "providers": ["tikhub", "content_downloader"]},
     "bilibili": {"label": "Bilibili", "providers": ["tikhub"]},
     "youtube": {"label": "YouTube", "providers": ["yt_dlp", "tikhub"]},
@@ -42,6 +43,8 @@ def resolve_priorities(config: dict | None = None) -> dict[str, list[str]]:
         order = []
         if isinstance(saved, list):
             for provider in saved:
+                if platform == "x" and provider == "content_downloader":
+                    provider = "x_graphql"
                 if provider in supported and provider not in order:
                     order.append(provider)
         result[platform] = order + [provider for provider in supported if provider not in order]
@@ -59,6 +62,9 @@ def validate_priorities(priorities: dict[str, list[str]]) -> None:
 
 def priority_view(config: dict) -> dict:
     from app.services.fetchers.x_twitter_cli import twitter_cli_status
+    from app.services.twitter_cli_settings import resolve_twitter_cli
     providers = {key: dict(value) for key, value in PROVIDERS.items()}
     providers["twitter_cli"].update(twitter_cli_status(config))
+    credentials = resolve_twitter_cli(config)
+    providers["x_graphql"]["status"] = "已配置 X 登录态" if credentials["auth"] and credentials["csrf"] else "未配置 X 登录态"
     return {"platforms": PLATFORMS, "providers": providers, "priorities": resolve_priorities(config)}

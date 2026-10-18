@@ -245,7 +245,8 @@ def test_import_uses_email_date_as_created_at(tmp_path, monkeypatch):
             return await session.get(Article, article_id)
 
     article = asyncio.run(load())
-    assert article.created_at == datetime.datetime(2026, 10, 4, 10, 30)
+    # 旧版无偏移的邮件日期按服务器本地时间解释，持久化为 UTC。
+    assert article.created_at == datetime.datetime(2026, 10, 4, 10, 30).astimezone(datetime.UTC).replace(tzinfo=None)
     assert article.publish_time == "2026-10-04 10:30"
     asyncio.run(engine.dispose())
 

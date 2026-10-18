@@ -116,7 +116,7 @@ def test_saved_cli_priority_is_used_before_other_providers(monkeypatch):
         raise AssertionError('CLI 成功后不能调用 TikHub')
     monkeypatch.setattr(x_providers, 'fetch_x_via_twitter_cli', cli)
     result = asyncio.run(x_providers.fetch_x_with_priority(URL, {
-        'fetchProviderPriorities': json.dumps({'x': ['twitter_cli', 'tikhub', 'content_downloader']}),
+        'fetchProviderPriorities': json.dumps({'x': ['twitter_cli', 'tikhub', 'x_graphql']}),
     }, lambda step: None, tikhub_fetcher=unexpected))
     assert result['payload']['tweet_text'] == 'CLI 正文'
 
@@ -127,7 +127,7 @@ def test_cli_failure_falls_back_to_tikhub(monkeypatch):
         raise RuntimeError('未配置登录态')
     monkeypatch.setattr(x_providers, 'fetch_x_via_twitter_cli', cli)
     result = asyncio.run(x_providers.fetch_x_with_priority(URL, {
-        'fetchProviderPriorities': json.dumps({'x': ['twitter_cli', 'tikhub', 'content_downloader']}),
+        'fetchProviderPriorities': json.dumps({'x': ['twitter_cli', 'tikhub', 'x_graphql']}),
     }, lambda step: None, tikhub_fetcher=lambda *args: {'payload': {'tweet_text': '后备正文'}}))
     assert result['payload']['tweet_text'] == '后备正文'
 

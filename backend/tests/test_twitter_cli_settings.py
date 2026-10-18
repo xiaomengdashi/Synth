@@ -127,7 +127,7 @@ def test_failure_reason_redacts_saved_cookies(cli_settings_client, monkeypatch):
     async def fail(*args):
         raise RuntimeError(f'provider error: {AUTH} / {CSRF}')
     monkeypatch.setattr(x_providers, 'fetch_x_via_twitter_cli', fail)
-    monkeypatch.setattr(x_providers, 'fetch_content_downloader_tweet', fail)
+    monkeypatch.setattr(x_providers, 'fetch_x_via_graphql', fail)
     saved = {'twitterAuthToken': AUTH, 'twitterCt0': CSRF}
     with pytest.raises(RuntimeError) as error:
         asyncio.run(x_providers.fetch_x_with_priority('https://x.com/a/status/123', saved, lambda step: None, tikhub_fetcher=lambda *args: None))
@@ -168,7 +168,7 @@ def test_saved_path_and_pair_reach_real_provider_without_command_line_secrets(cl
     monkeypatch.setattr(x_twitter_cli, '_run', run)
     from app.services.fetchers.x_providers import fetch_x_with_priority
     saved = asyncio.run(config.get_runtime_config())
-    saved['fetchProviderPriorities'] = json.dumps({'x': ['twitter_cli', 'tikhub', 'content_downloader']})
+    saved['fetchProviderPriorities'] = json.dumps({'x': ['twitter_cli', 'tikhub', 'x_graphql']})
     def unexpected(*args):
         raise AssertionError('Successful CLI fetch must not call another provider')
     result = asyncio.run(fetch_x_with_priority('https://x.com/author/status/123456789', saved, lambda step: None, tikhub_fetcher=unexpected))

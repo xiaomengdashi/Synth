@@ -2,7 +2,7 @@ import datetime
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from fastapi.encoders import jsonable_encoder
+from app.timezones import local_iso, jsonable_local as jsonable_encoder
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -52,7 +52,7 @@ async def list_tasks(db=Depends(get_db)):
 @router.post("/submit")
 async def submit_task(data: TaskSubmit, background_tasks: BackgroundTasks):
     task_id = str(uuid.uuid4())
-    created_at = datetime.datetime.now().isoformat()
+    created_at = local_iso(datetime.datetime.now(datetime.UTC))
 
     TASKS_DB[task_id] = {
         "id": task_id,

@@ -1,3 +1,4 @@
+import datetime
 import email.message
 import email.policy
 
@@ -65,7 +66,7 @@ def test_parse_raw_message_whitelisted():
     assert parsed.message_id == "<test-0001@163.com>"
     assert parsed.from_addr == "zhang@163.com"
     assert parsed.subject == "B站笔记"
-    assert parsed.date == "2026-10-04 10:30"
+    assert datetime.datetime.fromisoformat(parsed.date) == datetime.datetime.fromisoformat("2026-10-04T02:30:00+00:00")
     assert parsed.md_attachments and parsed.md_attachments[0]["content"] == "# 标题"
 
 
@@ -175,4 +176,4 @@ def test_parse_raw_message_converts_utc_date_to_cn():
     msg.set_content("body")
     msg.add_attachment("# 标题".encode(), maintype="text", subtype="markdown", filename="n.md")
     parsed = parse_raw_message(msg.as_bytes(), ["milky@4ueo.com"])
-    assert parsed.date == "2026-10-06 07:30"
+    assert datetime.datetime.fromisoformat(parsed.date) == datetime.datetime.fromisoformat("2026-10-05T23:30:00+00:00")

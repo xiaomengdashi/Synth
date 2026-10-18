@@ -16,10 +16,8 @@ import hashlib
 import imaplib
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta, timezone
 
 # 邮件 Date 头是发件方时区(常为 UTC),统一转东八区与用户网页版看到的收件时间一致
-CN_TZ = timezone(timedelta(hours=8))
 
 BILIBILI_URL_RE = re.compile(
     r"https?://(?:www\.)?bilibili\.com/video/[A-Za-z0-9]+|https?://b23\.tv/[A-Za-z0-9]+"
@@ -129,7 +127,7 @@ def parse_raw_message(raw: bytes, whitelist: list[str]) -> EmailMessageData | No
     subject = str(msg.get("Subject") or "").strip()
     try:
         date_value = email.utils.parsedate_to_datetime(str(msg.get("Date")))
-        date_text = date_value.astimezone(CN_TZ).strftime("%Y-%m-%d %H:%M")
+        date_text = date_value.astimezone().isoformat(timespec='minutes')
     except (TypeError, ValueError):
         date_text = ""
     message_id = str(msg.get("Message-ID") or "").strip()

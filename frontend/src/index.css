@@ -918,9 +918,6 @@
 .chart-tooltip-text { fill: #fff; font-family: 'DM Mono', monospace; font-size: 11px; }
 .source-bar { display: flex; height: 8px; overflow: hidden; margin: 4px 0 18px; border-radius: 999px; background: var(--ac-surface-2); }
 .source-bar span { min-width: 0; transition: width .45s ease; }
-.source-bar-wechat { background: var(--ac-chart-1); }
-.source-bar-x { background: var(--ac-chart-2); }
-.source-bar-other { background: var(--ac-chart-3); }
 .source-list { display: grid; gap: 12px; }
 .source-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .source-name { display: inline-flex; align-items: center; gap: 8px; min-width: 0; color: var(--ac-muted); font-size: 12px; }

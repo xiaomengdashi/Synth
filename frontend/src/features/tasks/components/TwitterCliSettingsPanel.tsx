@@ -1,3 +1,4 @@
+import { getServerTimeZone } from '../../../utils/formatDate';
 import { useEffect, useState } from 'react';
 import { ChevronDown, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -133,8 +134,8 @@ export default function TwitterCliSettingsPanel() {
               <div className="twitter-cli-connection-meta">
                 {account ? <a href={`https://x.com/${encodeURIComponent(account.screen_name)}`} target="_blank" rel="noreferrer">@{account.screen_name}</a>
                   : <span>{verifying ? '正在连接 X…' : dirty ? '先保存修改，再验证。' : config && !config.installed ? '在高级设置中检查 CLI 安装' : config?.credentials_configured ? '验证后显示当前账号' : '填写下方两项凭据开始连接'}</span>}
-                {verification && <time dateTime={verification.checked_at} title={new Date(verification.checked_at).toLocaleString('zh-CN', { hour12: false })}>
-                  {new Date(verification.checked_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 验证
+                {verification && <time dateTime={verification.checked_at} title={new Date(verification.checked_at).toLocaleString('zh-CN', { timeZone: getServerTimeZone(), hour12: false })}>
+                  {new Date(verification.checked_at).toLocaleString('zh-CN', { timeZone: getServerTimeZone(), month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} 验证
                 </time>}
               </div>
             </div>

@@ -32,16 +32,16 @@ def test_priority_roundtrip_and_other_settings_do_not_reset_it(priority_client):
     client = priority_client
     response = client.get('/api/v1/config/fetch-priorities')
     assert response.status_code == 200
-    assert response.json()['priorities']['x'] == ['tikhub', 'content_downloader', 'twitter_cli']
+    assert response.json()['priorities']['x'] == ['tikhub', 'x_graphql', 'twitter_cli']
     response = client.put('/api/v1/config/fetch-priorities', json={
-        'priorities': {'x': ['content_downloader', 'tikhub', 'twitter_cli']},
+        'priorities': {'x': ['x_graphql', 'tikhub', 'twitter_cli']},
     })
     assert response.status_code == 200
-    assert response.json()['priorities']['x'] == ['content_downloader', 'tikhub', 'twitter_cli']
+    assert response.json()['priorities']['x'] == ['x_graphql', 'tikhub', 'twitter_cli']
     assert client.post('/api/v1/config', json={'modelName': 'test'}).status_code == 200
-    assert client.get('/api/v1/config/fetch-priorities').json()['priorities']['x'] == ['content_downloader', 'tikhub', 'twitter_cli']
+    assert client.get('/api/v1/config/fetch-priorities').json()['priorities']['x'] == ['x_graphql', 'tikhub', 'twitter_cli']
     runtime = asyncio.run(config.get_runtime_config())
-    assert json.loads(runtime['fetchProviderPriorities'])['x'] == ['content_downloader', 'tikhub', 'twitter_cli']
+    assert json.loads(runtime['fetchProviderPriorities'])['x'] == ['x_graphql', 'tikhub', 'twitter_cli']
 
 
 @pytest.mark.parametrize('priorities', [
@@ -52,7 +52,7 @@ def test_invalid_priority_is_rejected_without_overwriting(priority_client, prior
     client = priority_client
     response = client.put('/api/v1/config/fetch-priorities', json={'priorities': priorities})
     assert response.status_code == 422
-    assert client.get('/api/v1/config/fetch-priorities').json()['priorities']['x'] == ['tikhub', 'content_downloader', 'twitter_cli']
+    assert client.get('/api/v1/config/fetch-priorities').json()['priorities']['x'] == ['tikhub', 'x_graphql', 'twitter_cli']
 
 
 def test_priority_admin_auth(priority_client):
@@ -68,12 +68,12 @@ def test_x_preview_uses_saved_order(priority_client, monkeypatch):
     from app.services.fetchers import x_providers
     client = priority_client
     client.app.include_router(articles.router, prefix='/api/v1/articles')
-    client.put('/api/v1/config/fetch-priorities', json={'priorities': {'x': ['content_downloader', 'tikhub', 'twitter_cli']}})
-    async def download(url):
+    client.put('/api/v1/config/fetch-priorities', json={'priorities': {'x': ['x_graphql', 'tikhub', 'twitter_cli']}})
+    async def download(url, *args):
         return {'payload': {'tweet_text': '按后台顺序获取的正文', 'media_items': []}}
     def paid(*args):
         raise RuntimeError('此预览不应访问 TikHub')
-    monkeypatch.setattr(x_providers, 'fetch_content_downloader_tweet', download)
+    monkeypatch.setattr(x_providers, 'fetch_x_via_graphql', download)
     monkeypatch.setattr(articles, 'fetch_tikhub_tweet', paid)
     response = client.get('/api/v1/articles/x-preview', params={'url': 'https://x.com/author/status/123456789'})
     assert response.status_code == 200
@@ -82,26 +82,26 @@ def test_x_preview_uses_saved_order(priority_client, monkeypatch):
 
 def test_wechat_priority_can_be_saved_independently_of_x(priority_client):
     client = priority_client
-    client.put('/api/v1/config/fetch-priorities', json={'priorities': {'x': ['content_downloader', 'tikhub', 'twitter_cli']}})
+    client.put('/api/v1/config/fetch-priorities', json={'priorities': {'x': ['x_graphql', 'tikhub', 'twitter_cli']}})
     response = client.put('/api/v1/config/fetch-priorities', json={'priorities': {'wechat': ['content_downloader', 'tikhub']}})
     assert response.status_code == 200
     stored = client.get('/api/v1/config/fetch-priorities').json()['priorities']
     assert stored['wechat'] == ['content_downloader', 'tikhub']
-    assert stored['x'] == ['content_downloader', 'tikhub', 'twitter_cli']
+    assert stored['x'] == ['x_graphql', 'tikhub', 'twitter_cli']
 
 
 def test_existing_saved_x_order_appends_new_cli_provider(priority_client):
-    asyncio.run(settings_store.save_settings({'fetchProviderPriorities': json.dumps({'x': ['content_downloader', 'tikhub']})}))
+    asyncio.run(settings_store.save_settings({'fetchProviderPriorities': json.dumps({'x': ['x_graphql', 'tikhub']})}))
     current = priority_client.get('/api/v1/config/fetch-priorities').json()['priorities']['x']
-    assert current == ['content_downloader', 'tikhub', 'twitter_cli']
+    assert current == ['x_graphql', 'tikhub', 'twitter_cli']
 
 
 def test_cli_can_be_saved_as_x_first_choice(priority_client):
     response = priority_client.put('/api/v1/config/fetch-priorities', json={
-        'priorities': {'x': ['twitter_cli', 'tikhub', 'content_downloader']},
+        'priorities': {'x': ['twitter_cli', 'tikhub', 'x_graphql']},
     })
     assert response.status_code == 200
     saved = priority_client.get('/api/v1/config/fetch-priorities').json()
-    assert saved['priorities']['x'] == ['twitter_cli', 'tikhub', 'content_downloader']
+    assert saved['priorities']['x'] == ['twitter_cli', 'tikhub', 'x_graphql']
     assert saved['priorities']['wechat'] == ['tikhub', 'content_downloader']
     assert 'status' in saved['providers']['twitter_cli']

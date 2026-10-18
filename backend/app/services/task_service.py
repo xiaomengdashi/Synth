@@ -3,6 +3,7 @@ import datetime
 import json
 import re
 import uuid
+from app.timezones import local_iso, utc_naive
 
 from app.database import AsyncSessionLocal
 from app.services.content_sources import detect_source_type
@@ -12,6 +13,7 @@ from app.services.fetchers.bilibili_audio import fetch_bilibili_transcript_via_a
 from app.services.fetchers.social import extract_x_article_id
 from app.services.fetchers.tikhub import TikHubError, fetch_tikhub_tweet
 from app.services.fetchers.x_providers import fetch_x_with_priority
+from app.services.fetchers.x_graphql_article import build_graphql_article
 from app.services.fetchers.twitter_article_rich import render_twitter_article_result
 from app.services.fetchers.x_article import fetch_x_article_replica
 from app.services.fetchers.video import fetch_video_content
@@ -101,7 +103,7 @@ async def create_task_record(task_id: str, url: str, created_at_iso: str):
                 original_url=url,
                 status="pending",
                 current_step="任务已接收",
-                created_at=datetime.datetime.fromisoformat(created_at_iso),
+                created_at=utc_naive(datetime.datetime.fromisoformat(created_at_iso)),
             )
         )
         await session.commit()
@@ -190,7 +192,10 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
                     "full_text": (tikhub_result.get("article_text") or {}).get("full_text", ""),
                 }
                 try:
-                    replica = await fetch_x_article_replica(url, metadata, update_step)
+                    if tikhub_result.get("article_result"):
+                        replica = await build_graphql_article(tikhub_result["article_result"], metadata, url, update_step)
+                    else:
+                        replica = await fetch_x_article_replica(url, metadata, update_step)
                 except Exception as exc:
                     if not x_article_payload:
                         raise TikHubError(f"X 原文补采失败，且 {provider_label} 未返回可保存的正文。") from exc
@@ -307,7 +312,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
             else:
                 db_article = Article(
                     id=article_id, original_url=source_url, **content_fields,
-                    created_at=datetime.datetime.fromisoformat(task_created_at(TASKS_DB[task_id])),
+                    created_at=utc_naive(datetime.datetime.fromisoformat(task_created_at(TASKS_DB[task_id]))),
                 )
                 session.add(db_article)
             db_task = await session.get(Task, task_id)
@@ -339,7 +344,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
 async def get_task_status(task_id: str):
     task = TASKS_DB.get(task_id)
     if task:
-        return task
+        return {**task, 'created_at': local_iso(task.get('created_at'))}
 
     async with AsyncSessionLocal() as session:
         db_task = await session.get(Task, task_id)
@@ -352,7 +357,7 @@ async def get_task_status(task_id: str):
             "status": db_task.status,
             "current_step": db_task.current_step,
             "article_id": db_task.article_id,
-            "created_at": db_task.created_at.isoformat() if db_task.created_at else "",
+            "created_at": local_iso(db_task.created_at),
         }
 
         if db_task.article_id:

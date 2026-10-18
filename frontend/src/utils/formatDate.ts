@@ -1,3 +1,26 @@
+let serverTimeZone = 'UTC';
+
+export function getServerTimeZone(): string {
+  return serverTimeZone;
+}
+
+export function setServerTimeZone(timeZone: string): void {
+  // Validate the server-provided zone before using it throughout the UI.
+  new Intl.DateTimeFormat('en', { timeZone }).format();
+  serverTimeZone = timeZone;
+}
+
+export async function initializeServerTimeZone(): Promise<void> {
+  try {
+    const response = await fetch('/api/v1/config/timezone', { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (typeof data.timeZone === 'string') setServerTimeZone(data.timeZone);
+  } catch {
+    // The backend may be unavailable; retain an unambiguous UTC fallback.
+  }
+}
+
 export function formatDistanceToNow(date: Date): string {
   const now = new Date();
   const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
@@ -32,6 +55,23 @@ export function formatDistanceToNow(date: Date): string {
 
 /** 文章时间统一显示具体时间(与 publish_time 同精度),不用"6个月前"这类相对表述。 */
 export function formatAbsolute(date: Date): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  if (Number.isNaN(date.getTime())) return '—';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: getServerTimeZone(), year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find(part => part.type === type)?.value;
+  return `${value('year')}-${value('month')}-${value('day')} ${value('hour')}:${value('minute')}`;
+}
+
+export function serverDayKey(date: Date): string {
+  return formatAbsolute(date).slice(0, 10);
+}
+
+export function recentServerDays(now = new Date(), count = 7): string[] {
+  const [year, month, day] = serverDayKey(now).split('-').map(Number);
+  // Work with calendar dates here; elapsed 24-hour periods do not model DST days.
+  return Array.from({ length: count }, (_, index) => (
+    new Date(Date.UTC(year, month - 1, day - (count - 1 - index))).toISOString().slice(0, 10)
+  ));
 }

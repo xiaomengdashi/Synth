@@ -1,3 +1,4 @@
+import { getServerTimeZone } from '../../utils/formatDate.ts';
 import type { ParameterSchema, QueryParameter } from './types';
 
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -71,5 +72,5 @@ export const money = (value: number | null | undefined, digits = 3) =>
 export const dateTime = (value?: string | null) => {
   if (!value) return '—';
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false });
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { timeZone: getServerTimeZone(), hour12: false });
 };

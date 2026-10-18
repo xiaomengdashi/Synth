@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { BarChart3, CheckCircle2, FileText, ListChecks, Newspaper, Settings2, TrendingUp, Wallet } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAppStore } from '../../app/store/useAppStore';
-import { formatAbsolute } from '../../../utils/formatDate';
+import { formatAbsolute, recentServerDays, serverDayKey } from '../../../utils/formatDate';
 import { money, requestJson } from '../../tikhub/client';
 import type { Account } from '../../tikhub/types';
 import type { Article } from '../../articles/types';
@@ -20,23 +20,13 @@ const sourceLabels: Record<Article['source_type'], string> = {
 
 const sourceColors = ['var(--ac-chart-1)', 'var(--ac-chart-2)', 'var(--ac-chart-3)', 'var(--ac-chart-4)', 'var(--ac-chart-5)', 'var(--ac-chart-6)', 'var(--ac-chart-7)'];
 
-function getDayKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-function getLastSevenDays() {
-  const today = new Date();
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(today);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(today.getDate() - (6 - index));
-    return date;
-  });
+function dayLabel(day: string) {
+  return day.slice(5).split('-').map(Number).join('/');
 }
 
 function countArticlesByDay(articles: Article[]) {
-  const days = getLastSevenDays();
-  const counts = days.map((day) => articles.filter((article) => getDayKey(new Date(article.created_at)) === getDayKey(day)).length);
+  const days = recentServerDays();
+  const counts = days.map((day) => articles.filter((article) => serverDayKey(new Date(article.created_at)) === day).length);
   return { days, counts };
 }
 
@@ -52,7 +42,7 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
   const points = counts.map((count, index) => `${padding.left + index * xStep},${chartHeight - padding.bottom - count * yScale}`).join(' ');
   const areaPoints = `${padding.left},${chartHeight - padding.bottom} ${points} ${chartWidth - padding.right},${chartHeight - padding.bottom}`;
   // 悬停提示框:SVG 原生 rect+text 随 viewBox 缩放;顶点上方放不下时翻到点下方
-  const tipLabel = hovered === null ? '' : `${days[hovered].getMonth() + 1}/${days[hovered].getDate()} 新增 ${counts[hovered]} 篇`;
+  const tipLabel = hovered === null ? '' : `${dayLabel(days[hovered])} 新增 ${counts[hovered]} 篇`;
   const tipWidth = 118;
   const tipHeight = 24;
 
@@ -74,7 +64,7 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
           {counts.map((count, index) => {
             const x = padding.left + index * xStep;
             const y = chartHeight - padding.bottom - count * yScale;
-            return <g key={getDayKey(days[index])}><circle cx={x} cy={y} r="4" className="trend-point" /><text x={x} y={chartHeight - 9} textAnchor="middle" className="chart-axis-label">{`${days[index].getMonth() + 1}/${days[index].getDate()}`}</text></g>;
+            return <g key={days[index]}><circle cx={x} cy={y} r="4" className="trend-point" /><text x={x} y={chartHeight - 9} textAnchor="middle" className="chart-axis-label">{dayLabel(days[index])}</text></g>;
           })}
           {hovered !== null ? (() => {
             const x = padding.left + hovered * xStep;
@@ -94,7 +84,7 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
             const y = chartHeight - padding.bottom - count * yScale;
             return (
               <circle
-                key={`hit-${getDayKey(days[index])}`}
+                key={`hit-${days[index]}`}
                 cx={x}
                 cy={y}
                 r="16"
@@ -129,7 +119,14 @@ function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourc
         <span className="ac-card-caption">{sourceCounts.length} 类来源</span>
       </div>
       <div className="ac-card-body">
-        <div className="source-bar" aria-label="文章来源分布"><span className="source-bar-wechat" style={{ width: `${(sourceCounts.find((item) => item.source === 'wechat')?.count || 0) / total * 100}%` }} /><span className="source-bar-x" style={{ width: `${(sourceCounts.find((item) => item.source === 'x')?.count || 0) / total * 100}%` }} /><span className="source-bar-other" style={{ width: `${sourceCounts.filter((item) => item.source !== 'wechat' && item.source !== 'x').reduce((sum, item) => sum + item.count, 0) / total * 100}%` }} /></div>
+        <div className="source-bar" aria-label="文章来源分布">
+          {sourceCounts.map((item, index) => (
+            <span key={item.source} title={`${item.label}：${item.count} 篇`} style={{
+              width: `${item.count / total * 100}%`,
+              background: sourceColors[index] || sourceColors[sourceColors.length - 1],
+            }} />
+          ))}
+        </div>
         <div className="source-list">
           {sourceCounts.length === 0 ? <div className="chart-empty">还没有来源数据</div> : sourceCounts.map((item, index) => <div className="source-item" key={item.source}><span className="source-name"><i style={{ background: sourceColors[index] || sourceColors[sourceColors.length - 1] }} />{item.label}</span><strong>{item.count}<small>篇 · {Math.round(item.count / total * 100)}%</small></strong></div>)}
         </div>

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete as sa_delete, func, or_, select, update as sa_update
-from fastapi.encoders import jsonable_encoder
+from app.timezones import local_iso, jsonable_local as jsonable_encoder
 from app.database import get_db
 from app.models import Article, Task
 from app.services.fetchers.article import parse_article_html
@@ -90,7 +90,7 @@ async def _list_article_summaries(db: AsyncSession, limit: int, offset: int, cat
         for condition in filters:
             count_query = count_query.where(condition)
         total = (await db.execute(count_query)).scalar() or 0
-    return {"total": total, "data": rows}
+    return jsonable_encoder({"total": total, "data": rows})
 
 
 @router.get("/")
@@ -162,7 +162,7 @@ async def get_related_articles(article_id: str, db: AsyncSession = Depends(get_d
     rows = await fetch_related(db, article_id)
     if rows is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    return {"data": rows}
+    return jsonable_encoder({"data": rows})
 
 
 @router.get("/x-preview")
@@ -210,7 +210,7 @@ async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db
         "cover_image_url": parsed["cover_image_url"],
         "account_name": parsed.get("account_name") or "",
         "publish_time": parsed.get("publish_time") or "",
-        "created_at": created_at.isoformat(),
+        "created_at": local_iso(created_at),
     }
 
     db.add(
@@ -368,7 +368,7 @@ async def refetch_article(
         if active:
             return {"task_id": active.id, "article_id": article_id, "status": active.status,
                     "current_step": active.current_step, "original_url": active.original_url,
-                    "created_at": active.created_at.isoformat(), "reused": True}
+                    "created_at": local_iso(active.created_at), "reused": True}
 
         config = await get_runtime_config()
         task_id = str(uuid.uuid4())
@@ -379,7 +379,7 @@ async def refetch_article(
         await db.commit()
         task_data = {"id": task_id, "original_url": url, "status": "pending",
                      "article_id": article_id, "current_step": task.current_step,
-                     "created_at": created_at.isoformat()}
+                     "created_at": local_iso(created_at)}
         TASKS_DB[task_id] = task_data
         background_tasks.add_task(process_task, task_id, url, config, article_id)
         return {**task_data, "task_id": task_id, "reused": False}
@@ -398,7 +398,7 @@ async def get_article(
         # 重新获取正文及修改元数据都会更新 updated_at，ETag 命中时省掉整段正文传输；
         # 收藏/进度只翻标记不动 updated_at,必须一并纳入 ETag,否则翻转后重验证命中 304 会把旧阅读态还回去
         etag = (
-            f'W/"{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}'
+            f'W/"local-{local_iso(article.updated_at)}-{article.id}-{article.updated_at.isoformat() if article.updated_at else "0"}'
             f'-{int(article.is_starred)}-{article.read_progress}"'
         )
         if request.headers.get("if-none-match") == etag:

@@ -95,7 +95,8 @@ export default function FetchPriorityPanel() {
             {Object.entries(settings.platforms).map(([platform, info]) => {
               const order = priorities[platform] ?? [];
               const adjustable = order.length > 1;
-              const cliStatus = order.includes('twitter_cli') ? settings.providers.twitter_cli?.status : undefined;
+              const graphql = order.includes('x_graphql');
+              const cliStatus = graphql ? settings.providers.x_graphql?.status : order.includes('twitter_cli') ? settings.providers.twitter_cli?.status : undefined;
               return <section className="priority-row" key={platform} aria-label={info.label}>
                 <h2>{info.label}</h2>
                 <div className="priority-row-content">
@@ -116,7 +117,7 @@ export default function FetchPriorityPanel() {
                       </li>;
                     })}
                   </ol>
-                  {cliStatus && <p className="priority-cli-status" title={cliStatus}><span className={cliStatus.startsWith('已配置') ? 'is-ready' : ''} aria-hidden="true" />twitter-cli {cliStatus.startsWith('已配置') ? '已配置' : cliStatus}<span aria-hidden="true">·</span><Link to="/admin/tikhub?section=twitter-cli">登录配置</Link></p>}
+                  {cliStatus && <p className="priority-cli-status" title={cliStatus}><span className={cliStatus.startsWith('已配置') ? 'is-ready' : ''} aria-hidden="true" />{graphql ? 'X 登录态' : 'twitter-cli'} {cliStatus.startsWith('已配置') ? '已配置' : graphql ? '未配置' : cliStatus}<span aria-hidden="true">·</span><Link to="/admin/tikhub?section=twitter-cli">登录配置</Link></p>}
                 </div>
               </section>;
             })}

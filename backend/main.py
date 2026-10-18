@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.staticfiles import StaticFiles
+from app.services.x_media import MediaFiles
 
 from app.database import init_db
 from app.routers import articles, tasks, config, tikhub, models, categories, admin_auth, email_import, notes
@@ -44,7 +44,7 @@ app.add_middleware(
 
 # 静态文件（图片等媒体）——mount 在模块加载时执行，必须先确保目录存在
 os.makedirs(settings.MEDIA_DIR, exist_ok=True)
-app.mount("/media", StaticFiles(directory=settings.MEDIA_DIR), name="media")
+app.mount("/media", MediaFiles(directory=settings.MEDIA_DIR), name="media")
 
 # Public local X fonts must also load inside an opaque sandboxed article frame.
 @app.middleware("http")
