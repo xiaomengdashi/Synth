@@ -1,13 +1,55 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronDown, CircleHelp, RotateCcw, Save } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronDown, CircleHelp, ExternalLink, Package, RotateCcw, Save } from 'lucide-react';
 import { adminFetch } from '../../../utils/adminAuth';
 
 type Priorities = Record<string, string[]>;
+interface DeploymentRequirement {
+  name: string;
+  summary: string;
+  condition: string;
+  description: string;
+  commands: { label: string; command: string }[];
+  docs_url?: string;
+  config_link?: { label: string; href: string };
+}
 interface FetchSettings {
-  platforms: Record<string, { label: string; providers: string[] }>;
+  platforms: Record<string, { label: string; providers: string[]; requirements?: DeploymentRequirement[] }>;
   providers: Record<string, { label: string; description: string; status?: string }>;
   priorities: Priorities;
+}
+
+function DeploymentRequirements({ platform, requirements }: { platform: string; requirements: DeploymentRequirement[] }) {
+  if (!requirements.length) return <p className="priority-no-dependencies">无需额外系统依赖</p>;
+  return (
+    <details className="priority-dependencies">
+      <summary aria-label={`${platform} 部署依赖`}>
+        <Package size={12} aria-hidden="true" />
+        <span>{requirements.map(requirement => requirement.summary).join('；')}</span>
+        <ChevronDown size={12} aria-hidden="true" />
+      </summary>
+      <div className="priority-dependency-content">
+        <p className="priority-dependency-location">在运行后端的服务器执行；容器部署请安装在后端镜像中。</p>
+        {requirements.map(requirement => (
+          <section className="priority-dependency" key={requirement.name}>
+            <h3>{requirement.name}</h3>
+            <p className="priority-dependency-condition">{requirement.condition}</p>
+            <p>{requirement.description}</p>
+            {requirement.commands.map(command => (
+              <div className="priority-install-command" key={command.label}>
+                <span>{command.label}</span>
+                <pre><code>{command.command}</code></pre>
+              </div>
+            ))}
+            <div className="priority-dependency-links">
+              {requirement.docs_url && <a href={requirement.docs_url} target="_blank" rel="noopener noreferrer">安装文档<ExternalLink size={11} /></a>}
+              {requirement.config_link && <Link to={requirement.config_link.href}>{requirement.config_link.label}<ArrowRight size={11} /></Link>}
+            </div>
+          </section>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 async function fetchSettings(init?: RequestInit): Promise<FetchSettings> {
@@ -108,7 +150,7 @@ export default function FetchPriorityPanel() {
                         <div className={`priority-method${index === 0 && adjustable ? ' is-first' : ''}`}>
                           {adjustable && <span className="priority-rank" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span>}
                           <strong>{method.label}</strong>
-                          <span className="priority-method-state">{adjustable ? (index === 0 ? '优先' : '') : '固定'}</span>
+                          <span className="priority-method-state">{adjustable && index === 0 ? '优先' : ''}</span>
                           {adjustable && <div className="priority-method-actions">
                             <button type="button" onClick={() => move(platform, index, -1)} disabled={saving || index === 0} aria-label={`上移 ${method.label}（${info.label}）`} title="提高优先级"><ArrowUp size={13} /></button>
                             <button type="button" onClick={() => move(platform, index, 1)} disabled={saving || index === order.length - 1} aria-label={`下移 ${method.label}（${info.label}）`} title="降低优先级"><ArrowDown size={13} /></button>
@@ -118,6 +160,7 @@ export default function FetchPriorityPanel() {
                     })}
                   </ol>
                   {cliStatus && <p className="priority-cli-status" title={cliStatus}><span className={cliStatus.startsWith('已配置') ? 'is-ready' : ''} aria-hidden="true" />{graphql ? 'X 登录态' : 'twitter-cli'} {cliStatus.startsWith('已配置') ? '已配置' : graphql ? '未配置' : cliStatus}<span aria-hidden="true">·</span><Link to="/admin/tikhub?section=twitter-cli">登录配置</Link></p>}
+                  <DeploymentRequirements platform={info.label} requirements={info.requirements ?? []} />
                 </div>
               </section>;
             })}

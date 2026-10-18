@@ -105,3 +105,22 @@ def test_cli_can_be_saved_as_x_first_choice(priority_client):
     assert saved['priorities']['x'] == ['twitter_cli', 'tikhub', 'x_graphql']
     assert saved['priorities']['wechat'] == ['tikhub', 'content_downloader']
     assert 'status' in saved['providers']['twitter_cli']
+
+
+def test_every_platform_declares_deployment_requirements(priority_client):
+    """每个平台都要带 requirements 字段：有依赖列出，无依赖空列表（前端显示"无需额外系统依赖"）。"""
+    view = priority_client.get('/api/v1/config/fetch-priorities').json()['platforms']
+    assert set(view) == {'x', 'wechat', 'bilibili', 'youtube', 'csdn', 'cnblogs', 'web'}
+    summaries = {platform: [item['summary'] for item in info['requirements']]
+                 for platform, info in view.items()}
+    assert summaries['x'] == ['twitter-cli 需单独安装']
+    assert summaries['bilibili'] == ['音频转写需 ffmpeg']
+    assert summaries['youtube'] == ['yt-dlp 需 Node.js / Deno', '音频转写需 ffmpeg']
+    assert summaries['csdn'] == ['浏览器抓取需 Chromium']
+    for platform in ('wechat', 'cnblogs', 'web'):
+        assert summaries[platform] == []
+    for info in view.values():
+        for requirement in info['requirements']:
+            assert {'name', 'summary', 'condition', 'description', 'commands'} <= set(requirement)
+            for command in requirement['commands']:
+                assert command['command'].strip()

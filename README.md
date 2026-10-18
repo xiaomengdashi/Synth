@@ -91,7 +91,7 @@ X 默认顺序为 **TikHub → Content Downloader → twitter-cli**，微信为 
 
 视频获取必须返回有效文稿；仅有视频标题和简介时任务报错，不会伪装成已获取完整正文。已有字幕不会调用语音转写；模型未配置或笔记生成失败时保存原文稿。没有字幕时使用后台「语音转写」配置的 MiniMax Key，临时音频在处理后自动删除。
 
-部署安装：`pip install -r backend/requirements.txt`；音频转写需 `ffmpeg`（Ubuntu：`sudo apt install ffmpeg`）。YouTube 的 yt-dlp 路径建议安装 Node.js 20+ 或 Deno；依赖中包含 yt-dlp 的 EJS 组件，不从浏览器自动提取登录 Cookie。部署脚本会在 Ubuntu 缺少 ffmpeg 时安装它。需要浏览器抓取 CSDN 时运行 `python -m playwright install --with-deps chromium`。
+部署安装：`pip install -r backend/requirements.txt`；音频转写需 `ffmpeg`（Ubuntu：`sudo apt install ffmpeg`）。YouTube 的 yt-dlp 路径需提供 [Node.js 22+ 或 Deno 2.3+](https://github.com/yt-dlp/yt-dlp/wiki/EJS)；依赖中包含 yt-dlp 的 EJS 组件，不从浏览器自动提取登录 Cookie。部署脚本会在 Ubuntu 缺少 ffmpeg 时安装它。需要浏览器抓取 CSDN 时运行 `python -m playwright install --with-deps chromium`。后台「获取优先级」的对应平台下会显示部署依赖摘要，展开可查看适用场景、服务器安装命令、官方文档及配置入口；无额外系统软件要求的平台也会明确注明。
 
 「系统设置 → 网络配置 → 视频下载代理」用于视频媒体下载，沿用 `bilibiliProxy` 存储字段及 `BILIBILI_PROXY` 环境变量；TikHub API 请求仍使用单独的接口端点。平台风控、地域或服务器网络限制可能导致媒体下载失败，届时任务显示具体失败原因，可配置代理后重新获取。
 
