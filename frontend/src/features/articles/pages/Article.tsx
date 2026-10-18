@@ -8,13 +8,15 @@ import rehypeHighlight from 'rehype-highlight';
 // common 子集(~35 种常用语言)代替全量引入:全量会把详情页 chunk 撑到 1MB+,显著拖慢首屏
 import hljs from 'highlight.js/lib/common';
 import 'highlight.js/styles/github-dark.css'; // 使用更经典美观的 GitHub Dark 主题
-import { ArrowLeft, ArrowUp, BookOpen, Download, ExternalLink, Loader2, Sparkles, Star } from 'lucide-react';
+import { ArrowLeft, ArrowUp, BookOpen, Download, ExternalLink, Loader2, RefreshCw, Sparkles, Star } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import WechatArticleView from '../components/WechatArticleView';
 import type { WechatArticleViewHandle } from '../components/WechatArticleView';
 import XArticleView from '../components/XArticleView';
 import ArticleNotes from '../components/ArticleNotes';
 import ArticleDeleteButton from '../components/ArticleDeleteButton';
+import useVerifiedAdminToken from '../../../hooks/useVerifiedAdminToken';
+import useArticleRefetch from '../../tasks/hooks/useArticleRefetch';
 import { extractXArticle } from '../lib/xArticle';
 import { clampProgress, shouldMarkRead, shouldReport, shouldRestore } from '../lib/readingState';
 import { sourceColor, sourceLabel } from '../components/ArticleList';
@@ -191,6 +193,9 @@ export default function Article() {
   const saveProgress = useAppStore((state) => state.saveProgress);
   const updateArticle = useAppStore((state) => state.updateArticle);
   const pushToast = useAppStore((state) => state.pushToast);
+  // 重新获取走后台同款链路:提交+轮询+updateArticle,完成后 store 命中带正文数据,本页 effect 自动刷新正文
+  const { jobs: refetchJobs, refetchArticle } = useArticleRefetch();
+  const { status: adminStatus } = useVerifiedAdminToken();
   // 列表接口的数据不含正文:store 命中但无 content_md 时首帧必须走加载态,
   // 否则第一次访问(chunk 下载慢、列表先返回)会带着元数据渲染,content_md 为 undefined 直接崩
   const initialArticle = storeArticle?.content_md ? storeArticle : null;
@@ -661,6 +666,18 @@ export default function Article() {
           <a className="reader-tool" href={`/api/v1/articles/${article.id}/export`} download>
             <Download size={13} /> 导出本文
           </a>
+          {adminStatus === 'verified' ? (
+            <button
+              type="button"
+              className="reader-tool"
+              disabled={Boolean(refetchJobs[article.id])}
+              onClick={() => void refetchArticle(article)}
+              title={refetchJobs[article.id] || '根据原始链接更新正文和摘要，失败保留原内容'}
+            >
+              {refetchJobs[article.id] ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              {refetchJobs[article.id] ? '获取中' : '重新获取'}
+            </button>
+          ) : null}
           <ArticleDeleteButton key={article.id} articleId={article.id} title={article.title} />
         </div>
       {tocItems.length > 0 ? (

@@ -1,3 +1,5 @@
+import { adminFetch } from '../../utils/adminAuth';
+
 export interface SharedTask {
   task_id?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
@@ -9,14 +11,14 @@ export interface SharedTask {
 
 export interface ShareInput { url?: string; text?: string; title?: string; retry?: boolean }
 
-async function requestTask(url: string, init: RequestInit = {}, signal?: AbortSignal): Promise<SharedTask> {
+async function requestTask(url: string, init: RequestInit = {}, signal?: AbortSignal, fetcher: typeof fetch = fetch): Promise<SharedTask> {
   const controller = new AbortController();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) controller.abort();
   const timeout = setTimeout(abort, 20000);
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
+    const response = await fetcher(url, { ...init, signal: controller.signal });
     const data = await response.json();
     if (!response.ok || data.error) {
       throw new Error(typeof data.detail === 'string' ? data.detail : data.error || '提交失败，请检查链接后重试。');
@@ -38,6 +40,7 @@ async function requestTask(url: string, init: RequestInit = {}, signal?: AbortSi
 }
 
 // Share pages can mount twice in StrictMode; the backend also deduplicates durably.
+// 提交走 adminFetch:导入是管理动作,需浏览器先登录过后台;状态轮询仍走公开接口
 const submissions = new Map<string, Promise<SharedTask>>();
 export function submitShare(input: ShareInput): Promise<SharedTask> {
   const body = JSON.stringify(input);
@@ -45,7 +48,7 @@ export function submitShare(input: ShareInput): Promise<SharedTask> {
   if (existing) return existing;
   const request = requestTask('/api/v1/tasks/share', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
-  }).finally(() => submissions.delete(body));
+  }, undefined, adminFetch as typeof fetch).finally(() => submissions.delete(body));
   submissions.set(body, request);
   return request;
 }

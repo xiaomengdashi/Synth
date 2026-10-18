@@ -64,6 +64,8 @@ def guard_client(tmp_path, monkeypatch):
     ('get', '/api/v1/tikhub/catalog', None),
     ('post', '/api/v1/tikhub/query', {'endpoint_id': 'x', 'parameters': {}}),
     ('post', '/api/v1/articles/import-html', {'original_url': 'https://x.example', 'html': '<p>x</p>'}),
+    ('post', '/api/v1/tasks/submit', {'url': 'https://x.com/a/status/1'}),
+    ('post', '/api/v1/tasks/share', {'url': 'https://x.com/a/status/1'}),
 ])
 def test_admin_endpoints_reject_missing_token(guard_client, method, path, body):
     if body is None:
@@ -76,6 +78,19 @@ def test_admin_endpoints_reject_missing_token(guard_client, method, path, body):
 def test_admin_endpoints_accept_valid_token(guard_client):
     assert guard_client.get('/api/v1/config', headers=AUTH).status_code == 200
     assert guard_client.get('/api/v1/tasks', headers=AUTH).status_code == 200
+
+
+def test_task_submit_accepts_valid_token(guard_client, monkeypatch):
+    # 匿名 401 之外还要保证站长提交通路不被误伤;后台任务替换为空操作,不触发真实抓取
+    from app.routers import tasks
+
+    async def noop(*args):
+        pass
+
+    monkeypatch.setattr(tasks, 'process_task', noop)
+    response = guard_client.post('/api/v1/tasks/submit', json={'url': 'https://x.com/a/status/1'}, headers=AUTH)
+    assert response.status_code == 200
+    assert response.json()['status'] == 'pending'
 
 
 def test_task_status_polling_stays_public(guard_client):

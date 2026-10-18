@@ -45,7 +45,7 @@ export default function ShareSetup() {
           <h2 className="ac-card-title">第一步 · 先让手机打开这个网站</h2>
         </div>
         <div className="ac-card-body">
-          <p className="ac-card-desc">在 iPhone 的 Safari 中打开下面的地址。使用电脑运行的版本时，手机和电脑需连接同一 Wi-Fi，电脑需保持开机、服务运行。</p>
+          <p className="ac-card-desc">在 iPhone 的 Safari 中打开下面的地址，并访问一次后台完成登录——导入功能只对已登录的站长开放，登录一次后分享导入即可自动可用。使用电脑运行的版本时，手机和电脑需连接同一 Wi-Fi，电脑需保持开机、服务运行。</p>
           <label className="share-input-label" htmlFor="mobile-site-url">iPhone 可访问的网站地址</label>
           <div className="share-address-row">
             <input id="mobile-site-url" className="ac-input" type="url" value={address} onChange={(event) => { setAddress(event.target.value); setCopyMessage(''); }} spellCheck={false} />

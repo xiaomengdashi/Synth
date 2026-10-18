@@ -8,6 +8,7 @@ import type { Task } from '../../tasks/types';
 import ArticleList from '../components/ArticleList';
 
 import { SOURCE_META as sourceMeta, detectSourceFromUrl, normalizeContentUrl, type Source } from '../lib/contentSources';
+import useVerifiedAdminToken from '../../../hooks/useVerifiedAdminToken';
 type TaskStatusResponse = {
   status?: Task['status'];
   current_step?: string;
@@ -18,6 +19,8 @@ type TaskStatusResponse = {
 
 export default function Home() {
   const { articles, articlesTotal, addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
+  // 导入是管理动作:仅令牌复验通过的站长可见投稿区,访客只见阅读内容
+  const { status: adminStatus } = useVerifiedAdminToken();
   const [source, setSource] = useState<Source>('wechat');
   const [url, setUrl] = useState('');
   const [detectedSource, setDetectedSource] = useState<Source | null>(null);
@@ -92,22 +95,28 @@ export default function Home() {
     setDetectedSource(null);
 
     try {
-      const response = await fetch('/api/v1/tasks/submit', {
+      const response = await adminFetch('/api/v1/tasks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: originalUrl }),
       });
-      if (!response.ok) throw new Error('提交任务失败');
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        throw new Error(response.status === 401
+          ? '导入需要管理员身份，请先登录后台再回来导入'
+          : (data as { detail?: string } | null)?.detail || '提交任务失败');
+      }
       const data = await response.json();
       updateTask(localTaskId, { status: 'processing', current_step: '已进入处理队列' });
       void pollTaskStatus(data.task_id, localTaskId);
     } catch (error) {
+      const reason = error instanceof Error ? error.message : '未知错误';
       updateTask(localTaskId, {
         status: 'failed',
-        current_step: `提交失败：${error instanceof Error ? error.message : '未知错误'}`,
+        current_step: `提交失败：${reason}`,
       });
       setIsSubmitting(false);
-      pushToast({ title: '链接提交失败，请稍后重试', tone: 'error' });
+      pushToast({ title: `导入未完成：${reason}`, tone: 'error' });
     }
   };
 
@@ -187,7 +196,8 @@ export default function Home() {
         </p>
       </section>
 
-      <section className="collect-shell anim-enter" style={{ '--lift': '14px', animationDuration: '.5s', animationDelay: '.12s' } as React.CSSProperties}>
+      {adminStatus === 'verified' ? (
+        <section className="collect-shell anim-enter" style={{ '--lift': '14px', animationDuration: '.5s', animationDelay: '.12s' } as React.CSSProperties}>
         <form className="collect-bar" onSubmit={handleSubmit}>
           <select className="collect-source-select" aria-label="选择来源" value={source} onChange={event => setSource(event.target.value as Source)}>
             {(Object.keys(sourceMeta) as Source[]).map(value => <option key={value} value={value}>{sourceMeta[value].label}</option>)}
@@ -224,6 +234,7 @@ export default function Home() {
           <button type="button" onClick={() => setHtmlImportOpen(true)}><Upload size={13} />导入网页 HTML</button>
         </div>
       </section>
+      ) : null}
 
       {htmlImportOpen ? (
         <div className="modal-backdrop" role="presentation" onMouseDown={() => !isHtmlImporting && setHtmlImportOpen(false)}>

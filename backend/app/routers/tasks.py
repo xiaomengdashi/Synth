@@ -29,7 +29,9 @@ class ShareSubmit(BaseModel):
 
 
 @router.post("/share")
-async def submit_share(data: ShareSubmit, background_tasks: BackgroundTasks, db=Depends(get_db)):
+async def submit_share(data: ShareSubmit, background_tasks: BackgroundTasks, db=Depends(get_db), _: None = Depends(require_admin)):
+    # 导入属于管理动作(消耗抓取配额并写库),须持有效令牌;
+    # 手机侧在 Safari 登录一次后台即可令 /share 页自动携带
     try:
         identity, url = extract_shared_url(data.url, data.text, data.title)
     except ValueError as exc:
@@ -52,7 +54,8 @@ async def list_tasks(db=Depends(get_db), _: None = Depends(require_admin)):
 
 
 @router.post("/submit")
-async def submit_task(data: TaskSubmit, background_tasks: BackgroundTasks):
+async def submit_task(data: TaskSubmit, background_tasks: BackgroundTasks, _: None = Depends(require_admin)):
+    # 同 submit_share:导入只对已登录站长开放
     task_id = str(uuid.uuid4())
     created_at = local_iso(datetime.datetime.now(datetime.UTC))
 

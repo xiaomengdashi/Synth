@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertCircle, ArrowRight, Check, Clipboard, Loader2, RotateCcw, Share2 } from 'lucide-react';
+import { AlertCircle, ArrowRight, Check, Clipboard, Loader2, Lock, RotateCcw, Share2 } from 'lucide-react';
 import { submitShare, watchSharedTask } from './shareClient';
 import type { SharedTask } from './shareClient';
+import useVerifiedAdminToken from '../../hooks/useVerifiedAdminToken';
 
 export default function ShareReceive() {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const query = params.toString();
+  const { status: adminStatus } = useVerifiedAdminToken();
   const [task, setTask] = useState<SharedTask | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
@@ -16,10 +18,13 @@ export default function ShareReceive() {
   const [manualMessage, setManualMessage] = useState('');
   const [pasting, setPasting] = useState(false);
   const hasInput = Boolean(params.get('task') || params.get('url') || params.get('text') || params.get('title'));
+  const locked = adminStatus === 'anonymous';
 
   useEffect(() => {
     const input = new URLSearchParams(query);
     if (!input.get('task') && !input.get('url') && !input.get('text') && !input.get('title')) return;
+    // 未登录不发起提交:提交接口要管理员令牌,发起只会收到 401
+    if (locked) return;
     const controller = new AbortController();
     setBusy(true);
     setNotice('');
@@ -56,7 +61,7 @@ export default function ShareReceive() {
       }
     })();
     return () => controller.abort();
-  }, [query, attempt, navigate, setParams]);
+  }, [query, attempt, locked, navigate, setParams]);
 
   const retry = async () => {
     if (task?.status !== 'failed' || !task.original_url) {
@@ -112,6 +117,15 @@ export default function ShareReceive() {
       <h1>把这篇好文章，收下来。</h1>
       <p className="share-lede">分享文章或视频链接，自动整理并保存到文章库。</p>
       <section className="share-status-panel" aria-live="polite" aria-busy={busy}>
+        {locked ? (
+          <>
+            <span className="share-status-icon has-notice"><Lock size={27} /></span>
+            <h2>导入需要管理员身份</h2>
+            <p>{hasInput ? '链接已收到，但导入功能只对站长开放。' : '导入功能只对站长开放。'}在这台设备的浏览器上登录一次后台，之后的分享导入即可自动可用。</p>
+            <Link className="primary-button" to="/admin">去登录后台 <ArrowRight size={15} /></Link>
+          </>
+        ) : (
+        <>
         <span className={`share-status-icon ${failed || notice ? 'has-notice' : ''}`}>
           {busy ? <Loader2 size={27} className="animate-spin" /> : failed || notice ? <AlertCircle size={27} /> : <Share2 size={27} />}
         </span>
@@ -132,6 +146,8 @@ export default function ShareReceive() {
           </div>
           {manualMessage && <p className="share-inline-notice" role="status">{manualMessage}</p>}
         </form>}
+        </>
+        )}
       </section>
       <div className="share-footer-links"><Link to="/admin/share">设置 iPhone 分享入口</Link><Link to={hasInput ? '/admin/tasks' : '/articles'}>{hasInput ? '查看处理任务' : '打开文章库'} <ArrowRight size={14} /></Link></div>
     </div>
