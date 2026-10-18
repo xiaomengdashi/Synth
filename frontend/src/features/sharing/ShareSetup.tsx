@@ -27,9 +27,9 @@ export default function ShareSetup() {
           <h2 className="ac-card-title"><Smartphone size={15} /> 分享流程</h2>
         </div>
         <div className="ac-card-body">
-          <p className="ac-card-desc">给 iPhone 添加一次「保存到 SynthAI」快捷指令，之后在 X 或微信里看到好文章，直接从分享菜单保存进文章库。</p>
+          <p className="ac-card-desc">给 iPhone 添加一次「保存到 SynthAI」快捷指令，之后看到想保存的文章或视频，直接从分享菜单保存进文章库。</p>
           <div className="share-flow" style={{ margin: 0, padding: 0, borderBottom: 0 }}>
-            <span><Share2 size={16} /> X / 微信分享</span><ArrowRight size={15} />
+            <span><Share2 size={16} /> 文章 / 视频分享</span><ArrowRight size={15} />
             <span><Smartphone size={16} /> 保存到 SynthAI</span><ArrowRight size={15} />
             <span>文章库</span>
           </div>
@@ -60,7 +60,7 @@ export default function ShareSetup() {
           <h2 className="ac-card-title">第二步 · 添加「保存到 SynthAI」</h2>
         </div>
         <div className="ac-card-body">
-          <p className="ac-card-desc" style={{ marginBottom: 0 }}>{shortcutIcloudUrl ? '在 iPhone 上打开 iCloud 快捷指令链接，添加时，将网站地址设为上一步已能打开的地址。首次运行时，允许它打开该网站。' : '当前站点还没有配置 iCloud 一键安装链接（VITE_SHARE_SHORTCUT_ICLOUD_URL），可按下方说明手动创建快捷指令，效果相同。'}</p>
+          <p className="ac-card-desc" style={{ marginBottom: 0 }}>{shortcutIcloudUrl ? '在 iPhone 上打开 iCloud 快捷指令链接，添加时，将网站地址设为上一步已能打开的地址。首次运行时，允许它打开该网站。' : '暂未提供一键安装链接，请按下方说明手动创建快捷指令。'}</p>
           {shortcutIcloudUrl && (
             <div className="ac-actions" style={{ justifyContent: 'flex-start' }}>
               <a className="ac-btn primary" href={shortcutIcloudUrl} target="_blank" rel="noreferrer">打开 iCloud 快捷指令 <ArrowRight size={14} /></a>
@@ -71,10 +71,10 @@ export default function ShareSetup() {
 
       <section className="ac-card">
         <div className="ac-card-head">
-          <h2 className="ac-card-title">第三步 · 回到 X 或微信，分享第一篇文章</h2>
+          <h2 className="ac-card-title">第三步 · 分享第一篇文章或视频</h2>
         </div>
         <div className="ac-card-body">
-          <p className="ac-card-desc">打开 X 帖子、X 长文或微信公众号文章，点击分享 → “通过其他方式分享” → 在系统分享菜单中选择「保存到 SynthAI」。网站会自动获取链接、抓取内容，并打开保存好的文章。</p>
+          <p className="ac-card-desc">打开支持的文章或视频，点击分享 → “通过其他方式分享” → 在系统分享菜单中选择「保存到 SynthAI」。网站会自动获取链接、抓取内容，并打开保存好的文章。</p>
           <p className="ac-help" style={{ marginBottom: 0 }}>如果没看到入口，请打开快捷指令的详细信息，开启“在共享表单中显示”。入口名称可能随 iOS、X 和微信版本略有不同。</p>
         </div>
       </section>

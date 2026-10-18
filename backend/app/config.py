@@ -20,5 +20,8 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     DEBUG: bool = True
     FRONTEND_URL: str = "http://localhost:3000"
+    SYNTHAI_TWITTER_BIN: str = ""
+    TWITTER_AUTH_TOKEN: str = ""
+    TWITTER_CT0: str = ""
 
 settings = Settings()

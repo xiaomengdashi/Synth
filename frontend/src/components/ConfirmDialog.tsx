@@ -44,7 +44,7 @@ export default function ConfirmDialog({
           <button type="button" className="modal-close" aria-label="关闭确认弹窗" onClick={onCancel} disabled={busy}><X size={17} /></button>
         </div>
         <div className="modal-footer">
-          <button type="button" className="secondary-button" onClick={onCancel} disabled={busy}>{cancelText}</button>
+          <button type="button" className="secondary-button" autoFocus onClick={onCancel} disabled={busy}>{cancelText}</button>
           <button type="button" className="primary-button" style={{ background: 'var(--danger)' }} onClick={onConfirm} disabled={busy}>
             {busy ? <><Loader2 size={14} className="animate-spin" />删除中</> : confirmText}
           </button>

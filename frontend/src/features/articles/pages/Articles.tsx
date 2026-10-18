@@ -1,3 +1,4 @@
+import { SOURCE_META, type Source } from '../lib/contentSources';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { BookOpen, ChevronDown, LayoutGrid, List, Search, Star, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -5,7 +6,7 @@ import ArticleList, { sourceColor } from '../components/ArticleList';
 import ArticleListFooter from '../components/ArticleListFooter';
 import { useAppStore } from '../../app/store/useAppStore';
 
-const SOURCES = [{ value: 'wechat', label: '微信' }, { value: 'x', label: 'X / Twitter' }, { value: 'bilibili', label: 'B 站' }] as const;
+const SOURCES = Object.entries(SOURCE_META).map(([value, info]) => ({ value: value as Source, label: info.label }));
 
 export default function Articles() {
   const { articles, articlesLoading, articlesTotal, fetchArticles, articlesLoadedKey, articlesErrorKey, statsVersion } = useAppStore();

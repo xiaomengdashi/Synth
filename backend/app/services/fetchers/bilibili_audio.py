@@ -93,9 +93,9 @@ def _fetch_audio_candidates(bvid: str, cid: str, token: str) -> list[str]:
     return urls
 
 
-def _download_one(url: str, dest: Path, proxy: str | None = None) -> bool:
+def _download_one(url: str, dest: Path, proxy: str | None = None, headers: dict | None = None) -> bool:
     """单条直链下载，断点续传重试 3 轮；支持 200/206 两种响应。"""
-    headers = {"User-Agent": UA, "Referer": REFERER}
+    headers = {"User-Agent": UA, "Referer": REFERER, **(headers or {})}
     client_kwargs: dict = {"timeout": httpx.Timeout(30.0, read=120.0)}
     if proxy:
         client_kwargs["proxy"] = proxy
@@ -122,7 +122,7 @@ def _download_one(url: str, dest: Path, proxy: str | None = None) -> bool:
     return False
 
 
-def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], None], proxies: list[str | None] | None = None) -> None:
+def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], None], proxies: list[str | None] | None = None, headers: dict | None = None) -> None:
     if proxies is None:
         proxies = [None]
     total = len(urls)
@@ -130,7 +130,8 @@ def _download_audio(urls: list[str], dest: Path, update_step: Callable[[str], No
         label = "代理" if proxy else "直连"
         for index, url in enumerate(urls, 1):
             update_step(f"正在下载音频（{label}镜像 {index}/{total}）...")
-            if _download_one(url, dest, proxy) and dest.stat().st_size > 1024:
+            downloaded = _download_one(url, dest, proxy, headers=headers) if headers else _download_one(url, dest, proxy)
+            if downloaded and dest.stat().st_size > 1024:
                 return
     raise TranscribeError(
         "所有音频直链下载失败。可在管理后台「TikHub 数据服务 → 接口与网络」配置 B 站下载代理（如 http://127.0.0.1:7890）后重试。"

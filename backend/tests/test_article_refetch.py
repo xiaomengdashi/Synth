@@ -20,6 +20,34 @@ PAYLOAD = {'title': '重新获取的标题', 'extracted_md': '重新抓取的完
            'cover_image_url': 'https://example.com/new.jpg', 'account_name': '新作者', 'publish_time': '2026-10-18'}
 
 
+@pytest.mark.parametrize('url,source', [
+    ('https://blog.csdn.net/u/article/details/123', 'csdn'),
+    ('https://www.cnblogs.com/u/p/123.html', 'cnblogs'),
+    ('https://example.com/article', 'other'),
+    ('https://youtu.be/BaW_jenozKc', 'youtube'),
+])
+def test_new_sources_submit_persist_and_filter_with_their_actual_source(refetch_client, monkeypatch, url, source):
+    client, sessions = refetch_client
+    async def fetch_article(*args):
+        return dict(PAYLOAD)
+    async def fetch_video(*args):
+        return {'title': '真实视频正文', 'transcript_text': '完整的视频文稿。', 'description': '', 'uploader': '作者', 'cover_image_url': ''}
+    async def notes(*args):
+        return '# 视频笔记\n\n完整的视频文稿。'
+    monkeypatch.setattr(task_service, 'fetch_article_content', fetch_article)
+    monkeypatch.setattr(task_service, 'fetch_video_content', fetch_video)
+    monkeypatch.setattr(task_service, 'generate_video_notes', notes)
+    response = client.post('/api/v1/tasks/submit', json={'url': url})
+    assert response.status_code == 200
+    task = client.get(f"/api/v1/tasks/{response.json()['task_id']}/status").json()
+    assert task['status'] == 'completed'
+    article_id = task['article_id']
+    article = client.get('/api/v1/articles/' + article_id).json()
+    assert article['source_type'] == source
+    assert '文稿' in article['content_md'] if source == 'youtube' else '正文' in article['content_md']
+    assert client.get('/api/v1/articles/stats').json()['sources'][source] >= 1
+
+
 @pytest.fixture
 def refetch_client(tmp_path, monkeypatch):
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'refetch.db'}")
@@ -191,3 +219,130 @@ def test_refetch_rejects_non_http_original_url(refetch_client):
     asyncio.run(change_url())
     assert client.post('/api/v1/articles/saved/refetch').status_code == 400
     assert client.get('/api/v1/tasks').json()['total'] == 0
+
+
+def test_x_import_and_refetch_use_saved_provider_order(refetch_client, monkeypatch):
+    """Changing the stored priority must affect both import and in-place refetch."""
+    import json
+    from app.services.fetchers import content_downloader_x
+    client, sessions = refetch_client
+    url = 'https://x.com/author/status/123456789'
+    async def prepare():
+        async with sessions() as session:
+            article = await session.get(Article, 'saved')
+            article.original_url = url
+            article.source_type = 'x'
+            await session.commit()
+        await settings_store.save_settings({'fetchProviderPriorities': json.dumps({'x': ['content_downloader', 'tikhub']})})
+    asyncio.run(prepare())
+    class Process:
+        returncode = 0
+        async def communicate(self):
+            return json.dumps({'id': '123456789', 'extractor_key': 'Twitter', 'description': '新方法获取的完整正文',
+                               'uploader': '作者', 'uploader_id': 'author', 'timestamp': 1720000000}).encode(), b''
+    async def spawn(*args, **kwargs):
+        return Process()
+    def unexpected_paid(*args):
+        raise AssertionError('首选成功后不应访问 TikHub')
+    monkeypatch.setattr(content_downloader_x.asyncio, 'create_subprocess_exec', spawn)
+    monkeypatch.setattr(task_service, 'fetch_tikhub_tweet', unexpected_paid)
+    refetched = status(client, submit(client))
+    assert refetched['status'] == 'completed'
+    article = client.get('/api/v1/articles/saved').json()
+    assert '新方法获取的完整正文' in article['content_md']
+    assert '<!-- X_CONTENT_START -->' in article['content_md']
+    assert article['account_name'] == '作者'
+    assert article['category'] == 'C++' and article['is_starred'] and article['read_progress'] == 0.6
+    response = client.post('/api/v1/tasks/submit', json={'url': url})
+    imported = status(client, response.json()['task_id'])
+    assert imported['status'] == 'completed'
+    assert imported['article_id'] != 'saved'
+    assert '新方法获取的完整正文' in imported['article']['content_md']
+
+
+@pytest.mark.parametrize('succeed', [True, False])
+def test_wechat_import_and_refetch_follow_priority_without_losing_saved_content(refetch_client, monkeypatch, succeed):
+    import httpx
+    import json
+    from app.services.fetchers import article as article_fetcher
+    client, sessions = refetch_client
+    url = 'https://mp.weixin.qq.com/s/wechat-priority'
+    async def prepare():
+        async with sessions() as session:
+            row = await session.get(Article, 'saved')
+            row.original_url = url
+            row.source_type = 'wechat'
+            await session.commit()
+        await settings_store.save_settings({'fetchProviderPriorities': json.dumps({'wechat': ['content_downloader', 'tikhub']})})
+    asyncio.run(prepare())
+    original_client = httpx.AsyncClient
+    def handler(request):
+        assert request.url.host == 'mp.weixin.qq.com'
+        html = ('<meta property="og:title" content="微信新标题"><a id="js_name">新公众号</a>'
+                '<div id="js_content"><p>重新获取的微信公众号正文。</p></div>') if succeed else '<html>环境异常</html>'
+        return httpx.Response(200, text=html, headers={'Content-Type': 'text/html; charset=utf-8'})
+    monkeypatch.setattr(article_fetcher.httpx, 'AsyncClient', lambda **kwargs: original_client(**kwargs, transport=httpx.MockTransport(handler)))
+    monkeypatch.setattr(task_service, 'fetch_article_content', article_fetcher.fetch_article_content)
+    def no_paid(*args):
+        raise RuntimeError('测试环境 TikHub 不可用')
+    monkeypatch.setattr(article_fetcher, 'fetch_wechat_article', no_paid)
+    before = client.get('/api/v1/articles/saved').json()
+    task = status(client, submit(client))
+    current = client.get('/api/v1/articles/saved').json()
+    if not succeed:
+        assert task['status'] == 'failed'
+        assert current == before
+        return
+    assert task['status'] == 'completed'
+    assert current['title'] == '微信新标题' and current['account_name'] == '新公众号'
+    assert '重新获取的微信公众号正文' in current['content_md']
+    assert '<!-- HTML_CONTENT_START -->' in current['content_md']
+    assert current['category'] == 'C++' and current['is_starred'] and current['read_progress'] == 0.6
+    imported = client.post('/api/v1/tasks/submit', json={'url': url})
+    new_task = status(client, imported.json()['task_id'])
+    assert new_task['status'] == 'completed' and new_task['article_id'] != 'saved'
+    assert new_task['article']['source_type'] == 'wechat'
+
+
+def test_cli_article_refetch_uses_rich_markdown_when_original_page_is_unavailable(refetch_client, monkeypatch):
+    import json
+    import sys
+    from app.services.fetchers import x_twitter_cli as cli
+    client, sessions = refetch_client
+    url = 'https://x.com/author/status/123456789'
+    async def prepare():
+        async with sessions() as session:
+            row = await session.get(Article, 'saved')
+            row.original_url = url
+            row.source_type = 'x'
+            await session.commit()
+        await settings_store.save_settings({'fetchProviderPriorities': json.dumps({'x': ['twitter_cli', 'tikhub', 'content_downloader']})})
+    asyncio.run(prepare())
+    monkeypatch.setenv('TWITTER_AUTH_TOKEN', 'test-auth')
+    monkeypatch.setenv('TWITTER_CT0', 'test-ct0')
+    monkeypatch.setattr(cli, '_twitter_command', lambda config=None: '/test/twitter')
+    monkeypatch.setattr(cli, '_twitter_python', lambda command: sys.executable)
+    raw = {'rest_id': '123456789', 'legacy': {'full_text': 'https://x.com/i/article/999'},
+           'article': {'article_results': {'result': {'title': 'CLI 重新获取的长文', 'content_state': {'blocks': [
+               {'type': 'unstyled', 'text': '完整长文正文', 'inlineStyleRanges': [{'offset': 0, 'length': 2, 'style': 'BOLD'}]},
+           ]}}}}}
+    class Process:
+        returncode = 0
+        async def communicate(self):
+            return json.dumps({'tweet_result': raw}).encode(), b''
+    async def spawn(*args, **kwargs):
+        return Process()
+    async def page_unavailable(*args):
+        raise RuntimeError('原页不可用')
+    def no_paid(*args):
+        raise AssertionError('CLI 成功后不应调用 TikHub')
+    monkeypatch.setattr(cli.asyncio, 'create_subprocess_exec', spawn)
+    monkeypatch.setattr(task_service, 'fetch_x_article_replica', page_unavailable)
+    monkeypatch.setattr(task_service, 'fetch_tikhub_tweet', no_paid)
+    task = status(client, submit(client))
+    assert task['status'] == 'completed'
+    article = task['article']
+    assert article['title'] == 'CLI 重新获取的长文'
+    assert '**完整**' in article['content_md']
+    assert 'twitter-cli' in article['content_md']
+    assert article['category'] == 'C++' and article['is_starred'] and article['read_progress'] == .6

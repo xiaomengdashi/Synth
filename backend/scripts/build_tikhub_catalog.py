@@ -10,17 +10,17 @@ from pathlib import Path
 from urllib.parse import quote
 
 PLATFORMS = {
-    'tikhub': '账户与计费', 'douyin': '抖音', 'tiktok': 'TikTok',
+    'tikhub': '账户与计费', 'tiktok': 'TikTok',
     'xiaohongshu': '小红书', 'bilibili': 'Bilibili', 'twitter': 'X / Twitter',
     'wechat_mp': '微信公众号', 'wechat_channels': '微信视频号', 'wechat_search': '微信搜索',
     'youtube': 'YouTube', 'instagram': 'Instagram', 'kuaishou': '快手', 'weibo': '微博',
     'zhihu': '知乎', 'reddit': 'Reddit', 'threads': 'Threads', 'linkedin': 'LinkedIn',
     'telegram': 'Telegram', 'lemon8': 'Lemon8', 'pipixia': '皮皮虾',
-    'xigua': '西瓜视频', 'toutiao': '今日头条', 'hybrid': '跨平台解析',
+    'xigua': '西瓜视频', 'toutiao': '今日头条',
 }
 # Exclude device registration, signatures, encryption and non-query utilities.
 EXCLUDED_PREFIXES = ('generate_', 'encrypt_', 'decrypt_', 'register_', 'device_', 'open_', 'TTencrypt_', 'translate_', 'bulk_translate_')
-EXCLUDED_NAMES = {'handler_shorten_url', 'fetch_tiktok_web_guest_cookie', 'fetch_douyin_web_guest_cookie', 'fetch_sec_token', 'get_sign_image', 'fetch_share_qr_code', 'tiktok_live_room'}
+EXCLUDED_NAMES = {'handler_shorten_url', 'fetch_tiktok_web_guest_cookie', 'fetch_sec_token', 'get_sign_image', 'fetch_share_qr_code', 'tiktok_live_room'}
 
 
 def build(spec: dict) -> dict:

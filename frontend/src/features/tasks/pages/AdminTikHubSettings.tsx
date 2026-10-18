@@ -4,7 +4,9 @@ import { ArrowRight, Bird, KeyRound, RefreshCw, Globe, Wallet } from 'lucide-rea
 import { useAppStore } from '../../app/store/useAppStore';
 import { dateTime, money, requestJson } from '../../tikhub/client';
 import type { Account, KeyStatus } from '../../tikhub/types';
-import AdminPageHeader from '../components/AdminPageHeader';
+import FetchPriorityPanel from '../components/FetchPriorityPanel';
+import TwitterCliSettingsPanel from '../components/TwitterCliSettingsPanel';
+import SettingsWorkspace from '../components/SettingsWorkspace';
 
 function NetworkPanel() {
   const { config, setConfig, fetchConfig } = useAppStore();
@@ -28,20 +30,20 @@ function NetworkPanel() {
   return (
     <section className="ac-set-card">
       <div className="ac-set-side">
-        <h2><Globe size={15} /> 接口与网络</h2>
-        <p>内容抓取的出站端点与网络路径。默认直连官方地址；音频下载被掐时配置代理即可，无需登服务器改环境变量。</p>
+        <h1><Globe size={15} /> 接口与网络</h1>
+        <p>设置 TikHub 接口地址与视频下载代理。</p>
       </div>
       <div className="ac-set-main">
         <form onSubmit={save}>
           <div className="ac-field">
             <label htmlFor="tikhub-api-base">TikHub API 端点</label>
             <input id="tikhub-api-base" className="ac-input" value={localConfig.tikhubApiBase ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, tikhubApiBase: event.target.value })} placeholder="https://api.tikhub.io" />
-            <p className="ac-help">三平台数据统一入口，留空用官方地址。更换端点后重新保存一次 Key 完成验证。</p>
+            <p className="ac-help">使用 TikHub 获取内容时的接口地址，留空用官方地址。更换端点后重新保存一次 Key 完成验证。</p>
           </div>
           <div className="ac-field">
-            <label htmlFor="bilibili-proxy">B 站下载代理</label>
+            <label htmlFor="bilibili-proxy">视频下载代理</label>
             <input id="bilibili-proxy" className="ac-input" value={localConfig.bilibiliProxy ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, bilibiliProxy: event.target.value })} placeholder="http://127.0.0.1:7890" />
-            <p className="ac-help">下载 B 站音频直连全部失败时改走该代理（音频转写用）；留空始终直连。仅对直连失败生效，不影响其他抓取。</p>
+            <p className="ac-help">用于 B 站和 YouTube 的媒体下载。留空直连。</p>
           </div>
           {message && <p className={`tikhub-message ${message.tone}`} role="status">{message.text}</p>}
           <div className="ac-actions">
@@ -113,7 +115,7 @@ function TikHubPanel() {
     try {
       const data = await requestJson<KeyStatus>('/api/v1/tikhub/key', { method: 'DELETE' });
       setKey(data); setAccount(null); setApiKey('');
-      setNotice('已移除保存的 Key，抓取功能将不可用，重新保存即可恢复。');
+      setNotice('已移除保存的 Key。TikHub 获取方式不可用，X 和微信公众号仍可尝试 Content Downloader。');
       await fetchConfig();
       await loadAccount();
     } catch (e) { setError(e instanceof Error ? e.message : '移除失败'); }
@@ -129,12 +131,12 @@ function TikHubPanel() {
     <div className="ac-stack">
       <section className="ac-set-card">
         <div className="ac-set-side">
-          <h2><KeyRound size={15} /> TikHub API Key
+          <h1><KeyRound size={15} /> TikHub API Key
             <span className={key !== null && key.configured ? 'ac-badge success' : 'ac-badge pending'}>
               {key === null ? '读取中' : key.configured ? '已配置' : '尚未配置'}
             </span>
-          </h2>
-          <p>内容抓取依赖 TikHub 接口。在 <a href="https://user.tikhub.io" target="_blank" rel="noreferrer">TikHub 控制台</a> 创建 Key，验证通过后保存；验证失败时现有 Key 保持不变。</p>
+          </h1>
+          <p>连接 TikHub 以获取多平台内容。在 <a href="https://user.tikhub.io" target="_blank" rel="noreferrer">TikHub 控制台</a> 创建 Key，验证通过后保存。</p>
           {key?.configured && <div className="tikhub-key-status"><code>{key.masked_key}</code><span>Key 仅保存在服务端数据库</span></div>}
         </div>
         <div className="ac-set-main">
@@ -144,7 +146,7 @@ function TikHubPanel() {
               <input id="tikhub-key" className="ac-input" type="password" autoComplete="new-password" spellCheck={false} value={apiKey}
                 onChange={event => setApiKey(event.target.value)} maxLength={4096} disabled={saving}
                 placeholder={key?.configured ? '输入新 Key 以更换' : '粘贴 TikHub API Key'} />
-              <p className="ac-help">Key 仅保存在后端数据库，不会回传到浏览器。</p>
+              <p className="ac-help">密钥仅保存在服务端；验证失败不会覆盖现有 Key。</p>
             </div>
             {error && <p className="tikhub-message error" role="alert">{error}</p>}
             {notice && <p className="tikhub-message success" role="status">{notice}</p>}
@@ -181,7 +183,7 @@ function TikHubPanel() {
                 <div><dt>创建时间</dt><dd>{dateTime(api?.created_at)}</dd></div>
                 <div><dt>到期时间</dt><dd>{api?.expires_at ? dateTime(api.expires_at) : '未设置到期时间'}</dd></div>
               </dl>
-              {!!api?.scopes?.length && <details className="tikhub-disclosure"><summary>查看 Key 权限（{api.scopes_count} 项）</summary><ul>{api.scopes.map(scope => <li key={scope}><code>{scope}</code></li>)}</ul></details>}
+              {!!api?.scopes?.length && <details className="tikhub-disclosure"><summary>查看 Key 权限（{api.scopes_count} 项）</summary><ul>{api.scopes.map((scope, index) => <li key={`${index}:${scope}`}><code>{scope}</code></li>)}</ul></details>}
               {account.warnings?.map(warning => <p className="tikhub-message warning" role="status" key={warning}>{warning}</p>)}
               {usage && <div className="tikhub-usage">
                 <h3>接口调用明细 <small>{usage.date || '日期由 TikHub 返回'}</small></h3>
@@ -193,28 +195,27 @@ function TikHubPanel() {
         </div>
       </section>
 
-      <section className="ac-set-card">
+      <section className="ac-set-card settings-query-entry">
         <div className="ac-set-side">
           <h2><Bird size={15} /> 多平台数据查询</h2>
           <p>按平台浏览 TikHub 接口目录，查询内容详情、用户信息、评论或搜索数据；查询按官方计费消耗额度。</p>
         </div>
         <div className="ac-set-main">
-          <Link to="/admin/tikhub/query" className="ac-btn primary">进入多平台查询 <ArrowRight size={14} /></Link>
+          <Link to="/admin/tikhub/query" className="ac-btn secondary">进入多平台查询 <ArrowRight size={14} /></Link>
         </div>
       </section>
     </div>
   );
 }
 
-/** TikHub 数据服务：密钥、账户与用量 */
+/** 内容获取：平台优先级、TikHub 密钥与网络 */
 export default function AdminTikHubSettings() {
   return (
-    <div>
-      <AdminPageHeader summary={<span>TikHub 数据服务：密钥、账户与用量</span>} />
-      <div className="ac-settings-page"><div className="ac-settings-content">
-        <TikHubPanel />
-        <NetworkPanel />
-      </div></div>
-    </div>
+    <SettingsWorkspace sections={[
+      { id: 'priorities', label: '获取优先级', content: <FetchPriorityPanel /> },
+      { id: 'twitter-cli', label: 'X 登录配置', content: <TwitterCliSettingsPanel /> },
+      { id: 'account', label: 'TikHub 账户', content: <TikHubPanel /> },
+      { id: 'network', label: '网络配置', content: <NetworkPanel /> },
+    ]} />
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AudioLines, Cpu, ListChecks, PlugZap, SlidersHorizontal } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
 import { requestJson } from '../../tikhub/client';
-import AdminPageHeader from '../components/AdminPageHeader';
+import SettingsWorkspace from '../components/SettingsWorkspace';
 
 type Message = { tone: 'success' | 'error'; text: string } | null;
 
@@ -76,12 +76,12 @@ function ConnectionPanel() {
   return (
     <section className="ac-set-card">
       <div className="ac-set-side">
-        <h2><Cpu size={15} /> 模型连接
+        <h1><Cpu size={15} /> 模型连接
           <span className={configured ? 'ac-badge success' : 'ac-badge pending'}>
             {configured ? '已配置' : '未配置'}
           </span>
-        </h2>
-        <p>OpenAI 兼容服务的端点与密钥，在模型服务商控制台获取。B 站视频导入用它把转写稿生成学习笔记；Base URL 带 /v1 与不带均可。</p>
+        </h1>
+        <p>连接 OpenAI 兼容服务，将视频转写稿生成学习笔记。Base URL 带 /v1 与不带均可。</p>
       </div>
       <div className="ac-set-main">
         <form onSubmit={save}>
@@ -142,19 +142,19 @@ function TranscriptionPanel() {
   return (
     <section className="ac-set-card">
       <div className="ac-set-side">
-        <h2><AudioLines size={15} /> 语音转写
+        <h1><AudioLines size={15} /> 语音转写
           <span className={config.minimaxConfigured ? 'ac-badge success' : 'ac-badge pending'}>
             {config.minimaxConfigured ? '已配置' : '未配置'}
           </span>
-        </h2>
-        <p>B 站视频没有 CC 字幕时，下载音频经 MiniMax 云端转写为文稿，再交给模型生成笔记。Token Plan 订阅 Key 以 sk-cp- 开头。</p>
+        </h1>
+        <p>B 站和 YouTube 没有可用字幕时，使用 MiniMax 转写音频。</p>
       </div>
       <div className="ac-set-main">
         <form onSubmit={save}>
           <div className="ac-field">
             <label htmlFor="minimax-api-key">MiniMax 转写 Key</label>
             <input id="minimax-api-key" className="ac-input" type="password" autoComplete="new-password" value={localConfig.minimaxApiKey ?? ''} onChange={(event) => setLocalConfig({ ...localConfig, minimaxApiKey: event.target.value })} placeholder={config.minimaxConfigured ? '已配置，输入新 Key 可更换' : 'sk-cp-...'} />
-            <p className="ac-help">仅保存在后端数据库，页面只返回掩码。</p>
+            <p className="ac-help">使用 sk-cp- 开头的 Token Plan 订阅 Key，仅保存在服务端。</p>
           </div>
           <div className="ac-field">
             <label htmlFor="minimax-api-base">MiniMax 转写端点</label>
@@ -206,7 +206,7 @@ function GenerationPanel() {
   return (
     <section className="ac-set-card">
       <div className="ac-set-side">
-        <h2><SlidersHorizontal size={15} /> 生成参数</h2>
+        <h1><SlidersHorizontal size={15} /> 生成参数</h1>
         <p>控制笔记生成与列表摘要的调用参数。数值留空即恢复默认，超出安全范围会被自动夹回。</p>
       </div>
       <div className="ac-set-main">
@@ -236,20 +236,11 @@ function GenerationPanel() {
 
 /** 模型服务：连接、语音转写与生成参数 */
 export default function AdminModelSettings() {
-  const [panel, setPanel] = useState('connection');
   return (
-    <div>
-      <AdminPageHeader summary={<span>配置导入与笔记生成使用的服务</span>} />
-      <div className="settings-workspace">
-        <nav className="settings-subnav" aria-label="模型服务设置">
-          {[['connection', '模型连接'], ['transcription', '语音转写'], ['generation', '生成参数']].map(([value, label]) => <button key={value} className={panel === value ? 'active' : ''} aria-pressed={panel === value} onClick={() => setPanel(value)}>{label}</button>)}
-        </nav>
-        <div className="ac-settings-content">
-          <div hidden={panel !== 'connection'}><ConnectionPanel /></div>
-          <div hidden={panel !== 'transcription'}><TranscriptionPanel /></div>
-          <div hidden={panel !== 'generation'}><GenerationPanel /></div>
-        </div>
-      </div>
-    </div>
+    <SettingsWorkspace sections={[
+      { id: 'connection', label: '模型连接', content: <ConnectionPanel /> },
+      { id: 'transcription', label: '语音转写', content: <TranscriptionPanel /> },
+      { id: 'generation', label: '生成参数', content: <GenerationPanel /> },
+    ]} />
   );
 }

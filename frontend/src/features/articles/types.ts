@@ -4,7 +4,7 @@ export interface Article {
   summary: string;
   content_md: string;
   original_url: string;
-  source_type: 'wechat' | 'bilibili' | 'douyin' | 'x' | 'csdn' | 'cnblogs' | 'other';
+  source_type: 'wechat' | 'bilibili' | 'youtube' | 'x' | 'csdn' | 'cnblogs' | 'other';
   cover_image_url?: string;
   account_name?: string;
   publish_time?: string;

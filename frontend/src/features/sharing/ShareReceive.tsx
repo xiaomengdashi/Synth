@@ -110,19 +110,19 @@ export default function ShareReceive() {
   return (
     <div className="share-page">
       <h1>把这篇好文章，收下来。</h1>
-      <p className="share-lede">来自 X 或微信文章的分享，会自动整理并保存到你的文章库。</p>
+      <p className="share-lede">分享文章或视频链接，自动整理并保存到文章库。</p>
       <section className="share-status-panel" aria-live="polite" aria-busy={busy}>
         <span className={`share-status-icon ${failed || notice ? 'has-notice' : ''}`}>
           {busy ? <Loader2 size={27} className="animate-spin" /> : failed || notice ? <AlertCircle size={27} /> : <Share2 size={27} />}
         </span>
         <h2>{failed ? '这次没有抓取成功' : notice ? '需要继续查看' : busy ? '正在保存这篇文章' : '等待一篇值得读的文章'}</h2>
-        <p>{notice || task?.current_step || (hasInput ? '正在识别分享链接…' : '在 X 或微信文章中点击分享，选择「保存到 SynthAI」。也可以在下面粘贴链接。')}</p>
+        <p>{notice || task?.current_step || (hasInput ? '正在识别分享链接…' : '从浏览器或 App 分享到「保存到 SynthAI」，也可以在下面粘贴链接。')}</p>
         {task?.original_url && <a className="share-source-url" href={task.original_url} target="_blank" rel="noreferrer">{task.original_url}</a>}
         {busy && <ol className="share-progress"><li><Check size={14} />接收分享</li><li><Loader2 size={14} className="animate-spin" />提取正文</li><li>保存文章</li></ol>}
         {!busy && hasInput && <button type="button" className="primary-button" onClick={() => void retry()}><RotateCcw size={15} />{failed ? '重新抓取' : '继续查看'}</button>}
         {!busy && (!hasInput || notice) && <form className="share-manual" onSubmit={(event) => { event.preventDefault(); startManualImport(manualUrl); }}>
-          <label htmlFor="shared-url">X、微信文章或帖子链接</label>
-          <input id="shared-url" type="url" placeholder="https://x.com/... 或 https://mp.weixin.qq.com/..." value={manualUrl} onChange={(event) => { setManualUrl(event.target.value); setManualMessage(''); }} required />
+          <label htmlFor="shared-url">文章或视频链接</label>
+          <input id="shared-url" type="url" placeholder="粘贴完整的文章或视频链接" value={manualUrl} onChange={(event) => { setManualUrl(event.target.value); setManualMessage(''); }} required />
           <div className="share-manual-actions">
             <button type="button" className="secondary-button" onClick={() => void pasteFromClipboard()} disabled={pasting}>
               {pasting ? <Loader2 size={14} className="animate-spin" /> : <Clipboard size={14} />}

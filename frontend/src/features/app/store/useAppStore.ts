@@ -4,6 +4,7 @@ import type { AppConfig } from '../../config/types';
 import type { Task } from '../../tasks/types';
 import { adminFetch } from '../../../utils/adminAuth';
 import { applyTheme, DEFAULT_THEME, isThemeId, LEGACY_THEME_MAP, type ThemeId } from '../themes';
+import { DEFAULT_ADMIN_THEME, isAdminThemeId, isAdminThemeMode, type AdminThemeId, type AdminThemeMode } from '../adminThemes';
 
 export interface ToastMessage {
   id: string;
@@ -16,10 +17,12 @@ interface AppState {
   tasks: Task[];
   toasts: ToastMessage[];
   theme: ThemeId;
-  adminDark: boolean;
+  adminTheme: AdminThemeId;
+  adminThemeMode: AdminThemeMode;
   config: AppConfig;
   setTheme: (id: ThemeId) => void;
-  toggleAdminDark: () => void;
+  setAdminTheme: (id: AdminThemeId) => void;
+  setAdminThemeMode: (mode: AdminThemeMode) => void;
   addArticle: (article: Article) => void;
   addTask: (task: Task) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
@@ -54,23 +57,38 @@ const getInitialTheme = (): ThemeId => {
   return saved === 'light' ? 'zhimo' : DEFAULT_THEME;
 };
 
-// 后台明暗独立于前台主题(后台是自己的设计系统,只有亮暗两态);
-// 初次迁移时沿用旧的全局明暗记录,落定后存独立的 admin-dark
+// 后台配色与外观模式独立于前台;初次迁移沿用既有的 admin-dark 明暗偏好。
 const getInitialAdminDark = (legacyTheme: string | null): boolean => {
   const saved = localStorage.getItem('admin-dark');
   if (saved !== null) return saved === 'dark';
   return legacyTheme !== 'light';
 };
 
+const getInitialAdminThemeMode = (initialDark: boolean): AdminThemeMode => {
+  const savedMode = localStorage.getItem('admin-theme-mode');
+  if (savedMode && isAdminThemeMode(savedMode)) return savedMode;
+  const legacyDark = localStorage.getItem('admin-dark');
+  return legacyDark === null ? (initialDark ? 'dark' : 'light') : (legacyDark === 'dark' ? 'dark' : 'light');
+};
+
 const savedThemeRaw = localStorage.getItem('theme');
 const initialTheme = getInitialTheme();
 const initialAdminDark = getInitialAdminDark(savedThemeRaw);
-// 立即归一化存储:旧值/脏值换成主题 id,后台明暗落到独立键
+const savedAdminThemeRaw = localStorage.getItem('admin-theme');
+const initialAdminTheme = savedAdminThemeRaw && isAdminThemeId(savedAdminThemeRaw) ? savedAdminThemeRaw : DEFAULT_ADMIN_THEME;
+const initialAdminThemeMode = getInitialAdminThemeMode(initialAdminDark);
+// 立即归一化存储:旧值/脏值换成主题 id,后台偏好落到独立键
 if (savedThemeRaw !== initialTheme) {
   localStorage.setItem('theme', initialTheme);
 }
 if (localStorage.getItem('admin-dark') === null) {
   localStorage.setItem('admin-dark', initialAdminDark ? 'dark' : 'light');
+}
+if (savedAdminThemeRaw !== initialAdminTheme) {
+  localStorage.setItem('admin-theme', initialAdminTheme);
+}
+if (localStorage.getItem('admin-theme-mode') !== initialAdminThemeMode) {
+  localStorage.setItem('admin-theme-mode', initialAdminThemeMode);
 }
 // 立即应用初始主题，防止页面闪烁
 applyTheme(initialTheme);
@@ -86,18 +104,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   tasks: [],
   toasts: [],
   theme: initialTheme,
-  adminDark: initialAdminDark,
+  adminTheme: initialAdminTheme,
+  adminThemeMode: initialAdminThemeMode,
   setTheme: (id) => {
     if (!isThemeId(id)) return;
     localStorage.setItem('theme', id);
     applyTheme(id);
     set({ theme: id });
   },
-  toggleAdminDark: () => set((state) => {
-    const adminDark = !state.adminDark;
-    localStorage.setItem('admin-dark', adminDark ? 'dark' : 'light');
-    return { adminDark };
-  }),
+  setAdminTheme: (id) => {
+    if (!isAdminThemeId(id)) return;
+    localStorage.setItem('admin-theme', id);
+    set({ adminTheme: id });
+  },
+  setAdminThemeMode: (mode) => {
+    if (!isAdminThemeMode(mode)) return;
+    localStorage.setItem('admin-theme-mode', mode);
+    if (mode !== 'system') localStorage.setItem('admin-dark', mode);
+    set({ adminThemeMode: mode });
+  },
   config: {
     modelName: 'gpt-4o-mini',
     apiKey: '',

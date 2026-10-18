@@ -61,7 +61,7 @@ export default function AdminTasks() {
                   <a className="task-card-m-url" href={task.original_url} target="_blank" rel="noopener noreferrer" title={task.original_url}>
                     <ExternalLink size={12} />{task.original_url}
                   </a>
-                  {step ? <p className="task-card-m-step">{step}</p> : null}
+                  {step ? <p className="task-card-m-step" title={task.current_step}>{step}</p> : null}
                   {task.status === 'completed' && task.article_id ? (
                     <div className="task-card-m-foot">
                       <Link className="ac-btn secondary sm" to={`/article/${task.article_id}`}><ExternalLink size={13} />查看文章</Link>
@@ -95,7 +95,7 @@ export default function AdminTasks() {
                   <tr key={task.id}>
                     <td>
                       <span className="cell-main" title={task.original_url}>{task.original_url}</span>
-                      {step ? <span className="cell-sub">{step}</span> : null}
+                      {step ? <span className="cell-sub" title={task.current_step}>{step}</span> : null}
                     </td>
                     <td><span className={`ac-badge ${badge.cls}`}>{badge.label}</span></td>
                     <td className="cell-time">{formatDistanceToNow(new Date(task.created_at))}</td>

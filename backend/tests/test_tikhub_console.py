@@ -118,7 +118,7 @@ def test_query_catalog_supports_platform_and_search_without_a_key(console):
     response = client.get('/api/v1/tikhub/catalog', params={'platform': 'twitter', 'q': 'fetch_tweet_detail'})
     assert response.status_code == 200
     data = response.json()
-    assert any(p['id'] == 'douyin' for p in data['platforms'])
+    assert all(p['id'] != 'douyin' for p in data['platforms'])
     endpoint = next(item for item in data['items'] if item['path'] == '/api/v1/twitter/web/fetch_tweet_detail')
     assert endpoint['method'] == 'GET'
     assert endpoint['parameters'][0]['name'] == 'tweet_id'
@@ -224,7 +224,7 @@ def test_x_preview_uses_saved_key(console, monkeypatch):
 
     def fetch(url, runtime_config):
         seen.append(runtime_config)
-        return {'payload': {'title': '预览'}}
+        return {'payload': {'title': '预览', 'tweet_text': '可保存的预览正文', 'media_items': []}}
 
     monkeypatch.setattr(articles, 'fetch_tikhub_tweet', fetch)
     app = FastAPI()
@@ -287,7 +287,7 @@ def test_array_body_and_redaction(console, monkeypatch):
 
     monkeypatch.setattr(upstream.httpx, 'request', request)
     response = client.post('/api/v1/tikhub/query', json={
-        'endpoint_id': 'POST /api/v1/douyin/web/fetch_multi_video', 'parameters': {'$body': ['123', '456']},
+        'endpoint_id': 'POST /api/v1/tiktok/app/v3/fetch_multi_video', 'parameters': {'$body': ['123', '456']},
     })
     assert response.status_code == 200
     assert 'private-key' not in response.text

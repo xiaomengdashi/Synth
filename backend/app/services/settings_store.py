@@ -23,6 +23,8 @@ SUPPORTED_KEYS = (
     "tikhubApiBase", "bilibiliProxy", "minimaxApiBase",
     "llmTemperature", "llmMaxTokens", "llmTimeoutSeconds",
     "summaryLength", "notesPrompt", "emailFetchDays",
+    "fetchProviderPriorities",
+    "twitterAuthToken", "twitterCt0", "twitterCliBin",
 )
 
 # 可调参数的出厂默认：库中未存或存空时按此回填，后台留空即恢复默认行为。

@@ -5,11 +5,13 @@ import re
 import uuid
 
 from app.database import AsyncSessionLocal
+from app.services.content_sources import detect_source_type
 from app.models import Article, Task
 from app.services.fetchers.article import fetch_article_content
 from app.services.fetchers.bilibili_audio import fetch_bilibili_transcript_via_asr
 from app.services.fetchers.social import extract_x_article_id
-from app.services.fetchers.tikhub import TikHubError, TikHubNotConfiguredError, fetch_tikhub_tweet
+from app.services.fetchers.tikhub import TikHubError, fetch_tikhub_tweet
+from app.services.fetchers.x_providers import fetch_x_with_priority
 from app.services.fetchers.twitter_article_rich import render_twitter_article_result
 from app.services.fetchers.x_article import fetch_x_article_replica
 from app.services.fetchers.video import fetch_video_content
@@ -60,18 +62,6 @@ def build_video_markdown(video_payload: dict, summary: str, notes: str = "") -> 
     if transcript:
         sections.extend(["", "## 文稿", "", transcript])
     return "\n".join(sections).strip()
-
-
-def detect_source_type(url: str) -> str:
-    return (
-        "bilibili" if "bilibili" in url or "b23.tv" in url else
-        "douyin" if "douyin" in url else
-        "wechat" if "weixin" in url else
-        "x" if ("x.com" in url or "twitter.com" in url) else
-        "csdn" if "csdn.net" in url else
-        "cnblogs" if "cnblogs.com" in url else
-        "other"
-    )
 
 
 async def resolve_article_summary(
@@ -133,20 +123,18 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
         account_name = ""
         publish_time = ""
 
-        if "x.com" in url or "twitter.com" in url:
+        source_type = detect_source_type(url)
+        if source_type == "x":
             direct_article_id = extract_x_article_id(url)
             if direct_article_id:
                 raise RuntimeError(
                     "暂不支持 x.com/i/article 直链（TikHub 仅支持推文链接）。请在 X 中打开宿主推文后分享其链接。"
                 )
 
-            update_step("正在通过 TikHub 接口获取推文数据...")
-            try:
-                tikhub_result = await asyncio.to_thread(fetch_tikhub_tweet, url, config)
-            except TikHubNotConfiguredError as exc:
-                raise RuntimeError(
-                    "未配置 TikHub API Token，无法抓取 X 内容。请在管理后台 TikHub 抓取页填写 Token。"
-                ) from exc
+            tikhub_result = await fetch_x_with_priority(
+                url, config, update_step, tikhub_fetcher=fetch_tikhub_tweet,
+            )
+            provider_label = tikhub_result.get("provider_label") or "TikHub"
             tweet_payload = tikhub_result["payload"]
 
             title = tweet_payload["title"]
@@ -179,7 +167,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
             if not external_fetched and (x_article_id or has_tikhub_article):
                 x_article_payload = None
                 if tikhub_result.get("article_result"):
-                    update_step("正在通过 TikHub 数据渲染 X 长文...")
+                    update_step(f"正在通过 {provider_label} 数据渲染 X 长文...")
                     rendered = render_twitter_article_result(tikhub_result["article_result"])
                     if rendered.get("content_md"):
                         x_article_payload = {
@@ -190,7 +178,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
                 elif tikhub_result.get("article_text"):
                     article_text = tikhub_result["article_text"]
                     if article_text.get("full_text"):
-                        update_step("正在读取 TikHub 返回的 X 长文全文...")
+                        update_step(f"正在读取 {provider_label} 返回的 X 长文全文...")
                         x_article_payload = {
                             "title": article_text["title"],
                             "content_md": article_text["full_text"],
@@ -205,7 +193,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
                     replica = await fetch_x_article_replica(url, metadata, update_step)
                 except Exception as exc:
                     if not x_article_payload:
-                        raise TikHubError("X 原文补采失败，且 TikHub 未返回可保存的正文。") from exc
+                        raise TikHubError(f"X 原文补采失败，且 {provider_label} 未返回可保存的正文。") from exc
                     replica = {
                         "version": 1, "status": "text-only", "body_html": "", "body_css": "",
                         "title": x_article_payload["title"], "text": x_article_payload["content_md"],
@@ -215,7 +203,7 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
                         "author_avatar_url": tweet_payload.get("author_avatar_url", ""),
                         "created_at": tweet_payload.get("created_at", ""), "source_url": url,
                         "fonts": [], "assets": [], "text_verified": False,
-                        "warnings": ["原页面补采失败，当前仅保存 TikHub 正文，配图、动画及原始排版可能缺失。请重新抓取。"],
+                        "warnings": [f"原页面补采失败，当前保存 {provider_label} 返回的正文，原页面排版可能未完全还原。"],
                     }
                 title = replica["title"] or title
                 cover_image_url = replica.get("cover_url") or ""
@@ -242,15 +230,17 @@ async def process_task(task_id: str, url: str, config, target_article_id: str | 
                     f"<!-- X_CONTENT_END -->"
                 )
             cover_image_url = cover_image_url or tweet_payload["cover_image_url"]
+            account_name = account_name or tweet_payload.get("author_name") or ""
+            publish_time = publish_time or tweet_payload.get("created_at") or ""
 
-        elif any(domain in url for domain in ["bilibili.com", "douyin.com", "youtube.com", "b23.tv"]):
+        elif source_type in {"bilibili", "youtube"}:
             update_step("正在通过专用接口解析视频信息...")
             video_payload = await fetch_video_content(url, config, update_step)
             title = video_payload["title"]
             update_step(f"解析成功: {title}。正在整理视频信息...")
             transcript = (video_payload.get("transcript_text") or "").strip()
             notes = ""
-            is_bilibili = "bilibili.com" in url or "b23.tv" in url
+            is_bilibili = source_type == "bilibili"
             if is_bilibili and not transcript:
                 # B 站 CC 字幕覆盖率极低，无字幕时下载音频走云端转写；失败不阻断保存
                 try:

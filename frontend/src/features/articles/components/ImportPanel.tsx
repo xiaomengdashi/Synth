@@ -5,7 +5,7 @@ import { useAppStore } from '../../app/store/useAppStore';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
 
-type Source = 'wechat' | 'x' | 'bilibili';
+import { SOURCE_META as sourceMeta, detectSourceFromUrl, normalizeContentUrl, type Source } from '../lib/contentSources';
 type TaskStatusResponse = {
   status?: Task['status'];
   current_step?: string;
@@ -13,45 +13,6 @@ type TaskStatusResponse = {
   article?: Article;
   error?: string;
 };
-
-const sourceMeta: Record<Source, { label: string; short: string; placeholder: string; color: string }> = {
-  wechat: { label: '微信公众号', short: '微信', placeholder: '粘贴 mp.weixin.qq.com 文章链接', color: 'var(--wechat)' },
-  x: { label: 'X / Twitter', short: 'X', placeholder: '粘贴 x.com 文章或帖子链接', color: 'var(--x-blue)' },
-  bilibili: { label: 'Bilibili', short: 'B 站', placeholder: '粘贴 bilibili.com 视频链接', color: 'var(--bili)' },
-};
-
-// 用户从部分 App 分享出来的链接常不带 scheme,按能解析出主机名的宽松口径识别
-function withHttpsScheme(value: string): string {
-  return /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value) ? value : `https://${value}`;
-}
-
-function detectSourceFromUrl(value: string): Source | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  try {
-    const hostname = new URL(withHttpsScheme(trimmed)).hostname.toLowerCase();
-    if (hostname === 'mp.weixin.qq.com' || hostname.endsWith('.weixin.qq.com')) return 'wechat';
-    if (hostname === 'x.com' || hostname.endsWith('.x.com') || hostname === 'twitter.com' || hostname.endsWith('.twitter.com')) return 'x';
-    if (hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com') || hostname === 'b23.tv') return 'bilibili';
-  } catch {
-    // Keep the current selection while the user is still typing a URL.
-  }
-  return null;
-}
-
-/** 提交前规范化:补 scheme、要求合法主机名。解析失败返回 null(原生 type=url 校验在
- * 部分 webview 不弹提示,提交会被静默拦下,必须换成显式校验+错误反馈)。 */
-function normalizeContentUrl(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) return null;
-  try {
-    const parsed = new URL(withHttpsScheme(trimmed));
-    if (!parsed.hostname.includes('.')) return null;
-    return parsed.toString();
-  } catch {
-    return null;
-  }
-}
 
 export default function ImportPanel() {
   const { addTask, updateTask, addArticle, fetchArticles, pushToast } = useAppStore();
@@ -69,7 +30,7 @@ export default function ImportPanel() {
 
   const pollTaskStatus = async (backendTaskId: string, localTaskId: string) => {
     let pollCount = 0;
-    while (pollCount < 120) {
+    while (pollCount < 600) {
       try {
         const response = await fetch(`/api/v1/tasks/${backendTaskId}/status`);
         const data: TaskStatusResponse = await response.json();
@@ -212,20 +173,9 @@ export default function ImportPanel() {
     <>
       <section className="collect-shell compact-collect">
         <form className="collect-bar" onSubmit={handleSubmit}>
-          <div className="source-chips" role="group" aria-label="选择来源">
-            {(Object.keys(sourceMeta) as Source[]).map((value) => (
-              <button
-                key={value}
-                type="button"
-                className={`source-chip ${source === value ? 'active' : ''}`}
-                aria-pressed={source === value}
-                style={{ '--chip': sourceMeta[value].color } as React.CSSProperties}
-                onClick={() => setSource(value)}
-              >
-                <i />{sourceMeta[value].short}
-              </button>
-            ))}
-          </div>
+          <select className="collect-source-select" aria-label="选择来源" value={source} onChange={event => setSource(event.target.value as Source)}>
+            {(Object.keys(sourceMeta) as Source[]).map(value => <option key={value} value={value}>{sourceMeta[value].label}</option>)}
+          </select>
           <label className="collect-input-wrap">
             <Link2 size={16} aria-hidden="true" />
             <input
@@ -251,7 +201,7 @@ export default function ImportPanel() {
         </form>
         <p className="collect-hint">
           {detectedSource ? <Check size={13} /> : <Link2 size={13} />}
-          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '支持微信、X 和 B 站链接，自动识别来源。')}
+          {clipboardMessage || (detectedSource ? `已自动识别为 ${sourceMeta[detectedSource].label}` : '粘贴文章或视频链接，自动识别来源。')}
         </p>
         <div className="collect-alt">
           <Link to="/admin/share"><Smartphone size={13} />iPhone 分享导入</Link>
@@ -282,7 +232,7 @@ export default function ImportPanel() {
                 </div>
                 <div className="form-field full">
                   <label htmlFor="html-source">网页源码</label>
-                  <textarea id="html-source" className="html-source-input" value={htmlText} onChange={(event) => setHtmlText(event.target.value)} placeholder="将保存的网页 HTML 粘贴到这里，需包含微信公众号的 #js_content 正文节点。" rows={10} required />
+                  <textarea id="html-source" className="html-source-input" value={htmlText} onChange={(event) => setHtmlText(event.target.value)} placeholder="粘贴保存的完整网页 HTML 源码。" rows={10} required />
                 </div>
               </div>
               <div className="modal-footer"><button type="button" className="secondary-button" onClick={() => setHtmlImportOpen(false)} disabled={isHtmlImporting}>取消</button><button type="submit" className="primary-button" disabled={isHtmlImporting || !htmlOriginalUrl.trim() || !htmlText.trim()}>{isHtmlImporting ? <><Loader2 size={14} className="animate-spin" />导入中</> : <><Upload size={14} />导入文章</>}</button></div>

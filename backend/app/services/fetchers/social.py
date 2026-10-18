@@ -1,6 +1,6 @@
 """X/Twitter 链接解析工具。
 
-数据获取统一走 TikHub（tikhub.py），本模块只保留 URL/ID 解析与外链过滤。
+数据获取按 x_providers.py 中的配置顺序执行；本模块负责 URL/ID 解析与外链过滤。
 """
 
 import re

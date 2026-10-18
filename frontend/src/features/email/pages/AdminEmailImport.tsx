@@ -173,7 +173,7 @@ function EmailPanel() {
 export default function AdminEmailImport() {
   return (
     <div>
-      <AdminPageHeader summary={<span>邮箱导入：拉取白名单发件人的 md 附件笔记</span>} />
+      <AdminPageHeader summary={<span>拉取白名单发件人的 md 附件笔记</span>} />
       <div className="ac-settings-page"><div className="ac-settings-content">
         <EmailPanel />
       </div></div>

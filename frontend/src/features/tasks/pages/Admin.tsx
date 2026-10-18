@@ -12,7 +12,7 @@ const sourceLabels: Record<Article['source_type'], string> = {
   wechat: '微信公众号',
   x: 'X / Twitter',
   bilibili: 'Bilibili',
-  douyin: '抖音',
+  youtube: 'YouTube',
   csdn: 'CSDN',
   cnblogs: '博客园',
   other: '其他来源',
@@ -110,7 +110,7 @@ function ArticleTrendChart({ articles, articlesTotal }: { articles: Article[]; a
   );
 }
 
-function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourceStats: { wechat: number; x: number; bilibili: number; other: number } | null }) {
+function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourceStats: Record<string, number> | null }) {
   const sourceCounts = (sourceStats
     ? (Object.entries(sourceLabels) as [string, string][])
         .map(([source, label]) => ({ source: source as Article['source_type'], label, count: (sourceStats as Record<string, number>)[source] || 0 }))
@@ -119,7 +119,7 @@ function SourceBreakdown({ articles, sourceStats }: { articles: Article[]; sourc
         .map(([source, label]) => ({ source: source as Article['source_type'], label, count: articles.filter((article) => article.source_type === source).length }))
         .filter((item) => item.count > 0)
   ).sort((a, b) => b.count - a.count);
-  const statTotal = sourceStats ? sourceStats.wechat + sourceStats.x + sourceStats.bilibili + sourceStats.other : 0;
+  const statTotal = sourceStats ? Object.values(sourceStats).reduce((sum, count) => sum + count, 0) : 0;
   const total = statTotal || articles.length || 1;
 
   return (
@@ -165,7 +165,7 @@ function TaskStatusChart({ tasks }: { tasks: Task[] }) {
 export default function Admin() {
   const { articles, tasks, fetchArticles, fetchTasks } = useAppStore();
   const articlesTotal = useAppStore((state) => state.articlesTotal);
-  const [sourceStats, setSourceStats] = useState<{ wechat: number; x: number; bilibili: number; other: number } | null>(null);
+  const [sourceStats, setSourceStats] = useState<Record<string, number> | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [accountLoading, setAccountLoading] = useState(true);
   useEffect(() => {

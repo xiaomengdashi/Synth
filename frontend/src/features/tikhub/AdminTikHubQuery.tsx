@@ -126,14 +126,14 @@ export default function AdminTikHubQuery() {
   };
 
   return <div className="ac-stack tikhub-page">
-    <section className="ac-pagebar">
-      <nav className="ac-tabs" aria-label="TikHub 页面"><Link to="/admin/tikhub">Key 与账户</Link><Link className="active" aria-current="page" to="/admin/tikhub/query">多平台查询</Link></nav>
+    <section className="ac-pagebar settings-query-toolbar">
+      <h1>多平台查询</h1>
       <div className="ac-pagebar-actions">
         {key?.configured && <><span className="ac-badge success">Key 已配置</span><code className="ac-code">{key.masked_key}</code></>}
       </div>
     </section>
     {keyError ? <p className="tikhub-message error" role="alert">{keyError} <button className="ac-btn secondary sm" onClick={() => setReload(reload + 1)}>重试</button></p>
-      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，<Link to="/admin/tikhub">设置 Key</Link> 后即可查询。</p>
+      : key && !key.configured ? <p className="tikhub-message warning">尚未配置 Key。可以浏览目录，在<Link to="/admin/tikhub?section=account">TikHub 账户</Link>中配置 Key 后即可查询。</p>
       : key?.configured && <p className="tikhub-key-status"><span>每次查询可能计费，请按需执行。</span></p>}
     <div className="tikhub-explorer">
       <section className="ac-card tikhub-catalog" aria-busy={loading}>
@@ -181,7 +181,7 @@ export default function AdminTikHubQuery() {
                 <div className="ac-actions" style={{ justifyContent: 'space-between', alignItems: 'center' }}><p className="ac-help">以此 Key 的权限和额度为准；部分接口还需平台 Cookie 等参数。</p><button type="submit" className="ac-btn primary" disabled={running || !key?.configured || !!keyError}>{running ? '查询中…' : '执行查询'}</button></div>
               </form>
             </div>
-          </> : <div className="ac-card-body"><p className="tikhub-empty">从左侧选择一个查询接口。</p></div>}
+          </> : <div className="ac-card-body"><p className="tikhub-empty">选择目录中的接口，查看参数并执行查询。</p></div>}
         </section>
         <section className="ac-card tikhub-results" aria-busy={running}>
           <div className="ac-card-head">

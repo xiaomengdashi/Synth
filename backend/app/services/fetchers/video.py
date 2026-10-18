@@ -3,10 +3,11 @@ import os
 from datetime import datetime, timedelta, timezone
 
 import httpx
-import yt_dlp
 
 from app.config import settings
 from app.services.fetchers.tikhub import TikHubNotConfiguredError, fetch_bilibili_video
+from app.services.content_sources import detect_source_type
+from app.services.fetchers.video_platforms import fetch_platform_video
 
 BILIBILI_VIEW_URL = "https://api.bilibili.com/x/web-interface/view"
 UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
@@ -15,9 +16,9 @@ CN_TZ = timezone(timedelta(hours=8))
 
 
 async def fetch_video_content(url: str, config, update_step):
-    if "bilibili.com" in url or "b23.tv" in url:
+    if detect_source_type(url) == 'bilibili':
         return await _fetch_bilibili_via_tikhub(url, config, update_step)
-    return await fetch_generic_video(url, update_step)
+    return await fetch_platform_video(url, config or {}, update_step)
 
 
 def _fetch_bilibili_official_view(bvid: str) -> dict:
@@ -84,26 +85,3 @@ async def _fetch_bilibili_via_tikhub(url: str, config, update_step):
         update_step("官方元数据不可用，继续使用 TikHub 解析结果。")
     update_step(f"解析成功: {payload['title']}。正在整理视频信息...")
     return payload
-
-
-async def fetch_generic_video(url: str, update_step):
-    update_step("正在通过 yt-dlp 解析视频信息...")
-    ydl_opts = {
-        "quiet": True,
-        "simulate": True,
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        },
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-    return {
-        "title": info.get("title", "未知标题"),
-        "description": info.get("description", ""),
-        "uploader": info.get("uploader", "未知作者"),
-        "transcript_text": "",
-        "cover_image_url": info.get("thumbnail", ""),
-        "bvid": "",
-        "chapter_info": "",
-    }

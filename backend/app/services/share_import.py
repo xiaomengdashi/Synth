@@ -3,12 +3,14 @@
 import datetime
 import hashlib
 import re
+import ipaddress
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
 from sqlalchemy import select, update
 from sqlalchemy.dialects.sqlite import insert
 
 from app.models import Article, Task
+from app.services.content_sources import detect_source_type, SOURCE_DOMAINS
 
 X_HOSTS = {"x.com", "www.x.com", "mobile.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com"}
 WECHAT_HOSTS = {"mp.weixin.qq.com"}
@@ -77,7 +79,35 @@ def wechat_link_identity(value: str):
 
 def shared_link_identity(value: str):
     candidate = value.rstrip(".,;:!?)]}）】»”")
-    return x_link_identity(candidate) or wechat_link_identity(candidate)
+    existing = x_link_identity(candidate) or wechat_link_identity(candidate)
+    if existing:
+        return existing
+    source = detect_source_type(candidate)
+    if source in {'x', 'wechat'}:
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        host = (parsed.hostname or '').lower()
+        if parsed.scheme not in {'http', 'https'} or parsed.username or parsed.password or parsed.port not in {None, 80, 443}:
+            return None
+        if '.' not in host or host.endswith(('.local', '.localhost', '.internal')):
+            return None
+        try:
+            if not ipaddress.ip_address(host).is_global:
+                return None
+        except ValueError:
+            pass
+        if source == 'other' and any(domain + '.' in host for domains in SOURCE_DOMAINS.values() for domain in domains):
+            return None
+        if source == 'youtube':
+            from app.services.fetchers.video_platforms import youtube_id
+            video_id = youtube_id(candidate)
+            return f'youtube:{video_id}', f'https://www.youtube.com/watch?v={video_id}'
+        query = urlencode(sorted((key, val) for key, val in parse_qsl(parsed.query) if not key.startswith('utm_') and key not in {'fbclid', 'spm'}))
+        url = f'{parsed.scheme}://{host}{parsed.path or "/"}' + (f'?{query}' if query else '')
+        return f'{source}:url:{url}', url
+    except ValueError:
+        return None
 
 
 def extract_shared_url(*values: str) -> tuple[str, str]:
@@ -88,7 +118,7 @@ def extract_shared_url(*values: str) -> tuple[str, str]:
             if identity:
                 links.setdefault(identity[0], identity[1])
     if not links:
-        raise ValueError("没有找到有效的 X 或微信文章链接。请分享具体文章，或粘贴完整链接。")
+        raise ValueError("没有找到有效的文章或视频链接，请粘贴完整的公开内容链接。")
     if len(links) > 1:
         raise ValueError("收到多个不同的文章链接，请每次只分享一篇文章。")
     return next(iter(links.items()))

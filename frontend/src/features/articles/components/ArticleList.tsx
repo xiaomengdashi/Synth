@@ -1,3 +1,4 @@
+import { SOURCE_META } from '../lib/contentSources';
 import { ArrowRight, Star } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { CSSProperties } from 'react';
@@ -7,11 +8,7 @@ import { isRead } from '../lib/readingState';
 import { useAppStore } from '../../app/store/useAppStore';
 
 export function sourceLabel(sourceType: Article['source_type']) {
-  if (sourceType === 'wechat') return '微信公众号';
-  if (sourceType === 'bilibili') return 'Bilibili';
-  if (sourceType === 'x') return 'X / Twitter';
-  if (sourceType === 'douyin') return '抖音';
-  return '网页';
+  return SOURCE_META[sourceType]?.label ?? '网页';
 }
 
 /** 来源功能色:微信绿 / X 蓝 / B 站粉,其余归墨色。 */

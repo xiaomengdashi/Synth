@@ -209,6 +209,15 @@ if [ '${NGINX_SITE_NAME}' != '${APP_NAME}' ]; then
   rm -f '/etc/nginx/sites-enabled/${APP_NAME}' '/etc/nginx/sites-available/${APP_NAME}'
 fi
 python3 -m venv '${REMOTE_APP_DIR}/venv'
+if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; then
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update
+    apt-get install -y ffmpeg
+  else
+    echo '请先安装 ffmpeg（含 ffprobe），视频音频转写需要它。' >&2
+    exit 1
+  fi
+fi
 '${REMOTE_APP_DIR}/venv/bin/pip' install --upgrade pip
 '${REMOTE_APP_DIR}/venv/bin/pip' install -r '${REMOTE_APP_DIR}/backend/requirements.txt'
 systemctl daemon-reload

@@ -36,7 +36,6 @@ SOURCE_LABELS = {
     "wechat": "微信公众号",
     "bilibili": "Bilibili",
     "x": "X / Twitter",
-    "douyin": "抖音",
 }
 
 

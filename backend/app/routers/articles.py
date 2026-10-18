@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models import Article, Task
 from app.services.fetchers.article import parse_article_html
 from app.services.fetchers.tikhub import fetch_tikhub_tweet
+from app.services.fetchers.x_providers import fetch_x_with_priority
 from app.services.article_summary import generate_article_summary
 from app.services.runtime_store import ARTICLES_DB, TASKS_DB
 from app.services.settings_store import numeric_setting
@@ -22,6 +23,7 @@ from app.services.related_articles import fetch_related
 from app.services.note_export import article_field, build_note_markdown, safe_filename
 
 from app.services import wechat_summary_regen
+from app.services.content_sources import SOURCE_IDS
 from app.routers.config import get_runtime_config
 from app.routers.admin_auth import require_admin
 
@@ -121,7 +123,7 @@ async def get_articles_stats(db: AsyncSession = Depends(get_db)):
     rows = (await db.execute(
         select(Article.source_type, func.count()).group_by(Article.source_type)
     )).all()
-    sources = {"wechat": 0, "x": 0, "bilibili": 0, "other": 0}
+    sources = dict.fromkeys(SOURCE_IDS, 0)
     total = 0
     for source_type, count in rows:
         key = source_type if source_type in sources else "other"
@@ -166,7 +168,10 @@ async def get_related_articles(article_id: str, db: AsyncSession = Depends(get_d
 @router.get("/x-preview")
 async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链接")):
     try:
-        return (await asyncio.to_thread(fetch_tikhub_tweet, url, await get_runtime_config()))["payload"]
+        return (await fetch_x_with_priority(
+            url, await get_runtime_config(), lambda step: None,
+            tikhub_fetcher=fetch_tikhub_tweet,
+        ))["payload"]
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

@@ -1,3 +1,5 @@
+import { SOURCE_META } from '../../articles/lib/contentSources';
+import { sourceLabel as getSourceLabel } from '../../articles/components/ArticleList';
 import { useEffect, useRef, useState } from 'react';
 import { Loader2, RefreshCw, Search, Sparkles, Trash2 } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
@@ -14,12 +16,6 @@ type RegenProgress = {
   skipped: number; failed: number; current: string;
 };
 
-function getSourceLabel(sourceType: Article['source_type']) {
-  if (sourceType === 'wechat') return '微信公众号';
-  if (sourceType === 'bilibili') return 'Bilibili';
-  if (sourceType === 'x') return 'X / Twitter';
-  return '网页链接';
-}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
@@ -169,7 +165,7 @@ export default function AdminArticles() {
   return (
     <div>
       <AdminPageHeader
-        summary={<span>{filtering ? `筛选出 ${articles.length} 篇（库内共 ${articlesTotal} 篇）` : `共 ${articlesTotal} 篇内容`}</span>}
+        summary={<span>{filtering ? `筛选出 ${articlesTotal} 篇` : `共 ${articlesTotal} 篇内容`}</span>}
         actions={<>
           <label className="ac-search" style={{ width: isMobile ? '100%' : 220 }} aria-label="搜索文章">
             <Search size={14} />
@@ -179,10 +175,7 @@ export default function AdminArticles() {
             <>
               <select className="ac-select admin-filter-select" value={src} onChange={(event) => setSrc(event.target.value)} aria-label="按来源筛选">
                 <option value="all">全部来源</option>
-                <option value="wechat">微信公众号</option>
-                <option value="x">X / Twitter</option>
-                <option value="bilibili">Bilibili</option>
-                <option value="__other">网页链接</option>
+                {Object.entries(SOURCE_META).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}
               </select>
               <select className="ac-select admin-filter-select" value={cat} onChange={(event) => setCat(event.target.value)} aria-label="按分类筛选">
                 <option value="all">全部分类</option>
@@ -220,7 +213,7 @@ export default function AdminArticles() {
       {isMobile ? (
         <div className="ac-stack">
           {articles.length === 0 ? (
-            <div className="ac-empty">{articles.length === 0 ? '还没有保存文章。' : '没有符合筛选条件的文章，换个条件试试。'}</div>
+            <div className="ac-empty">{filtering ? '没有符合筛选条件的文章，换个条件试试。' : '还没有保存文章。'}</div>
           ) : articles.map((article) => (
             <article key={article.id} className="ac-card article-card-m">
               <div className="ac-card-body">
@@ -279,10 +272,7 @@ export default function AdminArticles() {
                 <th>
                   <select className="ac-select th-select" value={src} onChange={(event) => setSrc(event.target.value)} aria-label="按来源筛选" style={{ color: src !== 'all' ? 'var(--ac-accent)' : undefined }}>
                     <option value="all">全部来源</option>
-                    <option value="wechat">微信公众号</option>
-                    <option value="x">X / Twitter</option>
-                    <option value="bilibili">Bilibili</option>
-                    <option value="__other">网页链接</option>
+                    {Object.entries(SOURCE_META).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}
                   </select>
                 </th>
                 <th>
@@ -298,9 +288,7 @@ export default function AdminArticles() {
             </thead>
             <tbody>
               {articles.length === 0 ? (
-                <tr><td colSpan={6}><div className="ac-empty">还没有保存文章。</div></td></tr>
-              ) : articles.length === 0 ? (
-                <tr><td colSpan={6}><div className="ac-empty">没有符合筛选条件的文章，换个条件试试。</div></td></tr>
+                <tr><td colSpan={6}><div className="ac-empty">{filtering ? '没有符合筛选条件的文章，换个条件试试。' : '还没有保存文章。'}</div></td></tr>
               ) : articles.map((article) => (
                 <tr key={article.id}>
                   <td className="ac-check-col">

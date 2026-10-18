@@ -58,7 +58,7 @@ ENABLE_CERTBOT=1 CERTBOT_EMAIL=you@example.com bash scripts/deploy_x_kolane.sh
 2. 上传前端 `dist`
 3. 上传后端 `app`、`main.py`、`requirements.txt`
 4. 在服务器创建或更新 `venv`
-5. 安装 Python 依赖
+5. 安装 Python 依赖，并在 Ubuntu 缺少 ffmpeg/ffprobe 时安装 ffmpeg
 6. 写入 `systemd` 和 `Nginx` 配置
 7. 重启后端服务并重载 `Nginx`
 8. 可选申请 HTTPS 证书
@@ -120,3 +120,11 @@ Nginx 中的证书路径为：
 
 - `/etc/letsencrypt/live/x.kolane.top/fullchain.pem`
 - `/etc/letsencrypt/live/x.kolane.top/privkey.pem`
+
+## 视频与网页导入依赖
+
+- Python 3.10+；重新部署会安装 requirements 中的新版 `yt-dlp[default]`。
+- ffmpeg/ffprobe：视频无字幕时用于音频转码与切片，Ubuntu 部署脚本自动安装。
+- Node.js 20+ 或 Deno：推荐用于 yt-dlp 处理 YouTube JavaScript；未安装时仍可尝试 TikHub 字幕。
+- 可选 Chromium：后端虚拟环境执行 `python -m playwright install --with-deps chromium`，用于 CSDN 浏览器抓取回退。
+- TikHub Key 与 MiniMax 转写 Key 在后台分别配置，访问媒体失败时可设置「网络配置 → 视频下载代理」。

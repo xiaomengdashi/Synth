@@ -1,0 +1,178 @@
+/* System settings share one working surface; unrelated admin pages keep their layout. */
+.system-settings { max-width: none; padding: 24px 28px 40px; }
+/* Two levels: icon-led section headings and aligned, text-only page links. */
+.admin-console .ac-sidebar { flex-basis: 240px; width: 240px; }
+.ac-nav.ac-accordion-nav { padding: 18px 12px; gap: 4px; }
+.ac-accordion-nav .ac-nav-item { min-height: 48px; margin: 0; padding: 0 12px; gap: 12px; border-radius: 8px; color: var(--ac-side-ink-strong); font-size: 15px; font-weight: 500; }
+.ac-accordion-nav .ac-nav-item.active::before { display: none; }
+.ac-accordion-nav > .ac-nav-accordion { margin-bottom: 4px; }
+.ac-accordion-nav .ac-nav-toggle { width: 100%; border: 0; background: transparent; font-family: inherit; text-align: left; cursor: pointer; }
+.ac-accordion-nav .ac-nav-toggle:hover { background: var(--ac-side-hover); }
+.ac-accordion-nav .ac-nav-toggle.active { background: transparent; font-weight: 600; }
+.ac-nav-toggle > span { flex: 1; }
+.ac-accordion-nav .ac-accordion-chevron { flex: none; width: 16px; color: var(--ac-side-ink); transition: transform .18s ease; }
+[aria-expanded='true'] > .ac-accordion-chevron { transform: rotate(180deg); }
+.ac-settings-menu { margin: 0 0 8px; padding: 0; border: 0; }
+.ac-accordion-panel[hidden] { display: none; }
+.ac-accordion-panel:not([hidden]) { animation: settings-enter .16s ease-out; }
+.ac-settings-link { display: flex; align-items: center; min-height: 40px; padding: 8px 12px 8px 44px; border-radius: 7px; color: var(--ac-side-ink-strong); font-size: 14px; font-weight: 400; line-height: 1.6; text-decoration: none; transition: color .15s ease, background .15s ease; }
+.ac-settings-link:hover { color: var(--ac-accent); background: var(--ac-side-hover); }
+.ac-settings-link.active { color: var(--ac-accent); background: var(--ac-side-active-bg); font-weight: 600; }
+.settings-panels { width: 100%; min-width: 0; }
+.settings-panel { min-width: 0; }
+.settings-panel:not([hidden]) { animation: settings-enter .18s ease-out; }
+.settings-panel[hidden] { display: none; }
+.system-settings .ac-set-card { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.system-settings .ac-set-side { gap: 6px; }
+.system-settings .ac-set-side :is(h1, h2) { display: flex; align-items: center; flex-wrap: wrap; margin: 0; gap: 9px; font-size: 17px; line-height: 1.5; font-weight: 650; letter-spacing: -.02em; }
+.system-settings .ac-set-side h1 { font-size: 22px; }
+.system-settings .ac-set-side :is(h1, h2) > svg { display: none; }
+.system-settings .ac-set-side :is(h1, h2) .ac-badge { margin-left: 5px; font-size: 10px; letter-spacing: 0; font-weight: 500; }
+.system-settings .ac-set-side > p { font-size: 12px; line-height: 1.85; max-width: 660px; }
+.system-settings .ac-set-main { gap: 14px; }
+.system-settings .ac-set-main form { gap: 18px; max-width: 960px; }
+.system-settings .ac-field { gap: 8px; }
+.system-settings .ac-field > label { font-size: 12px; font-weight: 600; }
+.system-settings .ac-input, .system-settings .ac-textarea { background: var(--ac-surface); border-color: var(--ac-line-strong); border-radius: 7px; }
+.system-settings .ac-input { height: 42px; padding: 0 13px; }
+.system-settings .ac-input:focus, .system-settings .ac-textarea:focus { border-color: var(--ac-accent); }
+.system-settings .ac-textarea { padding: 12px 13px; line-height: 1.85; }
+.system-settings .ac-help { font-size: 11px; line-height: 1.8; }
+.system-settings .ac-grid-2 { gap: 18px 24px; }
+.system-settings .ac-actions { align-items: center; gap: 10px; border-top: 1px solid var(--ac-line); padding-top: 14px; margin-top: 0; }
+.system-settings .ac-set-main form .ac-actions { margin-top: 2px; }
+.system-settings .ac-btn { min-height: 36px; border-radius: 7px; padding: 8px 13px; }
+.system-settings .ac-btn.primary { font-weight: 600; }
+.settings-save-status { margin-right: auto; color: var(--ac-faint); font-size: 11px; }
+.settings-save-status.is-dirty { color: var(--ac-warn); }
+.settings-save-status.is-dirty::before { content: ''; display: inline-block; width: 5px; height: 5px; margin-right: 7px; border-radius: 50%; background: currentColor; vertical-align: 2px; }
+.settings-help-disclosure { color: var(--ac-muted); font-size: 11px; line-height: 1.8; }
+.settings-help-disclosure summary { cursor: pointer; width: fit-content; transition: color .15s ease; }
+.settings-help-disclosure summary:hover { color: var(--ac-ink); }
+.settings-help-disclosure > p { margin: 10px 0 0; overflow-wrap: anywhere; }
+.settings-inline-note { display: flex; align-items: flex-start; gap: 11px; padding: 15px 16px; border-radius: 7px; background: var(--ac-accent-soft); color: var(--ac-accent); }
+.settings-inline-note > svg { flex: none; margin-top: 2px; }
+.settings-inline-note p { margin: 0; font-size: 12px; line-height: 1.8; }
+.settings-inline-note strong { display: block; font-weight: 550; }
+.settings-inline-note span { display: block; font-size: 11px; color: var(--ac-muted); margin-top: 3px; }
+.settings-panel > .ac-stack { gap: 32px; }
+.settings-panel > .ac-stack > .ac-set-card + .ac-set-card { border-top: 1px solid var(--ac-line); padding-top: 28px; }
+.system-settings .tikhub-key-status { gap: 8px 12px; margin-top: 3px; font-size: 11px; }
+.system-settings .tikhub-metrics { gap: 0; padding: 6px 0 20px; border-bottom: 1px solid var(--ac-line); }
+.system-settings .tikhub-metrics > div { padding: 0 15px; border: 0; border-right: 1px solid var(--ac-line); border-radius: 0; background: transparent; }
+.system-settings .tikhub-metrics > div:first-child { padding-left: 0; }
+.system-settings .tikhub-metrics > div:last-child { border-right: 0; }
+.system-settings .tikhub-metrics strong { font-size: 22px; font-weight: 600; }
+.system-settings .tikhub-details { margin-top: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 19px 24px; }
+.system-settings .tikhub-details dt { margin-bottom: 6px; }
+.system-settings .tikhub-disclosure { margin: 0; background: transparent; }
+.system-settings .tikhub-usage { margin: 0; }
+.system-settings .tikhub-usage h3 { font-size: 12px; }
+.system-settings .tikhub-message { margin: 0; font-size: 12px; }
+.system-settings .tikhub-empty { padding: 24px 18px; margin: 0; background: var(--ac-surface); border: 1px dashed var(--ac-line-strong); border-radius: 7px; }
+.system-settings .settings-query-entry { gap: 15px; }
+.system-settings .settings-query-entry h2 { font-size: 15px; }
+.system-settings .fetch-platforms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px 24px; align-items: start; }
+.system-settings .fetch-platform + .fetch-platform { padding-top: 0; border: 0; }
+.system-settings .fetch-platform-heading { margin-bottom: 10px; }
+.system-settings .fetch-platform-heading h2 { margin: 0; color: var(--ac-ink); font-size: 12px; font-weight: 600; }
+.system-settings .fetch-platform-heading > span { font-size: 10px; color: var(--ac-faint); }
+.system-settings .fetch-provider-list { gap: 0; border: 1px solid var(--ac-line); border-radius: 8px; overflow: hidden; background: var(--ac-surface); }
+.system-settings .fetch-provider { align-items: center; gap: 12px; padding: 7px 10px; border: 0; border-radius: 0; background: transparent; min-height: 44px; }
+.system-settings .fetch-provider + .fetch-provider { border-top: 1px solid var(--ac-line); }
+.system-settings .fetch-provider-rank { width: 23px; height: 23px; background: var(--ac-surface-2); border-radius: 50%; font-size: 10px; }
+.system-settings .fetch-provider:first-child .fetch-provider-rank { background: var(--ac-accent-soft); color: var(--ac-accent); }
+.system-settings .fetch-provider-copy strong { font-size: 12px; font-weight: 550; }
+.system-settings .fetch-provider-copy .ac-badge { font-size: 10px; padding: 2px 6px; background: transparent; }
+.system-settings .fetch-provider-copy p { font-size: 10px; margin-top: 3px; }
+.system-settings .fetch-provider-actions { flex-direction: row; gap: 0; padding: 2px; border: 1px solid var(--ac-line); border-radius: 6px; }
+.system-settings .fetch-provider-actions .ac-icon-btn { width: 28px; height: 28px; border-radius: 4px; }
+.fetch-provider-help { margin-top: 7px; }
+.fetch-provider-help dl { margin: 10px 0 3px; display: grid; gap: 9px; padding: 12px 14px; border-left: 2px solid var(--ac-line-strong); }
+.fetch-provider-help dt { font-weight: 550; color: var(--ac-ink); }
+.fetch-provider-help dd { margin: 3px 0 0; overflow-wrap: anywhere; }
+.system-settings .settings-save-hint { margin-top: 2px; }
+.system-settings .twitter-cli-settings { gap: 24px; }
+.system-settings .twitter-cli-settings form { max-width: none; gap: 18px; }
+.twitter-cli-connection { padding: 18px 20px; background: var(--ac-surface); border: 1px solid var(--ac-line); border-radius: 9px; }
+.twitter-cli-connection-row { display: flex; align-items: center; gap: 14px; }
+.twitter-cli-connection-icon { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; color: var(--ac-muted); background: var(--ac-surface-2); }
+.twitter-cli-connection.is-verified .twitter-cli-connection-icon { color: var(--ac-accent); background: var(--ac-accent-soft); }
+.twitter-cli-connection-copy { flex: 1; min-width: 0; }
+.twitter-cli-connection-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 7px 12px; }
+.twitter-cli-connection-heading strong { font-size: 14px; font-weight: 600; color: var(--ac-ink); overflow-wrap: anywhere; }
+.twitter-cli-state { font-size: 10px; color: var(--ac-muted); }
+.is-verified .twitter-cli-state { color: var(--ac-accent); }
+.is-verified .twitter-cli-state::before { content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: currentColor; margin-right: 5px; vertical-align: 1px; }
+.twitter-cli-connection-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 5px; font-size: 11px; color: var(--ac-muted); line-height: 1.6; overflow-wrap: anywhere; }
+.twitter-cli-connection-meta time { color: var(--ac-faint); }
+.twitter-cli-connection-error { margin: 12px 0 0 54px; font-size: 12px; line-height: 1.7; color: var(--ac-danger, #b85b55); }
+.system-settings .twitter-cli-settings .ac-field > label { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.twitter-cli-settings .ac-field > label code { font-size: 10px; color: var(--ac-faint); font-weight: 400; }
+.twitter-cli-settings code { overflow-wrap: anywhere; }
+.twitter-cli-cookie-help { margin-top: -5px; color: var(--ac-muted); font-size: 11px; line-height: 1.8; }
+.twitter-cli-cookie-help > summary { display: flex; align-items: center; gap: 5px; width: fit-content; list-style: none; cursor: pointer; }
+.twitter-cli-cookie-help summary:hover { color: var(--ac-accent); }
+.twitter-cli-cookie-help ol { padding-left: 19px; margin: 10px 0 0; }
+.twitter-cli-advanced { border-top: 1px solid var(--ac-line); }
+.twitter-cli-advanced > summary { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 0; list-style: none; cursor: pointer; color: var(--ac-ink); font-size: 12px; }
+.twitter-cli-advanced-preview { display: flex; align-items: center; gap: 10px; color: var(--ac-faint); font-size: 11px; }
+.twitter-cli-settings summary::-webkit-details-marker { display: none; }
+.twitter-cli-settings summary svg { transition: transform .18s ease; }
+.twitter-cli-settings details[open] > summary svg { transform: rotate(180deg); }
+.twitter-cli-advanced-content { display: grid; gap: 18px; padding: 2px 0 18px; }
+.twitter-cli-installation, .twitter-cli-advanced-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--ac-muted); }
+.twitter-cli-advanced-footer { border-top: 1px solid var(--ac-line); padding-top: 14px; color: var(--ac-faint); }
+.twitter-cli-clear { padding: 2px 0; border: 0; background: transparent; font-family: inherit; color: var(--ac-muted); font-size: 11px; cursor: pointer; }
+.twitter-cli-clear:hover { color: var(--ac-danger, #b85b55); }
+.twitter-cli-clear:disabled { opacity: .5; cursor: default; }
+.settings-optional { margin-left: 5px; color: var(--ac-faint); font-weight: 400; }
+.system-settings .twitter-cli-settings .ac-actions { justify-content: flex-end; padding-top: 16px; }
+.twitter-cli-settings a, .fetch-provider-status a, .fetch-provider-help a { color: var(--ac-accent); text-decoration: none; }
+.twitter-cli-settings a:hover, .fetch-provider-status a:hover, .fetch-provider-help a:hover { text-decoration: underline; }
+.settings-query-toolbar { align-items: flex-end; margin-bottom: 0; }
+.settings-query-toolbar h1 { margin: 0; font-size: 22px; letter-spacing: -.02em; font-weight: 650; }
+.system-settings .tikhub-explorer { grid-template-columns: 260px minmax(0, 1fr); gap: 28px; }
+.system-settings .tikhub-page .ac-card { border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.system-settings .tikhub-page .ac-card-head { padding: 0 0 15px; background: transparent; border-bottom: 1px solid var(--ac-line); }
+.system-settings .tikhub-page .ac-card-body { padding: 20px 0 0; }
+.system-settings .tikhub-catalog { gap: 0; border-right: 1px solid var(--ac-line); padding-right: 24px; }
+.system-settings .tikhub-endpoint-list { margin-top: 15px; }
+.system-settings .tikhub-query-main { gap: 32px; }
+.system-settings .tikhub-page .ac-select { height: 42px; border-color: var(--ac-line-strong); border-radius: 7px; background: var(--ac-surface); }
+.system-settings .tikhub-query-main > .ac-card:first-child > .ac-card-body:first-child { padding-top: 0; }
+@keyframes settings-enter { from { opacity: .5; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 960px) { .settings-console:not(.nav-open) .ac-sidebar { visibility: hidden; box-shadow: none; } }
+@media (max-width: 1000px) { .system-settings .tikhub-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 0; } .system-settings .tikhub-metrics > div:nth-child(odd) { padding-left: 0; } .system-settings .tikhub-metrics > div:nth-child(even) { border: 0; } }
+@media (max-width: 760px) {
+  .twitter-cli-connection { padding: 15px; }
+  .twitter-cli-connection-row { gap: 10px; flex-wrap: wrap; }
+  .twitter-cli-connection-heading strong { font-size: 13px; }
+  .twitter-cli-connection-icon { width: 34px; height: 34px; }
+  .twitter-cli-connection-error { margin-left: 0; }
+  .system-settings { padding: 20px 16px 32px; }
+  .system-settings .ac-set-side h1 { font-size: 21px; }
+  .system-settings .ac-set-card { gap: 16px; }
+  .system-settings .fetch-platforms { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .system-settings .ac-input-group { flex-wrap: wrap; }
+  .system-settings .ac-input-group .ac-input { flex-basis: 180px; }
+  .system-settings .tikhub-explorer { grid-template-columns: minmax(0, 1fr); gap: 28px; }
+  .system-settings .tikhub-catalog { border-right: 0; padding-right: 0; }
+  .settings-query-toolbar { align-items: flex-start; }
+}
+@media (max-width: 480px) {
+  .admin-console .ac-topbar { gap: 12px; }
+  .admin-console .ac-crumbs { flex: 1; justify-content: flex-end; }
+  .admin-console .ac-crumb:not(:last-child), .admin-console .ac-crumb:last-child .ac-crumb-sep, .admin-console .ac-topbar-spacer { display: none; }
+  .admin-console .ac-crumb:last-child { overflow: hidden; }
+  .admin-console .ac-crumb:last-child a { overflow: hidden; text-overflow: ellipsis; }
+  .system-settings .ac-input, .system-settings .ac-textarea { font-size: 16px; }
+  .system-settings .ac-grid-2 { grid-template-columns: minmax(0, 1fr); }
+  .system-settings .ac-actions { gap: 10px 8px; }
+  .settings-save-status { flex-basis: 100%; }
+  .system-settings .fetch-provider { gap: 8px; padding: 9px 10px; }
+  .system-settings .fetch-provider-copy .ac-badge { margin-top: 0; }
+  .system-settings .tikhub-details { grid-template-columns: minmax(0, 1fr); }
+  .system-settings .tikhub-metrics strong { font-size: 20px; }
+}
+@media (prefers-reduced-motion: reduce) { .settings-panel:not([hidden]) { animation: none; } .ac-settings-link { transition: none; } }

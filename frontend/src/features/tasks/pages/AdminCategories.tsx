@@ -60,7 +60,7 @@ export default function AdminCategories() {
       />
       <section className="ac-card">
         <div className="ac-card-head">
-          <h2 className="ac-card-title"><Tags size={15} />文章分类</h2>
+          <h2 className="ac-card-title"><Tags size={15} />分类列表</h2>
           <span className="ac-card-caption">{names.length} 个分类</span>
         </div>
         <div className="ac-card-body">

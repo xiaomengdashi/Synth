@@ -6,16 +6,16 @@ import {
   Cpu,
   LayoutDashboard,
   Menu,
-  Moon,
   Newspaper,
-  Sun,
   X,
 } from 'lucide-react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { useAppStore } from '../features/app/store/useAppStore';
 import { BrandMark } from './Layout';
+import AdminThemeControl from './AdminThemeControl';
 import ToastStack from './ToastStack';
 import AdminGate from './AdminGate';
+import AdminSidebarNavigation from './AdminSidebarNavigation';
 
 const NAV_GROUPS = [
   { path: '/admin', label: '总览', icon: LayoutDashboard },
@@ -26,53 +26,34 @@ const NAV_GROUPS = [
 const SECTIONS = [
   { label: '内容管理', items: [{ path: '/admin/articles', label: '文章管理' }, { path: '/admin/notes', label: '划线笔记' }, { path: '/admin/categories', label: '文章分类' }] },
   { label: '导入与任务', items: [{ path: '/admin/tasks', label: '处理任务' }, { path: '/admin/email', label: '邮箱导入' }, { path: '/admin/share', label: '手机分享导入' }] },
-  { label: '系统设置', items: [{ path: '/admin/tikhub', label: 'TikHub 数据服务' }, { path: '/admin/model', label: '模型服务' }, { path: '/admin/token', label: '访问令牌' }] },
+  { label: '系统设置', items: [{ path: '/admin/tikhub', label: '内容获取' }, { path: '/admin/model', label: '模型服务' }, { path: '/admin/token', label: '访问令牌' }] },
 ];
 
-/** 面包屑:上级可点击跳转,最后一级是当前位置。 */
-function useAdminBreadcrumbs(pathname: string) {
-  if (pathname === '/admin/tasks') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '处理任务' }];
-  }
-  if (pathname === '/admin/articles') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '文章管理' }];
-  }
-  if (pathname === '/admin/notes') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '划线笔记' }];
-  }
-  if (pathname === '/admin/categories') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '文章分类' }];
-  }
-  if (pathname === '/admin/model') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '模型服务' }];
-  }
-  if (pathname === '/admin/email') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '邮箱导入' }];
-  }
-  if (pathname === '/admin/share') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '手机分享导入' }];
-  }
-  if (pathname === '/admin/token') {
-    return [{ label: '后台管理', to: '/admin' }, { label: '访问令牌' }];
-  }
-  if (pathname.startsWith('/admin/tikhub') || pathname.startsWith('/admin/tikhub')) {
-    return [{ label: '后台管理', to: '/admin' }, { label: 'TikHub 数据服务' }];
-  }
-  return [{ label: '后台管理', to: '/admin' }, { label: '总览' }];
-}
-
 export default function AdminLayout() {
-  const { adminDark, toggleAdminDark } = useAppStore();
+  const { adminTheme, adminThemeMode } = useAppStore();
   const location = useLocation();
   const [navOpen, setNavOpen] = useState(false);
-  const breadcrumbs = useAdminBreadcrumbs(location.pathname);
-  // 后台明暗独立于前台主题:进入后台按自己的记录落 dark 类
+  // 后台配色和外观模式独立于前台主题。
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', adminDark);
-  }, [adminDark]);
+    const root = document.documentElement;
+    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+    const applyMode = () => {
+      const dark = adminThemeMode === 'dark' || (adminThemeMode === 'system' && systemTheme.matches);
+      root.classList.toggle('dark', dark);
+    };
+
+    root.dataset.adminTheme = adminTheme;
+    applyMode();
+    if (adminThemeMode === 'system') systemTheme.addEventListener('change', applyMode);
+
+    return () => {
+      systemTheme.removeEventListener('change', applyMode);
+      delete root.dataset.adminTheme;
+    };
+  }, [adminTheme, adminThemeMode]);
 
   // 路由变化时收起移动端抽屉
-  useEffect(() => { setNavOpen(false); }, [location.pathname]);
+  useEffect(() => { setNavOpen(false); }, [location.pathname, location.search]);
 
   useEffect(() => {
     if (!navOpen) return;
@@ -82,14 +63,18 @@ export default function AdminLayout() {
   }, [navOpen]);
 
   const section = SECTIONS.find(group => group.items.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)));
-  const isNavActive = (path: string) => {
-    if (path === '/admin') return location.pathname === '/admin';
-    return SECTIONS.find(group => group.items[0].path === path) === section;
-  };
+  const isSettings = section?.label === '系统设置';
+  const currentPage = section?.items.find(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
+  const pageTitle = currentPage?.label ?? (location.pathname === '/admin' ? '总览' : undefined);
+  // The top bar shows ancestors; the current page has one heading in the content area.
+  const breadcrumbs = [
+    { label: '后台管理', to: '/admin' },
+    ...(section ? [{ label: section.label, to: section.items[0].path }] : []),
+  ];
 
   return (
     <AdminGate>
-    <div className={navOpen ? 'admin-console nav-open' : 'admin-console'}>
+    <div className={`admin-console${isSettings ? ' settings-console' : ''}${navOpen ? ' nav-open' : ''}`}>
       <aside className="ac-sidebar" aria-label="后台侧边栏">
         <Link to="/admin" className="ac-brand">
           <span className="ac-brand-logo"><BrandMark size={26} accent="var(--ac-accent)" ink="var(--ac-side-ink-strong)" /></span>
@@ -98,11 +83,7 @@ export default function AdminLayout() {
           </span>
         </Link>
 
-        <nav className="ac-nav" aria-label="后台导航">
-          <div className="ac-nav-label">工作空间</div>
-          {NAV_GROUPS.map(item => <Link to={item.path} key={item.path} className={isNavActive(item.path) ? 'ac-nav-item active' : 'ac-nav-item'} aria-current={isNavActive(item.path) ? 'page' : undefined}><item.icon size={18} /><span>{item.label}</span></Link>)}
-
-        </nav>
+        <AdminSidebarNavigation groups={NAV_GROUPS} sections={SECTIONS} />
 
         <div className="ac-side-foot">
           <Link to="/" className="ac-back-site"><BookOpenText size={15} /> 返回前台网站</Link>
@@ -117,31 +98,20 @@ export default function AdminLayout() {
             {navOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
           <Link to="/admin" className="ac-topbar-brand">SynthAI</Link>
-          <nav className="ac-crumbs" aria-label="面包屑">
+          <nav className="ac-crumbs" aria-label="上级导航">
             {breadcrumbs.map((crumb, index) => (
               <span className="ac-crumb" key={crumb.label}>
                 {index > 0 && <span className="ac-crumb-sep"><ChevronRight size={13} /></span>}
-                {crumb.to && index < breadcrumbs.length - 1 ? (
-                  <Link to={crumb.to}>{crumb.label}</Link>
-                ) : (
-                  <strong aria-current={index === breadcrumbs.length - 1 ? 'page' : undefined}>{crumb.label}</strong>
-                )}
+                <Link to={crumb.to}>{crumb.label}</Link>
               </span>
             ))}
           </nav>
           <div className="ac-topbar-spacer" />
-          <button type="button" className="ac-icon-btn" onClick={toggleAdminDark} aria-label="切换明暗">
-            {adminDark ? <Sun size={17} /> : <Moon size={17} />}
-          </button>
+          <AdminThemeControl />
         </header>
 
-        <main className="ac-main">
-          {section ? <>
-            <header className="ac-workspace-heading"><p className="eyebrow">SynthAI 控制台</p><h1>{section.label}</h1></header>
-            <nav className="ac-section-nav" aria-label={`${section.label}页面`}>
-              {section.items.map(item => <Link key={item.path} to={item.path} className={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`) ? 'active' : ''} aria-current={location.pathname === item.path || location.pathname.startsWith(`${item.path}/`) ? 'page' : undefined}>{item.label}</Link>)}
-            </nav>
-          </> : null}
+        <main className={isSettings ? 'ac-main system-settings' : 'ac-main'}>
+          {pageTitle && !isSettings ? <header className="ac-workspace-heading"><h1>{pageTitle}</h1></header> : null}
           <Outlet />
         </main>
       </div>

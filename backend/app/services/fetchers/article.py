@@ -1,10 +1,13 @@
 import re
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 import trafilatura
 from bs4 import BeautifulSoup, Tag
 
 from app.services.fetchers.tikhub import TikHubNotConfiguredError, fetch_wechat_article
+from app.services.fetch_priorities import PROVIDERS, resolve_priorities
+from app.services.content_sources import detect_source_type
 
 
 # 微信 <pre><code> 内联样式会压成一行（white-space:nowrap + display:-webkit-box），优先级高于站点 CSS
@@ -74,8 +77,8 @@ def _normalize_wechat_code_styles(root: Tag) -> None:
 
 
 async def fetch_article_content(url: str, update_step, config=None):
-    if "mp.weixin.qq.com" in url:
-        return await _fetch_wechat_via_tikhub(url, update_step, config)
+    if detect_source_type(url) == 'wechat':
+        return await _fetch_wechat_with_priority(url, update_step, config)
 
     update_step("正在抓取文章内容...")
     html = await fetch_article_html(url, update_step)
@@ -85,8 +88,88 @@ async def fetch_article_content(url: str, update_step, config=None):
     return result
 
 
+def _valid_wechat_body(html: str) -> bool:
+    root = BeautifulSoup(html or "", "html.parser").find(id="js_content")
+    if not isinstance(root, Tag):
+        return False
+    if root.get_text(strip=True):
+        return True
+    return any(str(image.get("data-src") or image.get("src") or "").strip().startswith(("https://", "http://", "//"))
+               for image in root.find_all("img"))
+
+
+async def _fetch_wechat_with_priority(url: str, update_step, config=None):
+    errors = []
+    for index, provider in enumerate(resolve_priorities(config)["wechat"]):
+        label = PROVIDERS[provider]["label"]
+        update_step(f"{'正在回退到' if index else '正在通过'} {label} 获取公众号文章...")
+        try:
+            if provider == "content_downloader":
+                result = await _fetch_wechat_via_content_downloader(url)
+            else:
+                result = await _fetch_wechat_via_tikhub(url, update_step, config)
+            if not _valid_wechat_body(result.get("html_content") or ""):
+                raise RuntimeError("未获取到有效微信正文")
+            update_step(f"{label} 获取成功：{result['title']}。正在整理正文...")
+            return result
+        except Exception as exc:
+            message = str(exc)
+            for key in ("tikhubApiKey", "apiKey", "minimaxApiKey", "imapPassword"):
+                secret = str((config or {}).get(key) or "")
+                if secret:
+                    message = message.replace(secret, "[已隐藏]")
+            errors.append(f"{label}：{message[:180]}")
+    raise RuntimeError("微信公众号内容获取失败；" + "；".join(errors))
+
+
+async def _fetch_wechat_via_content_downloader(url: str) -> dict:
+    """Adapt content-downloader's WeChatOAParser HTTP fetching to our rich reader.
+
+    MIT, copyright 2026 zinan92; see content_downloader_LICENSE.txt. Preserve
+    the complete nested #js_content DOM instead of the original regex slice.
+    Uses this app's parser, so deployment needs no sibling checkout or login.
+    """
+    parsed = urlsplit(url)
+    if (parsed.scheme not in {"http", "https"} or parsed.hostname != "mp.weixin.qq.com"
+            or parsed.username or parsed.password or parsed.port not in {None, 80, 443}
+            or not (parsed.path == "/s" or parsed.path.startswith("/s/"))):
+        raise RuntimeError("Content Downloader 仅支持微信公众号文章链接")
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
+    async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+        response = await client.get(url, headers=headers)
+        response.raise_for_status()
+        if response.url.host != "mp.weixin.qq.com":
+            raise RuntimeError("微信页面已跳转，未获取到原文")
+        html = response.text
+    if not _valid_wechat_body(html):
+        raise RuntimeError("微信页面没有有效的 #js_content 正文，可能需要验证或文章已失效")
+    soup = BeautifulSoup(html, "html.parser")
+    root = soup.find(id="js_content")
+    try:
+        result = parse_article_html(url, html)
+    except ValueError:
+        # A real image-only article has no text for trafilatura to extract.
+        title_tag = soup.find(id="activity-name")
+        title = _extract_meta_content(soup, "og:title") or (title_tag.get_text(" ", strip=True) if title_tag else "")
+        account_name, publish_time = _extract_wechat_page_meta(soup)
+        result = {"title": _normalize_title(title), "extracted_md": title or "图片文章",
+                  "html_content": str(root), "cover_image_url": _extract_meta_content(soup, "og:image"),
+                  "account_name": account_name, "publish_time": publish_time}
+    if not result["cover_image_url"]:
+        image = root.find("img")
+        result["cover_image_url"] = str(image.get("data-src") or image.get("src") or "") if image else ""
+    if not result["account_name"]:
+        author = soup.find(class_="rich_media_meta_text")
+        result["account_name"] = author.get_text(" ", strip=True) if author else ""
+    return result
+
+
 async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
-    """微信公众号文章统一走 TikHub H5 接口（绕过安全验证）。
+    """通过 TikHub H5 接口获取微信公众号文章。
 
     正文按原文存储（内联样式、<br> 换行、hidden 装饰等一律保留），
     由前端微信复刻视图按官方页面 CSS 渲染；代码块规范化仅用于
@@ -99,7 +182,7 @@ async def _fetch_wechat_via_tikhub(url: str, update_step, config=None):
         article = await asyncio.to_thread(fetch_wechat_article, url, config)
     except TikHubNotConfiguredError as exc:
         raise RuntimeError(
-            "未配置 TikHub API Token，无法抓取公众号文章。请在管理后台 TikHub 抓取页填写 Token。"
+            "未配置 TikHub API Token，请在管理后台「内容获取」设置。"
         ) from exc
 
     update_step(f"抓取成功: {article['title']}。正在解析正文并保存内容...")
@@ -153,7 +236,7 @@ def _extract_wechat_page_meta(soup: BeautifulSoup) -> tuple[str, str]:
     if isinstance(publish_tag, Tag):
         publish_time = publish_tag.get_text(" ", strip=True)
     if not publish_time:
-        ct_match = re.search(r'var\s+ct\s*=\s*"?(\d{10,13})"?', str(soup))
+        ct_match = re.search(r'''var\s+ct\s*=\s*["']?(\d{10,13})["']?''', str(soup))
         if ct_match:
             publish_time = ct_match.group(1)
     return account_name, publish_time
@@ -181,19 +264,25 @@ def parse_article_html(url: str, html: str) -> dict:
             title = _normalize_title(title_tag.get_text(" ", strip=True))
 
     main_content = _find_main_content(url, soup)
+    author = soup.find('meta', attrs={'name': 'author'})
+    account_name = str(author.get('content') or '').strip() if author else _extract_meta_content(soup, 'article:author')
+    publish_time = _extract_meta_content(soup, 'article:published_time')
     if main_content is None:
         if "mp.weixin.qq.com" in url:
             raise ValueError("保存的微信 HTML 中没有找到 #js_content，可能仍是验证页。")
-        extracted_md = trafilatura.extract(html, output_format="markdown") or "> 无法提取文章正文。"
+        if re.fullmatch(r'(?:40[134]|50[023])(?:\s*[-:|]\s*.*)?|not found|access denied|just a moment[.!…]*', title, re.I):
+            raise ValueError('页面未返回文章正文，可能是错误页或验证页。')
+        extracted_md = trafilatura.extract(html, output_format="markdown") or ''
+        if not extracted_md.strip():
+            raise ValueError('没有提取到文章正文，页面可能需要登录或已失效。')
         return {
             "title": title,
             "extracted_md": extracted_md,
             "html_content": "",
             "cover_image_url": cover_image_url,
+            "account_name": account_name,
+            "publish_time": publish_time,
         }
-
-    account_name = ""
-    publish_time = ""
     if "mp.weixin.qq.com" in url:
         # 微信正文按原文存储，代码规范化只作用于提取副本
         account_name, publish_time = _extract_wechat_page_meta(soup)
@@ -224,9 +313,9 @@ def _find_main_content(url: str, soup: BeautifulSoup) -> Tag | None:
     if "mp.weixin.qq.com" in url:
         return soup.find("div", {"id": "js_content"})
     if "csdn.net" in url:
-        return soup.find("div", {"id": "article_content"})
+        return soup.find(id="article_content")
     if "cnblogs.com" in url:
-        return soup.find("div", {"id": "cnblogs_post_body"})
+        return soup.find(id="cnblogs_post_body")
     return soup.find("article") or soup.find("main")
 
 
@@ -259,6 +348,7 @@ async def fetch_article_html(url: str, update_step):
 
     async with httpx.AsyncClient(headers=headers, follow_redirects=True, verify=False, timeout=30.0, http2=True) as http_client:
         res = await http_client.get(url)
+        res.raise_for_status()
         return res.text
 
 
@@ -276,6 +366,12 @@ def extract_main_html(url: str, soup: BeautifulSoup) -> str:
 
 def _normalize_html_content(url: str, main_content: Tag) -> str:
     """Keep source layout while fixing lazy images and unsafe code styles."""
+    for tag in main_content.find_all(['img', 'source', 'a']):
+        if tag.get('data-src'):
+            tag['src'] = tag.attrs.pop('data-src')
+        for attribute in ('src', 'data-src', 'href'):
+            if tag.get(attribute):
+                tag[attribute] = urljoin(url, str(tag[attribute]))
     html_content = str(main_content)
     html_content = re.sub(r"data-src\s*=", "src=", html_content, flags=re.IGNORECASE)
     html_content = re.sub(r"visibility:\s*hidden;?", "visibility: visible;", html_content, flags=re.IGNORECASE)
