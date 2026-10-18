@@ -178,7 +178,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   fetchConfig: async () => {
     try {
-      const res = await fetch('/api/v1/config');
+      const res = await adminFetch('/api/v1/config');
       if (res.ok) {
         const data = await res.json();
         if (data && typeof data === 'object') {
@@ -243,7 +243,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   fetchTasks: async () => {
     try {
-      const res = await fetch('/api/v1/tasks');
+      const res = await adminFetch('/api/v1/tasks');
       if (!res.ok) throw new Error(`Tasks API returned ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data.data)) throw new Error('Tasks API returned an invalid payload');

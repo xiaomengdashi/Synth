@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Check, Clipboard, Link2, Loader2, Send, Smartphone, Upload, X } from 'lucide-react';
 import { useAppStore } from '../../app/store/useAppStore';
+import { adminFetch } from '../../../utils/adminAuth';
 import type { Article } from '../types';
 import type { Task } from '../../tasks/types';
 
@@ -148,7 +149,7 @@ export default function ImportPanel() {
     if (!htmlOriginalUrl.trim() || !htmlText.trim()) return;
     setIsHtmlImporting(true);
     try {
-      const response = await fetch('/api/v1/articles/import-html', {
+      const response = await adminFetch('/api/v1/articles/import-html', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ original_url: htmlOriginalUrl.trim(), html: htmlText }),

@@ -28,6 +28,10 @@ app = FastAPI(
     description="AI 内容聚合平台后端 API",
     version="1.0.0",
     lifespan=lifespan,
+    # 接口清单不对外公开:线上 nginx 只代理 /api 与 /media,本地直连时也不暴露文档
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # API 响应 gzip 压缩:文章正文动辄上百 KB,不压缩时公网传输是详情页最大等待来源

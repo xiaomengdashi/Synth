@@ -177,7 +177,7 @@ async def get_x_preview(url: str = Query(..., description="原始 X/Twitter 链�
 
 
 @router.post("/import-html")
-async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db)):
+async def import_html(data: HtmlImportPayload, db: AsyncSession = Depends(get_db), _: None = Depends(require_admin)):
     """Import a saved page without opening a browser or fetching the URL."""
     try:
         parsed = parse_article_html(data.original_url.strip(), data.html)

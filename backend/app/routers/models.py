@@ -9,9 +9,10 @@ from __future__ import annotations
 import time
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
+from app.routers.admin_auth import require_admin
 from app.services import settings_store
 
 router = APIRouter()
@@ -51,7 +52,7 @@ def _error_detail(status: int, body: str) -> str:
 
 
 @router.post("/list")
-async def list_models(payload: ModelCredentials):
+async def list_models(payload: ModelCredentials, _: None = Depends(require_admin)):
     base, key, _ = await _effective(payload)
     if not base:
         raise HTTPException(400, "请先填写 Base URL。")
@@ -80,7 +81,7 @@ async def list_models(payload: ModelCredentials):
 
 
 @router.post("/test")
-async def test_model(payload: ModelCredentials):
+async def test_model(payload: ModelCredentials, _: None = Depends(require_admin)):
     base, key, model = await _effective(payload)
     if not base:
         raise HTTPException(400, "请先填写 Base URL。")

@@ -93,7 +93,8 @@ class AppConfigModel(BaseModel):
 
 
 @router.get("")
-async def get_config():
+async def get_config(_: None = Depends(require_admin)):
+    # 配置含邮箱账号、代理地址等隐私字段,密钥虽已脱敏仍不对外公开
     return settings_store.public_settings(await settings_store.load_settings())
 
 

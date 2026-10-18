@@ -1,8 +1,13 @@
+import { getAdminToken } from '../../utils/adminAuth.ts';
 import { getServerTimeZone } from '../../utils/formatDate.ts';
 import type { ParameterSchema, QueryParameter } from './types';
 
 export async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
+  // 后台接口统一携带访问令牌(models 测试、TikHub 控制台等均需鉴权)
+  const headers = new Headers(init?.headers || {});
+  const token = getAdminToken();
+  if (token) headers.set('X-Admin-Token', token);
+  const response = await fetch(url, { ...init, headers });
   let data;
   try { data = await response.json(); }
   catch { throw new Error(`服务返回了无法读取的响应（HTTP ${response.status}），请稍后重试。`); }

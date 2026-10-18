@@ -6,6 +6,7 @@ from app.timezones import local_iso, jsonable_local as jsonable_encoder
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from app.routers.admin_auth import require_admin
 from app.database import get_db
 from app.models import Task
 from app.services.runtime_store import TASKS_DB
@@ -43,7 +44,8 @@ async def submit_share(data: ShareSubmit, background_tasks: BackgroundTasks, db=
 
 
 @router.get("")
-async def list_tasks(db=Depends(get_db)):
+async def list_tasks(db=Depends(get_db), _: None = Depends(require_admin)):
+    # 任务列表暴露站长抓取历史,仅后台可见;/{task_id}/status 保持开放供快捷指令轮询
     result = await db.execute(select(Task).order_by(Task.created_at.desc()).limit(100))
     tasks = result.scalars().all()
     return {"total": len(tasks), "data": jsonable_encoder(tasks)}

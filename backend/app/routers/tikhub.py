@@ -2,9 +2,10 @@
 import asyncio
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.routers.admin_auth import require_admin
 from app.services import settings_store
 from app.services.fetchers.tikhub import (
     TikHubError, TikHubNotConfiguredError, fetch_tikhub_account,
@@ -32,12 +33,12 @@ async def _token() -> str:
 
 
 @router.get('/key')
-async def get_tikhub_key():
+async def get_tikhub_key(_: None = Depends(require_admin)):
     return settings_store.key_metadata(await settings_store.load_settings())
 
 
 @router.post('/key')
-async def set_tikhub_key(data: TikHubKeyPayload):
+async def set_tikhub_key(data: TikHubKeyPayload, _: None = Depends(require_admin)):
     token = data.apiKey.strip()
     if not token or any(c.isspace() or ord(c) < 32 or ord(c) > 126 for c in token):
         raise HTTPException(status_code=400, detail='API Token 不能为空，也不能包含空格或非 ASCII 字符。')
@@ -54,13 +55,13 @@ async def set_tikhub_key(data: TikHubKeyPayload):
 
 
 @router.delete('/key')
-async def delete_tikhub_key():
+async def delete_tikhub_key(_: None = Depends(require_admin)):
     await settings_store.save_settings({'tikhubApiKey': ''})
     return settings_store.key_metadata(await settings_store.load_settings())
 
 
 @router.get('/account')
-async def get_tikhub_account():
+async def get_tikhub_account(_: None = Depends(require_admin)):
     metadata = settings_store.key_metadata(await settings_store.load_settings())
     if not metadata['configured']:
         return {'configured': False}
@@ -76,12 +77,13 @@ async def get_tikhub_account():
 
 @router.get('/catalog')
 async def get_catalog(platform: str = '', q: str = Query('', max_length=200),
-                      offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=100)):
+                      offset: int = Query(0, ge=0), limit: int = Query(40, ge=1, le=100),
+                      _: None = Depends(require_admin)):
     return query_catalog(platform, q, offset, limit)
 
 
 @router.post('/query')
-async def query_tikhub(data: TikHubQueryPayload):
+async def query_tikhub(data: TikHubQueryPayload, _: None = Depends(require_admin)):
     token = await _token()
     try:
         result = await asyncio.to_thread(run_query, data.endpoint_id, data.parameters, token)
