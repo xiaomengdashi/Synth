@@ -14,3 +14,10 @@ test('a failed metadata refresh never discards a completed answer', async t => {
   assert.equal(state.byId.a.turns[0].answer, '已完成的答案[1]');
   assert.equal(state.pendingById.a, false);
 });
+test('loading a saved conversation also refreshes its navigation title', async t => {
+  const old = {id:'a',title:'新会话',created_at:'',updated_at:''};
+  useKnowledgeStore.setState({byId:{},conversations:[old],total:1,pendingById:{},errorsById:{}});
+  t.mock.method(knowledgeClient,'get', async () => ({conversation:{...old,title:'Redis 失败后保留的问题'},turns:[]}));
+  await useKnowledgeStore.getState().loadConversation('a');
+  assert.equal(useKnowledgeStore.getState().conversations[0].title,'Redis 失败后保留的问题');
+});

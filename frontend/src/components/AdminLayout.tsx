@@ -6,6 +6,7 @@ import {
   Cpu,
   LayoutDashboard,
   Menu,
+  MessagesSquare,
   Newspaper,
   X,
 } from 'lucide-react';
@@ -19,6 +20,7 @@ import AdminSidebarNavigation from './AdminSidebarNavigation';
 
 const NAV_GROUPS = [
   { path: '/admin', label: '总览', icon: LayoutDashboard },
+  { path: '/admin/ask', label: '知识库问答', icon: MessagesSquare },
   { path: '/admin/articles', label: '内容管理', icon: Newspaper },
   { path: '/admin/tasks', label: '导入与任务', icon: Activity },
   { path: '/admin/tikhub', label: '系统设置', icon: Cpu },
@@ -65,7 +67,7 @@ export default function AdminLayout() {
   const section = SECTIONS.find(group => group.items.some(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)));
   const isSettings = section?.label === '系统设置';
   const currentPage = section?.items.find(item => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`));
-  const pageTitle = currentPage?.label ?? (location.pathname === '/admin' ? '总览' : undefined);
+  const pageTitle = currentPage?.label ?? (location.pathname === '/admin/ask' ? '知识库问答' : location.pathname === '/admin' ? '总览' : undefined);
   // The top bar shows ancestors; the current page has one heading in the content area.
   const breadcrumbs = [
     { label: '后台管理', to: '/admin' },

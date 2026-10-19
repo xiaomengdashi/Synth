@@ -28,7 +28,8 @@ export const useKnowledgeStore = create<KnowledgeState>((set, get) => ({
   async loadConversation(id) {
     const startedAt = Date.now();
     const result = await knowledgeClient.get(id);
-    set(state => ({byId: applyConversationSnapshot(state.byId, result, startedAt)}));
+    set(state => ({byId: applyConversationSnapshot(state.byId, result, startedAt),
+      conversations:state.conversations.map(c => c.id === id ? result.conversation : c)}));
   },
   async deleteConversation(id) {
     await knowledgeClient.remove(id);

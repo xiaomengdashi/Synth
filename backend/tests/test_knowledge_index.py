@@ -84,6 +84,8 @@ def test_follow_up_reuses_topic_without_overriding_new_question(tmp_path):
         await sync_knowledge_index(db)
         follow = await retrieve_chunks(db, '再展开讲讲', previous_questions=['SQLite 事务'], previous_article_ids=['sql'])
         assert follow and follow[0].article_id == 'sql'
+        repeated = await retrieve_chunks(db, '再展开讲讲', previous_questions=['再展开', '讲讲'], previous_article_ids=['sql'])
+        assert repeated and all(row.article_id == 'sql' for row in repeated)
         changed = await retrieve_chunks(db, 'Redis', previous_questions=['SQLite 事务'], previous_article_ids=['sql'])
         assert changed and all(row.article_id == 'redis' for row in changed)
     with_database(tmp_path, scenario)

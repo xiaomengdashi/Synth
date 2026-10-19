@@ -86,10 +86,11 @@ async def retrieve_chunks(db, question: str, *, previous_questions: list[str], p
     if not tokens:
         tokens = tokenize(' '.join(previous_questions[-2:]), query=True)
     expression = build_match_query(tokens)
-    if not expression:
+    if not expression and not previous_article_ids:
         await db.commit()
         return []
-    rows = (await db.execute(text('''
+    if expression:
+        statement = text('''
         SELECT c.id AS chunk_id,c.article_id,c.text,a.title,a.source_type,i.article_updated_at,
                bm25(knowledge_chunks_fts,4.0,1.0) AS score
         FROM knowledge_chunks_fts
@@ -98,7 +99,19 @@ async def retrieve_chunks(db, question: str, *, previous_questions: list[str], p
         JOIN knowledge_indexed_articles i ON i.article_id=c.article_id
         WHERE knowledge_chunks_fts MATCH :query
         ORDER BY score,c.id LIMIT 60
-    '''), {'query': expression})).mappings().all()
+        ''')
+        parameters = {'query': expression}
+    else:
+        # Repeated generic follow-ups can outlive the last two explicit questions.
+        parameters = {f'id{i}': value for i, value in enumerate(dict.fromkeys(previous_article_ids[:12]))}
+        placeholders = ','.join(':' + key for key in parameters)
+        statement = text(f'''
+            SELECT c.id AS chunk_id,c.article_id,c.text,a.title,a.source_type,i.article_updated_at
+            FROM knowledge_chunks c JOIN articles a ON a.id=c.article_id
+            JOIN knowledge_indexed_articles i ON i.article_id=c.article_id
+            WHERE c.article_id IN ({placeholders}) ORDER BY c.position,c.id LIMIT 60
+        ''')
+    rows = (await db.execute(statement, parameters)).mappings().all()
     await db.commit()
     # Round-robin articles so a long single source cannot crowd out other evidence.
     groups = {}

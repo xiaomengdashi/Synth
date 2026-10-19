@@ -10,9 +10,9 @@ export default defineConfig({
   ],
   server: {
     proxy: {
-      '/media': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/media': { target: process.env.SYNTHAI_BACKEND_URL || 'http://127.0.0.1:8000', changeOrigin: true },
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: process.env.SYNTHAI_BACKEND_URL || 'http://127.0.0.1:8000',
         changeOrigin: true,
         secure: false,
       }

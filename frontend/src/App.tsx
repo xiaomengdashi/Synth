@@ -29,6 +29,7 @@ const Admin = lazyPage(() => import('./features/tasks/pages/Admin'));
 const AdminTasks = lazyPage(() => import('./features/tasks/pages/AdminTasks'));
 const AdminArticles = lazyPage(() => import('./features/tasks/pages/AdminArticles'));
 const AdminNotes = lazyPage(() => import('./features/tasks/pages/AdminNotes'));
+const AdminKnowledge = lazyPage(() => import('./features/knowledge/pages/AdminKnowledge'));
 const AdminCategories = lazyPage(() => import('./features/tasks/pages/AdminCategories'));
 const AdminModelSettings = lazyPage(() => import('./features/tasks/pages/AdminModelSettings'));
 const AdminEmailImport = lazyPage(() => import('./features/email/pages/AdminEmailImport'));
@@ -110,6 +111,7 @@ function App() {
             <Route path="tasks" element={<Suspense fallback={<PageLoading />}><AdminTasks /></Suspense>} />
             <Route path="articles" element={<Suspense fallback={<PageLoading />}><AdminArticles /></Suspense>} />
             <Route path="notes" element={<Suspense fallback={<PageLoading />}><AdminNotes /></Suspense>} />
+            <Route path="ask" element={<Suspense fallback={<PageLoading />}><AdminKnowledge /></Suspense>} />
             <Route path="categories" element={<Suspense fallback={<PageLoading />}><AdminCategories /></Suspense>} />
             <Route path="model" element={<Suspense fallback={<PageLoading />}><AdminModelSettings /></Suspense>} />
             <Route path="email" element={<Suspense fallback={<PageLoading />}><AdminEmailImport /></Suspense>} />

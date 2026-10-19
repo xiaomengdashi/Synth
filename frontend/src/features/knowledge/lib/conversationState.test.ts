@@ -25,3 +25,9 @@ test('server result replaces optimistic request and duplicate completions', () =
   assert.equal(current.a.turns.length, 1);
   assert.equal(current.a.turns[0].id, 'server');
 });
+test('a read racing the first POST preserves the unsaved optimistic question', () => {
+  const current = mergeTurn(cache(), 'a', turn('a','optimistic','pending'), 20);
+  const next = applyConversationSnapshot(current, {conversation:current.a.conversation,turns:[]}, 30);
+  assert.equal(next.a.turns.length, 1);
+  assert.equal(next.a.turns[0].question, 'Redis');
+});

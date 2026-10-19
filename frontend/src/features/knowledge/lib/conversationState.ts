@@ -12,5 +12,7 @@ export function mergeTurn(cache: ConversationCache, conversationId: string, turn
 export function applyConversationSnapshot(cache: ConversationCache, snapshot: ConversationDetail, startedAt: number): ConversationCache {
   const id = snapshot.conversation.id;
   if (cache[id]?.lastMutationAt > startedAt) return cache;
-  return {...cache, [id]: {...snapshot, lastMutationAt: cache[id]?.lastMutationAt || 0}};
+  const localPending = (cache[id]?.turns || []).filter(turn => turn.status === 'pending'
+    && !snapshot.turns.some(saved => saved.request_id === turn.request_id));
+  return {...cache, [id]: {...snapshot, turns:[...snapshot.turns,...localPending], lastMutationAt: cache[id]?.lastMutationAt || 0}};
 }

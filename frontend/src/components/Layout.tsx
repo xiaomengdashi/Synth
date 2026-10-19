@@ -4,6 +4,7 @@ import { ArrowUpRight, Check, Moon, Search, Sun } from 'lucide-react';
 import { useAppStore } from '../features/app/store/useAppStore';
 import { applyTheme, getTheme, THEMES } from '../features/app/themes';
 import ToastStack from './ToastStack';
+import useVerifiedAdminToken from '../hooks/useVerifiedAdminToken';
 
 /** 品牌标:双色纸带 S(绿带 + 墨带,深色下墨带自动变暖纸白)。与 /favicon.svg 同形。 */
 export function BrandMark({ size = 26, accent, ink }: { size?: number; accent?: string; ink?: string }) {
@@ -27,6 +28,7 @@ export function BrandMark({ size = 26, accent, ink }: { size?: number; accent?: 
 
 /** 前台(公开页面)布局:顶部菜单栏。后台控制台使用独立的 AdminLayout。 */
 export default function Layout() {
+  const { status: adminStatus } = useVerifiedAdminToken();
   const { theme, setTheme } = useAppStore();
   const location = useLocation();
   const navigate = useNavigate();
@@ -87,6 +89,7 @@ export default function Layout() {
           <nav className="public-nav" aria-label="主导航">
             <Link to="/" className={location.pathname === '/' ? 'active' : ''}>首页</Link>
             <Link to="/articles" className={location.pathname.startsWith('/article') ? 'active' : ''}>文章库</Link>
+            {adminStatus === 'verified' && <Link to="/admin/ask">知识库问答</Link>}
           </nav>
           <div className="header-actions">
             <form className={`header-search ${location.pathname === '/articles' ? 'library-header-search' : ''}`} onSubmit={handleSearch} role="search">

@@ -117,6 +117,16 @@ Token 在 [user.tikhub.io](https://user.tikhub.io) 用户控制台创建并充�
 
 ## 技术栈
 
+### 知识库问答
+
+登录后台后打开 **知识库问答**（`/admin/ask`），或从前台导航进入。沿用「模型服务」中保存的 Base URL、API Key 和模型名称；需先设置后台访问令牌，未登录访客不能读取会话或发起模型请求。
+
+提问会从所有已保存文章的正文中检索相关段落，再由模型回答。点击答案中的编号可展开对应原文片段，并打开文章核对。支持连续追问、新建与删除会话；会话和引用快照保存在 SQLite，刷新页面后仍可查看，原文章删除后引用快照仍保留。
+
+首次提问会构建全文分段索引，内容较多时需要等待；新增、重新获取或删除文章后，下次提问会增量同步。索引使用 SQLite FTS5，本地中英文词面检索，不需要 Embedding 模型或独立搜索服务；同义改写可能无法召回，可尝试具体关键词。检索不到资料时明确提示依据不足；模型回答应结合所引用原文核对。服务器缺少 FTS5 时仅问答不可用，文章阅读与导入不受影响。
+
+开发环境可用 `SYNTHAI_BACKEND_URL=http://127.0.0.1:8018 npm run dev` 指向独立后端，未设置时仍使用 `127.0.0.1:8000`。线上反向代理应允许与模型超时配置相匹配的长请求；应用目前采用单工作进程的会话互斥，多工作进程部署前需改用数据库租约。
+
 **Frontend:** React, TypeScript, Vite, Tailwind CSS, Zustand, React Router, Framer Motion
 **Backend:** Python, FastAPI, SQLAlchemy, SQLite, OpenAI Python SDK, yt-dlp, trafilatura, BeautifulSoup4
 
