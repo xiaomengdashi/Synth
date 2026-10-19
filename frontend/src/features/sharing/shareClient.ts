@@ -1,4 +1,4 @@
-import { adminFetch } from '../../utils/adminAuth';
+import { adminFetch } from '../../utils/adminAuth.ts';
 
 export interface SharedTask {
   task_id?: string;
