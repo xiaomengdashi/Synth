@@ -76,3 +76,45 @@ def tokenize(text: str, *, query: bool = False) -> list[str]:
 
 def build_match_query(tokens: list[str]) -> str:
     return ' OR '.join('"' + token.replace('"', '""') + '"' for token in tokens[:48] if token)
+
+
+async def retrieve_chunks(db, question: str, *, previous_questions: list[str], previous_article_ids: list[str]) -> list[RetrievedChunk]:
+    from sqlalchemy import text
+
+    tokens = tokenize(question, query=True)
+    # Generic follow-ups reuse the topic; explicit new topics never fall back to unrelated history.
+    if not tokens:
+        tokens = tokenize(' '.join(previous_questions[-2:]), query=True)
+    expression = build_match_query(tokens)
+    if not expression:
+        await db.commit()
+        return []
+    rows = (await db.execute(text('''
+        SELECT c.id AS chunk_id,c.article_id,c.text,a.title,a.source_type,i.article_updated_at,
+               bm25(knowledge_chunks_fts,4.0,1.0) AS score
+        FROM knowledge_chunks_fts
+        JOIN knowledge_chunks c ON c.id=knowledge_chunks_fts.rowid
+        JOIN articles a ON a.id=c.article_id
+        JOIN knowledge_indexed_articles i ON i.article_id=c.article_id
+        WHERE knowledge_chunks_fts MATCH :query
+        ORDER BY score,c.id LIMIT 60
+    '''), {'query': expression})).mappings().all()
+    await db.commit()
+    # Round-robin articles so a long single source cannot crowd out other evidence.
+    groups = {}
+    for row in rows:
+        groups.setdefault(row['article_id'], []).append(row)
+    selected, seen, budget = [], set(), 14400
+    for position in range(3):
+        for group in groups.values():
+            if position >= len(group):
+                continue
+            row = group[position]
+            if row['text'] in seen or len(row['text']) > budget:
+                continue
+            selected.append(RetrievedChunk(**{key: row[key] for key in RetrievedChunk.__dataclass_fields__}))
+            seen.add(row['text'])
+            budget -= len(row['text'])
+            if len(selected) == 12:
+                return selected
+    return selected
