@@ -57,6 +57,9 @@ async def init_db():
         ):
             await conn.execute(text(ddl))
 
+        from app.services.knowledge_index import initialize_knowledge
+        await initialize_knowledge(conn)
+
 
 async def get_db():
     """FastAPI 依赖注入：获取数据库会话"""
