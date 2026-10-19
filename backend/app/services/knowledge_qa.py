@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import json
 import re
 
+from markdown_it import MarkdownIt
+
 from app.services.llm_client import chat_completion, strip_code_fence
 from app.services.settings_store import numeric_setting
 
@@ -17,6 +19,25 @@ class KnowledgeAnswer:
     answer: str
     insufficient_evidence: bool
     sources: list[dict]
+
+
+def citation_numbers(answer: str) -> list[int]:
+    # Match the frontend's Markdown structure: code, image alt text and links aren't citations.
+    parser = MarkdownIt('gfm-like')
+    parser.validateLink = lambda url: True  # Parse link structure only; never render or fetch URLs.
+    numbers = []
+    for block in parser.parse(answer):
+        if block.type != 'inline':
+            continue
+        link_depth = 0
+        for token in block.children or []:
+            if token.type == 'link_open':
+                link_depth += 1
+            elif token.type == 'link_close':
+                link_depth -= 1
+            elif token.type == 'text' and not link_depth:
+                numbers.extend(int(n) for n in re.findall(r'\[(\d+)\]', token.content))
+    return list(dict.fromkeys(numbers))
 
 
 def build_messages(question, chunks, history):
@@ -50,12 +71,11 @@ def build_messages(question, chunks, history):
 def parse_answer(raw, chunks):
     try:
         result = json.loads(strip_code_fence(raw))
-        answer = result['answer'].strip()
+        answer = result['answer']
         insufficient = result['insufficient_evidence']
-        if not answer or type(insufficient) is not bool:
+        if not isinstance(answer, str) or not answer.strip() or type(insufficient) is not bool:
             raise ValueError()
-        visible = re.sub(r'```[\s\S]*?```|`[^`]*`', '', answer)
-        numbers = list(dict.fromkeys(int(n) for n in re.findall(r'(?<!!)\[(\d+)\](?!\()', visible)))
+        numbers = citation_numbers(answer)
         if any(n < 1 or n > len(chunks) for n in numbers) or (not insufficient and not numbers):
             raise ValueError()
     except (ValueError, TypeError, KeyError, AttributeError):

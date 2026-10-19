@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 
 FTS_DDL = 'CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunks_fts USING fts5(title_tokens, body_tokens)'
-INDEX_VERSION = 1
+INDEX_VERSION = 2
 _index_lock = asyncio.Lock()
 
 

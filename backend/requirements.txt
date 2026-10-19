@@ -15,5 +15,6 @@ yt-dlp[default]==2026.8.19
 aiofiles==24.1.0
 python-multipart==0.0.20
 markdownify==0.14.1
+markdown-it-py[linkify]==4.0.0
 trafilatura==2.0.0
 jsonschema>=4.23,<5

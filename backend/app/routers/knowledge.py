@@ -141,6 +141,13 @@ async def send_message(cid: str, payload: MessagePayload, db: AsyncSession = Dep
     _busy.add(cid)
     tid = str(uuid4())
     try:
+        # Configuration/index awaits can let an earlier identical request finish.
+        # Recheck inside the per-conversation reservation before inserting or billing.
+        existing = await db.scalar(select(KnowledgeTurn).where(KnowledgeTurn.conversation_id == cid, KnowledgeTurn.request_id == payload.request_id))
+        if existing:
+            if existing.status == 'pending':
+                raise HTTPException(409, '这个问题正在处理中，请稍后查看。')
+            return await turn_payload(db, existing)
         turn = KnowledgeTurn(id=tid, conversation_id=cid, request_id=payload.request_id, question=payload.question)
         db.add(turn)
         if conversation.title == '新会话':
@@ -173,6 +180,8 @@ async def send_message(cid: str, payload: MessagePayload, db: AsyncSession = Dep
         message = '模型未返回有效的答案或资料引用，请检查模型服务后重试。'
         await fail_turn(db, tid, cid, message)
         raise HTTPException(502, message) from None
+    except HTTPException:
+        raise
     except Exception:
         message = '知识库问答暂时失败，请稍后重试。'
         await fail_turn(db, tid, cid, message)

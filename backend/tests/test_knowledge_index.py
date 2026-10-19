@@ -86,6 +86,12 @@ def test_follow_up_reuses_topic_without_overriding_new_question(tmp_path):
         assert follow and follow[0].article_id == 'sql'
         repeated = await retrieve_chunks(db, '再展开讲讲', previous_questions=['再展开', '讲讲'], previous_article_ids=['sql'])
         assert repeated and all(row.article_id == 'sql' for row in repeated)
+        for question in ['它有哪些缺点？', '详细说说', 'tell me more']:
+            contextual = await retrieve_chunks(db, question, previous_questions=['SQLite 事务'], previous_article_ids=['sql'])
+            assert contextual and contextual[0].article_id == 'sql', question
+        long_follow_up = await retrieve_chunks(db, '详细说说', previous_questions=['它有哪些缺点？', 'tell me more'], previous_article_ids=['sql'])
+        assert long_follow_up and long_follow_up[0].article_id == 'sql'
+        assert not await retrieve_chunks(db, '火星栽培', previous_questions=['SQLite 事务'], previous_article_ids=['sql'])
         changed = await retrieve_chunks(db, 'Redis', previous_questions=['SQLite 事务'], previous_article_ids=['sql'])
         assert changed and all(row.article_id == 'redis' for row in changed)
     with_database(tmp_path, scenario)

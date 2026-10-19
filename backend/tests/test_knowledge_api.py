@@ -158,3 +158,34 @@ def test_deleted_during_generation_keeps_source_snapshot(qa_client, monkeypatch)
     assert result['sources'][0]['article_exists'] is False
     assert 'Redis' in result['sources'][0]['excerpt']
     assert send(client, cid, 'next').json()['insufficient_evidence']
+
+
+def test_same_request_is_rechecked_after_waiting_for_configuration(qa_client, monkeypatch):
+    client, _ = qa_client
+    first_entered, second_entered, first_complete = threading.Event(), threading.Event(), threading.Event()
+    calls = 0
+    async def delayed_config():
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            first_entered.set()
+            await asyncio.to_thread(second_entered.wait, 5)
+        else:
+            second_entered.set()
+            await asyncio.to_thread(first_complete.wait, 5)
+        return dict(baseUrl='https://example.invalid',apiKey='test',modelName='test')
+    monkeypatch.setattr(knowledge,'load_settings',delayed_config)
+    cid = new_conversation(client)
+    results = []
+    def first():
+        try: results.append(send(client,cid,'same-id'))
+        finally: first_complete.set()
+    a = threading.Thread(target=first)
+    b = threading.Thread(target=lambda: results.append(send(client,cid,'same-id')))
+    a.start()
+    assert first_entered.wait(3)
+    b.start()
+    a.join(8); b.join(8)
+    assert len(results) == 2
+    assert [r.status_code for r in results] == [200,200]
+    assert results[0].json()['id'] == results[1].json()['id']

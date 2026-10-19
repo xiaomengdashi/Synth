@@ -46,3 +46,15 @@ def test_model_request_uses_bounded_generation(monkeypatch):
     monkeypatch.setattr(qa, 'chat_completion', model)
     result = asyncio.run(qa.generate_knowledge_answer('SQLite?', CHUNKS, [], {'llmMaxTokens': '300'}))
     assert result.sources[0]['article_id'] == 'one'
+
+
+@pytest.mark.parametrize('answer', ['~~~python\nx = a[1]\n~~~', '    x = a[1]', '[[1]](https://example.com)'])
+def test_code_and_link_labels_are_not_evidence_citations(answer):
+    with pytest.raises(qa.KnowledgeAnswerError):
+        qa.parse_answer(json.dumps({'answer':answer,'insufficient_evidence':False}),CHUNKS)
+
+
+@pytest.mark.parametrize('extra', ['~~~python\nx = a[999]\n~~~', '    x = a[999]', '[[999]](https://example.com)', '`a[999]`'])
+def test_non_citation_numbers_in_code_and_links_do_not_reject_valid_answer(extra):
+    result = qa.parse_answer(json.dumps({'answer':'事务[1]\n\n' + extra,'insufficient_evidence':False}),CHUNKS)
+    assert len(result.sources) == 1 and result.sources[0]['number'] == 1

@@ -20,6 +20,13 @@ def test_corrupt_payload_has_no_summary_substitute():
     assert retrieval.extract_search_text('<!-- X_ARTICLE_START -->broken<!-- X_ARTICLE_END -->') == ''
 
 
+def test_markdown_code_preserves_cpp_template_arguments():
+    body = '```cpp\nstd::vector<int> values;\nstd::optional<std::string> name;\n```'
+    result = retrieval.extract_search_text(body)
+    assert 'std::vector<int>' in result
+    assert 'std::optional<std::string>' in result
+
+
 def test_chunks_preserve_tail_and_respect_budget():
     body = '开篇。' + ''.join(f'第{i}段知识检索需要完整保留。' for i in range(2000)) + '尾部独有证据'
     chunks = retrieval.split_chunks(body)

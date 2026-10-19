@@ -2,8 +2,6 @@
 from dataclasses import dataclass
 import re
 
-from bs4 import BeautifulSoup
-
 from app.services.note_export import extract_note_body
 
 
@@ -20,15 +18,14 @@ class RetrievedChunk:
 _TOKEN = re.compile(r'[\u3400-\u9fff]+|[a-zA-Z0-9_]+')
 _STOP = {'the', 'a', 'an', 'is', 'are', 'what', 'how', 'why', 'which', 'in', 'of', 'to', 'and', 'it', 'this', 'that', 'about', 'please'}
 _PHRASES = ('知识库', '文章', '资料', '什么', '哪些', '怎么', '如何', '是否', '请问', '详细', '讲讲', '解释', '说明', '介绍', '帮我', '根据', '可以', '相关', '有关', '一下', '再讲', '展开', '这些', '这个', '我的', '收藏')
+_FOLLOW_UP = re.compile(r'^(?:它|他|她|这|那|该|上述|此|继续|详细|再|还有|优缺点|缺点|优点)|^(?:tell me more|elaborate|go on|continue|what (?:about|are (?:its|their))|why is that)\b', re.I)
 
 
 def extract_search_text(content_md: str) -> str:
     clean = re.sub(r'<(script|style)\b[^>]*>[\s\S]*?</\1\s*>', '', content_md or '', flags=re.I)
     body = extract_note_body(clean)
-    soup = BeautifulSoup(body, 'html.parser')
-    for node in soup(['script', 'style']):
-        node.decompose()
-    body = soup.get_text('\n')
+    # extract_note_body already turns stored HTML into text. Parsing Markdown
+    # again as HTML would erase C++ templates such as vector<int>.
     body = re.sub(r'!\[[^\]]*\]\([^)]*\)', '', body)
     body = re.sub(r'https?://\S+', '', body)
     body = re.sub(r'<!--.*?-->', '', body, flags=re.S)
@@ -81,10 +78,29 @@ def build_match_query(tokens: list[str]) -> str:
 async def retrieve_chunks(db, question: str, *, previous_questions: list[str], previous_article_ids: list[str]) -> list[RetrievedChunk]:
     from sqlalchemy import text
 
+    def previous_sources_query():
+        parameters = {f'id{i}': value for i, value in enumerate(dict.fromkeys(previous_article_ids[:12]))}
+        placeholders = ','.join(':' + key for key in parameters)
+        statement = text(f'''
+            SELECT c.id AS chunk_id,c.article_id,c.text,a.title,a.source_type,i.article_updated_at
+            FROM knowledge_chunks c JOIN articles a ON a.id=c.article_id
+            JOIN knowledge_indexed_articles i ON i.article_id=c.article_id
+            WHERE c.article_id IN ({placeholders}) ORDER BY c.position,c.id LIMIT 60
+        ''')
+        return statement, parameters
+
     tokens = tokenize(question, query=True)
+    history_tokens = tokenize(' '.join(previous_questions[-2:]), query=True)
+    is_follow_up = bool(_FOLLOW_UP.search(question.strip())) and bool(previous_questions or previous_article_ids)
+    # An explicit new English technical name takes priority over deictic wording.
+    new_names = {t for t in tokens if re.search('[a-z0-9]',t)} - set(history_tokens) - {'tell','me','more','elaborate','continue','go','on','its','their'}
+    if new_names:
+        is_follow_up = False
+    if is_follow_up:
+        tokens = list(dict.fromkeys(history_tokens + tokens))[:48]
     # Generic follow-ups reuse the topic; explicit new topics never fall back to unrelated history.
     if not tokens:
-        tokens = tokenize(' '.join(previous_questions[-2:]), query=True)
+        tokens = history_tokens
     expression = build_match_query(tokens)
     if not expression and not previous_article_ids:
         await db.commit()
@@ -103,16 +119,16 @@ async def retrieve_chunks(db, question: str, *, previous_questions: list[str], p
         parameters = {'query': expression}
     else:
         # Repeated generic follow-ups can outlive the last two explicit questions.
-        parameters = {f'id{i}': value for i, value in enumerate(dict.fromkeys(previous_article_ids[:12]))}
-        placeholders = ','.join(':' + key for key in parameters)
-        statement = text(f'''
-            SELECT c.id AS chunk_id,c.article_id,c.text,a.title,a.source_type,i.article_updated_at
-            FROM knowledge_chunks c JOIN articles a ON a.id=c.article_id
-            JOIN knowledge_indexed_articles i ON i.article_id=c.article_id
-            WHERE c.article_id IN ({placeholders}) ORDER BY c.position,c.id LIMIT 60
-        ''')
+        statement, parameters = previous_sources_query()
     rows = (await db.execute(statement, parameters)).mappings().all()
     await db.commit()
+    if not rows and is_follow_up and previous_article_ids:
+        statement, parameters = previous_sources_query()
+        rows = (await db.execute(statement, parameters)).mappings().all()
+        await db.commit()
+    if is_follow_up and previous_article_ids:
+        previous = set(previous_article_ids)
+        rows.sort(key=lambda row: row['article_id'] not in previous)
     # Round-robin articles so a long single source cannot crowd out other evidence.
     groups = {}
     for row in rows:
