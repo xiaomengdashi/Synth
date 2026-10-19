@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test src/utils/*.test.ts src/features/sharing/*.test.ts src/features/tikhub/*.test.ts src/features/articles/lib/*.test.ts",
+    "test": "node --experimental-strip-types --test src/utils/*.test.ts src/features/sharing/*.test.ts src/features/tikhub/*.test.ts src/features/articles/lib/*.test.ts src/features/knowledge/lib/*.test.ts",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
