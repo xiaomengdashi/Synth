@@ -21,7 +21,7 @@ def test_corrupt_payload_has_no_summary_substitute():
 
 
 def test_chunks_preserve_tail_and_respect_budget():
-    body = '开篇。' + ('知识检索需要完整保留。' * 2000) + '尾部独有证据'
+    body = '开篇。' + ''.join(f'第{i}段知识检索需要完整保留。' for i in range(2000)) + '尾部独有证据'
     chunks = retrieval.split_chunks(body)
     assert all(0 < len(c) <= 1200 for c in chunks)
     assert '尾部独有证据' in chunks[-1]
