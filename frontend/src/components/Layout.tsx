@@ -5,6 +5,7 @@ import { useAppStore } from '../features/app/store/useAppStore';
 import { applyTheme, getTheme, THEMES } from '../features/app/themes';
 import ToastStack from './ToastStack';
 import useVerifiedAdminToken from '../hooks/useVerifiedAdminToken';
+import FloatingKnowledgeChat from '../features/knowledge/components/FloatingKnowledgeChat';
 
 /** 品牌标:双色纸带 S(绿带 + 墨带,深色下墨带自动变暖纸白)。与 /favicon.svg 同形。 */
 export function BrandMark({ size = 26, accent, ink }: { size?: number; accent?: string; ink?: string }) {
@@ -89,7 +90,6 @@ export default function Layout() {
           <nav className="public-nav" aria-label="主导航">
             <Link to="/" className={location.pathname === '/' ? 'active' : ''}>首页</Link>
             <Link to="/articles" className={location.pathname.startsWith('/article') ? 'active' : ''}>文章库</Link>
-            {adminStatus === 'verified' && <Link to="/admin/ask">知识库问答</Link>}
           </nav>
           <div className="header-actions">
             <form className={`header-search ${location.pathname === '/articles' ? 'library-header-search' : ''}`} onSubmit={handleSearch} role="search">
@@ -163,6 +163,7 @@ export default function Layout() {
       </footer>
 
       <ToastStack />
+      <FloatingKnowledgeChat adminStatus={adminStatus} />
     </div>
   );
 }
